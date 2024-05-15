@@ -6,10 +6,12 @@ import (
 	"go/format"
 	"log"
 	"os"
+	"os/user"
 	"path/filepath"
 	"text/template"
 
 	"github.com/spf13/cast"
+	"github.com/spf13/cobra"
 	"github.com/spf13/viper"
 )
 
@@ -19,6 +21,13 @@ type CommandConfig struct {
 	Function string
 }
 
+type Subcommand struct {
+	Name     string          `json:"name"`
+	Short    string          `json:"short"`
+	Function string          `json:"function"`
+	Flags    ([]interface{}) `json:"flags"`
+}
+
 type FlagConfig struct {
 	Name       string
 	Usage      string
@@ -26,18 +35,27 @@ type FlagConfig struct {
 	DefaultVal interface{}
 	Param      string
 }
+type ToolData struct {
+	Id         string
+	Org        string
+	Name       string
+	Active     bool
+	Version    string
+	Repocitory string
+}
 
 const templateContent = `
 package cmd
 
 import (
-	"fmt"
-	"github.com/spf13/cobra"
-	"github.com/spf13/viper"
+	"bal/pkg/generate"
 	"bal/pkg/utils"
 	"log"
-)
 
+	"github.com/spf13/cobra"
+	"github.com/spf13/viper"
+)
+var {{.Name}}cmd *cobra.Command
 func {{.Name}}Cmd() *cobra.Command{
 	cmd := &cobra.Command{
 	Use:     "{{.Name}}",
@@ -45,14 +63,12 @@ func {{.Name}}Cmd() *cobra.Command{
 	Long:   "",
 	Example: "",
 	Run: func(cmd *cobra.Command, args []string) {
-		fmt.Println("called")
 		{{.Function}}
 	},
 }
-
-	viper.SetConfigName("{{.Name}}")
-	viper.AddConfigPath("/home/wso2/Final_implementation/ballerina-lang/Bal/executables/config") // Update this with your actual config path
-	viper.SetConfigType("toml")
+path:=generate.FindPathForJson("{{.Name}}")
+viper.SetConfigType("json")
+viper.SetConfigFile(path)
 
 	if err := viper.ReadInConfig(); err != nil {
 		log.Fatalf("Error reading config file: %s", err)
@@ -72,8 +88,8 @@ func {{.Name}}Cmd() *cobra.Command{
 }
 
 func init() {
-	{{.Name}}Cmd:= {{.Name}}Cmd()
-	RootCmd.AddCommand({{.Name}}Cmd)
+	{{.Name}}cmd= {{.Name}}Cmd()
+	RootCmd.AddCommand({{.Name}}cmd)
 	{{.SubLines}}
 
 }
@@ -107,7 +123,8 @@ func generateFlagLine(flag FlagConfig, cmdName string) string {
 
 func generateSubCommands(subcommands []interface{}, config CommandConfig) (string, string) {
 	const subCommandTemp = `
-	func {{.Name}}() *cobra.Command {
+	var {{.Name}}cmd *cobra.Command
+	func {{.Name}}Cmd() *cobra.Command {
 		cmd := &cobra.Command{
 		Use:   "{{.Use}}",
 		Short: "{{.Short}}",
@@ -118,9 +135,9 @@ func generateSubCommands(subcommands []interface{}, config CommandConfig) (strin
 		},
 	}
 		{{.SubFlagLines}}
-		viper.SetConfigName("{{.Base}}")
-		viper.AddConfigPath("/home/wso2/Final_implementation/ballerina-lang/Bal/executables/config")
-		viper.SetConfigType("toml")
+		path:=generate.FindPathForJson("{{.Base}}")
+		viper.SetConfigType("json")
+		viper.SetConfigFile(path)
 
 		if err := viper.ReadInConfig(); err != nil {
 			log.Fatalf("Error reading config file: %s", err)
@@ -166,7 +183,7 @@ func generateSubCommands(subcommands []interface{}, config CommandConfig) (strin
 				SubFlagLines string
 				Base         string
 			}{
-				Name:         subconfig.Name + config.Name + "Cmd",
+				Name:         subconfig.Name + config.Name,
 				Use:          subconfig.Name,
 				Short:        subconfig.Short,
 				Function:     function,
@@ -177,8 +194,9 @@ func generateSubCommands(subcommands []interface{}, config CommandConfig) (strin
 				log.Fatalf("Error executing subcommand template: %s", err)
 			}
 			subCommandsStr += subcmdStrBuffer.String() + "\n"
-			subline := fmt.Sprintf("%sCmd.AddCommand(%s)", config.Name, data.Name+"()")
-			subLinesStr += subline + "\n"
+			subassign := fmt.Sprintf("%scmd = %sCmd()", data.Name, data.Name)
+			subline := fmt.Sprintf("%scmd.AddCommand(%scmd)", config.Name, data.Name)
+			subLinesStr += subassign + "\n" + subline + "\n"
 		}
 	}
 
@@ -196,7 +214,6 @@ func generateSubFlagLines(subflags []interface{}, generateFlagLine func(FlagConf
 				DefaultVal: m["default_val"],
 				Shorthend:  cast.ToString(m["shorthand"]),
 			}
-			//commandName := cast.ToString(m["command"]) + config.Name + "Cmd"
 			subflagline := generateFlagLine(subflag, "cmd")
 			subflagLines += subflagline + "\n"
 		}
@@ -222,24 +239,24 @@ func generatingBaseCommandFlags(flags []interface{}, name string) string {
 	return flagLines
 }
 
-func GeneratingCLICommands(path string, name string, commandPath string) {
+func GeneratingCLICommands(path string) {
 
-	viper.SetConfigName(name)
-	viper.AddConfigPath(path)
-	viper.SetConfigType("toml")
+	viper.SetConfigType("json")
+	viper.SetConfigFile(path)
 
 	if err := viper.ReadInConfig(); err != nil {
 		log.Fatalf("Error reading config file: %s", err)
 	}
 
 	config := CommandConfig{
-		Name:     viper.GetString("base_command.name"),
-		Short:    viper.GetString("base_command.short"),
+		Name:     viper.GetString("tool_id"),
+		Short:    viper.GetString("short"),
 		Function: "_ = utils.ExecuteBallerinaCommand(javaCmdPass, cmdLineArgsPass)",
 	}
+
 	filename := config.Name + ".go"
-	filePath := filepath.Join(commandPath, filename)
-	file, err := os.Create(filePath)
+	fmt.Println(filename)
+	file, err := os.Create(filepath.Join("cmd", filename))
 	if err != nil {
 		log.Fatalf("Error creating command.go file: %s", err)
 	}
@@ -272,12 +289,101 @@ func GeneratingCLICommands(path string, name string, commandPath string) {
 		log.Fatalf("Error executing template: %s", err)
 	}
 	output := commandData.String() //format the content of the document
-	//fmt.Println(output)
+	fmt.Println(output)
 	formattedContent, err := format.Source([]byte(output))
 	if err != nil {
 		log.Fatalf("Error formatting Go code: %s", err)
 	}
-	if err := os.WriteFile(filePath, formattedContent, 0644); err != nil {
+	if err := os.WriteFile(filepath.Join("cmd", filename), formattedContent, 0644); err != nil {
 		log.Fatalf("Error writing to file: %s", err)
 	}
+}
+
+func FindPathForJson(toolName string) string {
+	jasonPath := ""
+	currentUser, _ := user.Current()
+	balToolPath := filepath.Join(currentUser.HomeDir, ".ballerina", ".config")
+	fmt.Println("Configuration path:", balToolPath)
+
+	viper.SetConfigName("bal-tools")
+	viper.AddConfigPath(balToolPath)
+	viper.SetConfigType("toml")
+
+	if err := viper.ReadInConfig(); err != nil {
+		fmt.Println("Error reading config file:", err)
+	}
+
+	toolDetails, ok := viper.Get("tool").([]interface{})
+	if !ok {
+		fmt.Println("Error reading tool details from config")
+	}
+	for _, table := range toolDetails {
+		if m, ok := table.(map[string]interface{}); ok {
+			if cast.ToString(m["id"]) == toolName && cast.ToBool(m["active"]) {
+				toolData := ToolData{
+					Id:         cast.ToString(m["id"]),
+					Org:        cast.ToString(m["org"]),
+					Name:       cast.ToString(m["name"]),
+					Active:     cast.ToBool(m["active"]),
+					Version:    cast.ToString(m["version"]),
+					Repocitory: cast.ToString(m["repocitory"]),
+				}
+				repocitoryType := ""
+				if toolData.Repocitory == "" {
+					repocitoryType = "central.ballerina.io"
+				} else {
+					repocitoryType = toolData.Repocitory
+				}
+				jasonPath = filepath.Join(currentUser.HomeDir, ".ballerina", "repositories", repocitoryType, "bala", toolData.Org, toolData.Name, toolData.Version, "java17", "tool", "bal-tool.json")
+				break
+			}
+		}
+	}
+
+	if jasonPath == "" {
+		fmt.Println("Tool not found or not active in config")
+	}
+
+	return jasonPath
+}
+
+func GetListOfTools() []string {
+	currentUser, _ := user.Current()
+	balToolPath := filepath.Join(currentUser.HomeDir, ".ballerina", ".config")
+	fmt.Println("Configuration path:", balToolPath)
+
+	viper.SetConfigName("bal-tools")
+	viper.AddConfigPath(balToolPath)
+	viper.SetConfigType("toml")
+
+	if err := viper.ReadInConfig(); err != nil {
+		fmt.Println("Error reading config file:", err)
+	}
+
+	toolDetails, ok := viper.Get("tool").([]interface{})
+	if !ok {
+		fmt.Println("Error reading tool details from config")
+	}
+	toolList := []string{}
+	for _, table := range toolDetails {
+		if m, ok := table.(map[string]interface{}); ok {
+			if cast.ToBool(m["active"]) {
+				toolList = append(toolList, cast.ToString(m["id"]))
+			}
+		}
+	}
+	return toolList
+}
+
+func GetCommandsList(names []string, rootCmd *cobra.Command) []*cobra.Command {
+	var commands []*cobra.Command
+	allCommands := rootCmd.Commands()
+	for _, cmd := range allCommands {
+		for _, name := range names {
+			if cmd.Use == name {
+				commands = append(commands, cmd)
+			}
+		}
+	}
+	return commands
 }

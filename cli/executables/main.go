@@ -23,8 +23,8 @@ func main() {
 		}
 		path = link
 	}
-	directory := filepath.Join(filepath.Dir(path), "config")
-	commandPath := filepath.Join(filepath.Dir(path), "..", "bal", "cmd")
+	directory := filepath.Join(filepath.Dir(path), "..", "..", "ballerina-cli", "src", "main", "resources", "command-info")
+	commandPath := filepath.Join(filepath.Dir(path), "bal", "cmd")
 	err = filepath.Walk(directory, func(path string, info os.FileInfo, err error) error {
 		if err != nil {
 			return err

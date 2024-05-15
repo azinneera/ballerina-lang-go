@@ -2,13 +2,26 @@ package templates
 
 import (
 	"bytes"
+	"fmt"
 	"log"
 	"os"
 	"text/template"
 
+	"github.com/spf13/cast"
 	"github.com/spf13/cobra"
-	"github.com/spf13/pflag"
+	"github.com/spf13/viper"
 )
+
+type SubCommandInfo struct {
+	Name  string
+	Short string
+}
+
+type ConfigFileInfo struct {
+	Path     string
+	FileType string
+	Name     string
+}
 
 const subcommandTemplate = `
 NAME:
@@ -48,7 +61,7 @@ type CommandData struct {
 	Synopsis string
 	Long     string
 	Options  string
-	Commands []CommandInfo
+	Commands []SubCommandInfo
 	Examples string
 }
 
@@ -71,53 +84,85 @@ func FillTemplate(commandData CommandData) {
 	}
 }
 
-func GetSubCommands(cmd *cobra.Command) []CommandInfo {
+func GetSubCommands(cmd *cobra.Command) []SubCommandInfo {
 	if len(cmd.Commands()) == 0 {
 		return nil
 	}
 
-	var commands []CommandInfo
+	var commands []SubCommandInfo
 	for _, subCmd := range cmd.Commands() {
-		commands = append(commands, CommandInfo{
-			Use:   subCmd.Use,
+		commands = append(commands, SubCommandInfo{
+			Name:  subCmd.Use,
 			Short: subCmd.Short,
 		})
 	}
+
 	return commands
 }
 
-func GetCommandData(cmd *cobra.Command) CommandData {
+func GetCommandData(cmd *cobra.Command, field string, configInfo ConfigFileInfo, flagfield string) CommandData {
+	viper.SetConfigName(configInfo.Name)
+	viper.AddConfigPath(configInfo.Path)
+	viper.SetConfigType(configInfo.FileType)
 	return CommandData{
 		BName:    cmd.Name(),
 		BShort:   cmd.Short,
-		Synopsis: cmd.Short,
+		Synopsis: GetSynopsis(field),
 		Long:     cmd.Long,
-		Options:  "No options available",
+		Options:  FillOptions(flagfield, cmd),
 		Commands: GetSubCommands(cmd),
 		Examples: cmd.Example,
 	}
 }
 
-func FillOptions(cmd *cobra.Command, path string) string {
+func FillOptions(field string, cmd *cobra.Command) string {
+	flags, _ := viper.Get(field).([]interface{})
 	var options string
-	flags := cmd.Flags()
 	tmpl, err := template.New("flagTemplate").Parse(FlagTemplate)
 	if err != nil {
 		log.Fatalln("Error parsing template:", err)
 	}
 
-	flags.VisitAll(func(flag *pflag.Flag) {
-		var buf bytes.Buffer
-		err := tmpl.Execute(&buf, OptionData{
-			ShortForm: flag.Shorthand,
-			LongForm:  flag.Name,
-			Param:     flag.Value.Type(),
-			Usage:     flag.Usage,
-		})
-		if err != nil {
-			log.Fatalln("Error executing template:", err)
+	for _, table := range flags {
+		if m, ok := table.(map[string]interface{}); ok {
+
+			var buf bytes.Buffer
+			err := tmpl.Execute(&buf, OptionData{
+				ShortForm: cast.ToString(m["shorthand"]),
+				LongForm:  cast.ToString(m["name"]),
+				Param:     cast.ToString(m["param"]),
+				Usage:     cast.ToString(m["usage"]),
+			})
+			if err != nil {
+				log.Fatalln("Error executing template:", err)
+			}
+			options += buf.String()
+
 		}
-		options += buf.String()
+	}
+	// Manually add the help flag
+	var buf bytes.Buffer
+	err = tmpl.Execute(&buf, OptionData{
+		ShortForm: "h",
+		LongForm:  "help",
+		Param:     "",
+		Usage:     fmt.Sprintf("Print the usage details of %s command. ", cmd.Name()),
 	})
+	if err != nil {
+		log.Fatalln("Error executing template:", err)
+	}
+	options += buf.String()
+
 	return options
+}
+
+func GetSynopsis(field string) string {
+	synopsis := ""
+	if err := viper.ReadInConfig(); err != nil {
+		log.Fatalf("Error reading config file: %s", err)
+	}
+	if viper.GetString(field) != "" {
+		synopsis = viper.GetString(field)
+	}
+	return synopsis
 }

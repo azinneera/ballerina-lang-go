@@ -1,6 +1,7 @@
 package cmd
 
 import (
+	"bal/pkg/generate"
 	"bal/pkg/templates"
 	"bal/pkg/utils"
 	"fmt"
@@ -12,6 +13,7 @@ import (
 var (
 	javaCmdPass     string
 	cmdLineArgsPass []string
+	ToolsPass       []*cobra.Command
 )
 
 var RootCmd = &cobra.Command{
@@ -33,12 +35,15 @@ func init() {
 
 	RootCmd.Flags().BoolP("version", "v", false, "Print version information.")
 	cmdLineArgsPass, javaCmdPass = utils.Setup()
+	names := generate.GetListOfTools()
+	Tools := templates.CommandGroup{Message: "Tool Commands", Commands: generate.GetCommandsList(names, RootCmd)}
+	ToolsPass = Tools.Commands
 
 	commandGroups := templates.CommandGroups{
-		{Message: "Core Commands", Commands: []*cobra.Command{buildCmd(), runCmd, testCmd(), docCmd(), packCmd()}},
+		{Message: "Core Commands", Commands: []*cobra.Command{buildCmd(), runCmd(), testCmd(), docCmd(), packCmd()}},
 		{Message: "Package Commands", Commands: []*cobra.Command{newCmd(), addCmd(), pullCmd(), pushCmd(), searchCmd(), semverCmd(), graphCmd(), deprecateCmd()}},
 		{Message: "Other Commands", Commands: []*cobra.Command{cleanCmd(), formatCmd(), grpcCmd(), graphqlCmd(), openapiCmd(), asyncapiCmd(), persistCmd(), persistCmd(), bindgenCmd(), shellCmd(), toolCmd(), versionCmd(), profileCmd()}},
-		{Message: "Tool Commands", Commands: []*cobra.Command{}},
+		Tools,
 	}
 
 	RootCmd.SetHelpFunc(func(cmd *cobra.Command, args []string) {

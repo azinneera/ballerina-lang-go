@@ -11,6 +11,7 @@ import (
 	"text/template"
 
 	"github.com/spf13/cast"
+	"github.com/spf13/cobra"
 	"github.com/spf13/viper"
 )
 
@@ -345,4 +346,45 @@ func FindPathForJson(toolName string) string {
 	}
 
 	return jasonPath
+}
+
+func GetListOfTools() []string {
+	currentUser, _ := user.Current()
+	balToolPath := filepath.Join(currentUser.HomeDir, ".ballerina", ".config")
+	fmt.Println("Configuration path:", balToolPath)
+
+	viper.SetConfigName("bal-tools")
+	viper.AddConfigPath(balToolPath)
+	viper.SetConfigType("toml")
+
+	if err := viper.ReadInConfig(); err != nil {
+		fmt.Println("Error reading config file:", err)
+	}
+
+	toolDetails, ok := viper.Get("tool").([]interface{})
+	if !ok {
+		fmt.Println("Error reading tool details from config")
+	}
+	toolList := []string{}
+	for _, table := range toolDetails {
+		if m, ok := table.(map[string]interface{}); ok {
+			if cast.ToBool(m["active"]) {
+				toolList = append(toolList, cast.ToString(m["id"]))
+			}
+		}
+	}
+	return toolList
+}
+
+func GetCommandsList(names []string, rootCmd *cobra.Command) []*cobra.Command {
+	var commands []*cobra.Command
+	allCommands := rootCmd.Commands()
+	for _, cmd := range allCommands {
+		for _, name := range names {
+			if cmd.Use == name {
+				commands = append(commands, cmd)
+			}
+		}
+	}
+	return commands
 }

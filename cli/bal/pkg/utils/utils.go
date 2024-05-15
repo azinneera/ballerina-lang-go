@@ -170,10 +170,8 @@ func ExecuteCommand(javaCmd string, cmdArgs []string) error {
 	return cmd.Run() //type error  check md  run command
 }
 
-func Setup() ([]string, string) {
-	ballerinaVersion := "2201.8.5"
+func GetBalScriptDir() string {
 	balScriptPath, err := os.Executable()
-	balScriptPath = "/usr/lib/ballerina/distributions/ballerina-2201.8.5/bin/bal"
 	if err != nil {
 		log.Fatalln("Error: Cannot find the path of the executable file")
 	}
@@ -189,6 +187,13 @@ func Setup() ([]string, string) {
 		balScriptPath = link
 	}
 	scriptPathDir := filepath.Dir(balScriptPath)
+	return scriptPathDir
+}
+
+func Setup() ([]string, string) {
+	ballerinaVersion := "@VERSION@"
+
+	scriptPathDir := GetBalScriptDir()
 
 	ballerinaHome, _ := filepath.Abs(filepath.Join(scriptPathDir, ".."))
 	javaHome, javaCmd := GetJavaSettings(ballerinaHome)
@@ -211,8 +216,8 @@ func Setup() ([]string, string) {
 
 	// Define Ballerina CLI Arguments
 	cmdLineArgs := []string{
-		"-Xms256m",
-		"-Xmx1024m",
+		"-Xms@XMS_VAL@",
+		"-Xmx@XMX_VAL@",
 		"-XX:+HeapDumpOnOutOfMemoryError",
 		"-classpath", ballerinaClasspath,
 		fmt.Sprintf("-Dballerina.home=%s", ballerinaHome),
