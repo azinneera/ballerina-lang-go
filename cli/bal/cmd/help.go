@@ -19,7 +19,7 @@
 package cmd
 
 import (
-	"bal/pkg/templates"
+	"ballerina-lang-go/cli/bal/pkg/templates"
 
 	"github.com/spf13/cobra"
 )

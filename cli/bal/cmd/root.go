@@ -19,9 +19,9 @@
 package cmd
 
 import (
-	"bal/pkg/generate"
-	"bal/pkg/templates"
-	"bal/pkg/utils"
+	"ballerina-lang-go/cli/bal/pkg/generate"
+	"ballerina-lang-go/cli/bal/pkg/templates"
+	"ballerina-lang-go/cli/bal/pkg/utils"
 	"os"
 
 	"github.com/spf13/cobra"
@@ -65,6 +65,17 @@ func init() {
 	packageCommands := []*cobra.Command{newCmd(), addCmd(), pullCmd(), pushCmd(), searchCmd(), semverCmd(), graphCmd(), deprecateCmd()}
 	otherCommands := []*cobra.Command{cleanCmd(), formatCmd(), grpcCmd(), graphqlCmd(), openapiCmd(), asyncapiCmd()}
 	otherCommands = append(otherCommands, []*cobra.Command{persistCmd(), bindgenCmd(), shellCmd(), toolCmd(), versionCmd(), profileCmd()}...)
+
+	for _, cmd := range coreCommands {
+		RootCmd.AddCommand(cmd)
+	}
+	for _, cmd := range packageCommands {
+		RootCmd.AddCommand(cmd)
+	}
+	for _, cmd := range otherCommands {
+		RootCmd.AddCommand(cmd)
+	}
+
 	commandGroups = templates.CommandGroups{
 		{Message: "Core Commands", Commands: coreCommands},
 		{Message: "Package Commands", Commands: packageCommands},

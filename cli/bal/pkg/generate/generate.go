@@ -1,7 +1,7 @@
 package generate
 
 import (
-	"bal/pkg/utils"
+	"ballerina-lang-go/cli/bal/pkg/utils"
 	"fmt"
 	"log"
 	"os"
@@ -138,7 +138,7 @@ func RegisterDynamicCommands(javaCmdPass string, cmdLineArgsPass []string, path 
 	viper.SetConfigFile(path)
 	viper.SetConfigType("json")
 	if err := viper.ReadInConfig(); err != nil {
-		log.Fatalln("Error reading config file:", err)
+		return fmt.Errorf("error reading config file: %w", err)
 	}
 	//Create Base command
 	toolID := viper.GetString("tool_id")

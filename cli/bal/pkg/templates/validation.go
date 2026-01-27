@@ -1,8 +1,8 @@
 package templates
 
 import (
-	"bal/pkg/generate"
-	"bal/pkg/utils"
+	"ballerina-lang-go/cli/bal/pkg/generate"
+	"ballerina-lang-go/cli/bal/pkg/utils"
 	"fmt"
 	"log"
 	"path/filepath"
