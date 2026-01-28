@@ -25,8 +25,8 @@ import (
 	"github.com/spf13/cobra"
 )
 
-// prints an error message in the standard Ballerina CLI format.
-func printError(err error, usage string, showHelp bool) {
+// printError prints an error message in the standard Ballerina CLI format.
+func printError(err error, usage string, showHelp bool, cmdName string) {
 	fmt.Fprintf(os.Stderr, "ballerina: %s\n", err.Error())
 	if usage != "" {
 		fmt.Fprintln(os.Stderr)
@@ -35,15 +35,15 @@ func printError(err error, usage string, showHelp bool) {
 	}
 	if showHelp {
 		fmt.Fprintln(os.Stderr)
-		fmt.Fprintln(os.Stderr, "For more information try --help")
+		fmt.Fprintf(os.Stderr, "For more information try 'bal %s --help'\n", cmdName)
 	}
 }
 
-// validates the source file argument for the 'run' command.
+// validateSourceFile validates the source file argument for the 'run' command.
 func validateSourceFile(cmd *cobra.Command, args []string) error {
 	if len(args) < 1 {
 		err := fmt.Errorf("source file not provided")
-		printError(err, cmd.Use, true)
+		printError(err, cmd.Use, true, cmd.Name())
 		return err
 	}
 

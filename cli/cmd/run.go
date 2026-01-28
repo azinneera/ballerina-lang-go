@@ -32,9 +32,46 @@ import (
 	"ballerina-lang-go/parser"
 	"ballerina-lang-go/runtime"
 
+	"ballerina-lang-go/cli/pkg/templates"
+
 	"github.com/spf13/cobra"
 )
 
+var runLongDesc = `Compile the current package and run it.
+
+The 'run' command compiles and executes the given Ballerina source file.
+
+A Ballerina program consists of one or more modules; one of these modules is distinguished as the root
+module, which is the default module of current package.
+
+Ballerina program execution consists of two consecutive phases. The initialization phase initializes all
+modules of a program one after another. If a module defines a function named 'init()', it will be invoked
+during this phase. If the root module of the program defines a public function named 'main()', then it
+will be invoked.
+
+If the initialization phase of program execution completes successfully, then execution proceeds to the
+listening phase. If there are no module listeners, then the listening phase immediately terminates
+successfully. Otherwise, the listening phase initializes the module listeners.
+
+A service declaration is the syntactic sugar for creating a service object and attaching it to the module
+listener specified in the service declaration.`
+
+var runExamples = []templates.Example{
+	{
+		Description: "Run the current package.",
+		Commands:    []string{"bal run"},
+	},
+	{
+		Description: "Run a single Ballerina source file.",
+		Commands:    []string{"bal run main.bal"},
+	},
+	{
+		Description: "Run with program arguments.",
+		Commands:    []string{"bal run main.bal -- arg1 arg2"},
+	},
+}
+
+// runOpts holds the command-line options for the run command
 var runOpts struct {
 	dumpTokens    bool
 	dumpST        bool
@@ -44,45 +81,33 @@ var runOpts struct {
 	logFile       string
 }
 
-var runCmd = &cobra.Command{
-	Use:   "run <source-file.bal>",
-	Short: "Compile and run the current package or a Ballerina source file",
-	Long: `	Compile the current package and run it.
+func NewRunCommand() *cobra.Command {
+	cmd := &cobra.Command{
+		Use:           "run [OPTIONS] [<package>|<source-file>|<executable>] [-- <args...> <(-Ckey=value)...>]",
+		Short:         "Compile and run the current package or a Ballerina source file",
+		Long:          runLongDesc,
+		Example:       templates.FormatExamples(runExamples),
+		SilenceUsage:  true,
+		SilenceErrors: true,
+		Args:          validateSourceFile,
+		RunE:          runRun,
+	}
 
-	The 'run' command compiles and executes the given Ballerina source file.
+	addRunFlags(cmd)
 
-	A Ballerina program consists of one or more modules; one of these modules
-	is distinguished as the root module, which is the default module of
-	current package.
-
-	Ballerina program execution consists of two consecutive phases.
-	The initialization phase initializes all modules of a program one after
-	another. If a module defines a function named 'init()', it will be
-	invoked during this phase. If the root module of the program defines a
-	public function named 'main()', then it will be invoked.
-
-	If the initialization phase of program execution completes successfully,
-	then execution proceeds to the listening phase. If there are no module
-	listeners, then the listening phase immediately terminates successfully.
-	Otherwise, the listening phase initializes the module listeners.
-
-	A service declaration is the syntactic sugar for creating a service object
-	and attaching it to the module listener specified in the service
-	declaration.`,
-	Args: validateSourceFile,
-	RunE: runBallerina,
+	return cmd
 }
 
-func init() {
-	runCmd.Flags().BoolVar(&runOpts.dumpTokens, "dump-tokens", false, "Dump lexer tokens")
-	runCmd.Flags().BoolVar(&runOpts.dumpST, "dump-st", false, "Dump syntax tree")
-	runCmd.Flags().BoolVar(&runOpts.dumpAST, "dump-ast", false, "Dump abstract syntax tree")
-	runCmd.Flags().BoolVar(&runOpts.dumpBIR, "dump-bir", false, "Dump Ballerina Intermediate Representation")
-	runCmd.Flags().BoolVar(&runOpts.traceRecovery, "trace-recovery", false, "Enable error recovery tracing")
-	runCmd.Flags().StringVar(&runOpts.logFile, "log-file", "", "Write debug output to specified file")
+func addRunFlags(cmd *cobra.Command) {
+	cmd.Flags().BoolVar(&runOpts.dumpTokens, "dump-tokens", false, "Dump lexer tokens")
+	cmd.Flags().BoolVar(&runOpts.dumpST, "dump-st", false, "Dump syntax tree")
+	cmd.Flags().BoolVar(&runOpts.dumpAST, "dump-ast", false, "Dump abstract syntax tree")
+	cmd.Flags().BoolVar(&runOpts.dumpBIR, "dump-bir", false, "Dump Ballerina Intermediate Representation")
+	cmd.Flags().BoolVar(&runOpts.traceRecovery, "trace-recovery", false, "Enable error recovery tracing")
+	cmd.Flags().StringVar(&runOpts.logFile, "log-file", "", "Write debug output to specified file")
 }
 
-func runBallerina(cmd *cobra.Command, args []string) error {
+func runRun(cmd *cobra.Command, args []string) error {
 	fileName := args[0]
 
 	var debugCtx *debugcommon.DebugContext
@@ -109,7 +134,7 @@ func runBallerina(cmd *cobra.Command, args []string) error {
 			logWriter, err = os.Create(runOpts.logFile)
 			if err != nil {
 				cmdErr := fmt.Errorf("error creating log file %s: %w", runOpts.logFile, err)
-				printError(cmdErr, "", false)
+				printError(cmdErr, "", false, cmd.Name())
 				return cmdErr
 			}
 		} else {
@@ -137,14 +162,14 @@ func runBallerina(cmd *cobra.Command, args []string) error {
 	}
 
 	// Compile the source
-	fmt.Fprintln(os.Stderr, "Compiling source")
-	fmt.Fprintf(os.Stderr, "\t%s\n", filepath.Base(fileName))
+	fmt.Println("Compiling source")
+	fmt.Println("\t" + filepath.Base(fileName))
 
 	cx := context.NewCompilerContext()
 
 	syntaxTree, err := parser.GetSyntaxTree(debugCtx, fileName)
 	if err != nil {
-		printError(fmt.Errorf("compilation failed: %w", err), "", false)
+		printError(fmt.Errorf("compilation failed: %w", err), "", false, cmd.Name())
 		return fmt.Errorf("compilation failed: %w", err)
 	}
 
@@ -158,10 +183,9 @@ func runBallerina(cmd *cobra.Command, args []string) error {
 	if runOpts.dumpBIR {
 		prettyPrinter := bir.PrettyPrinter{}
 		// Print the BIR with separators
-		fmt.Fprintln(os.Stderr)
-		fmt.Fprintln(os.Stderr, "==================BEGIN BIR==================")
+		fmt.Println("==================BEGIN BIR==================")
 		fmt.Println(strings.TrimSpace(prettyPrinter.Print(*birPkg)))
-		fmt.Fprintln(os.Stderr, "===================END BIR===================")
+		fmt.Println("===================END BIR===================")
 	}
 
 	// Run the executable

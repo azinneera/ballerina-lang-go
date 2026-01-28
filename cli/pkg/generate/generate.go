@@ -1,7 +1,6 @@
 package generate
 
 import (
-	"ballerina-lang-go/cli/bal/pkg/utils"
 	"fmt"
 	"log"
 	"os"
@@ -33,6 +32,7 @@ type FlagConfig struct {
 	DefaultVal interface{}
 	Param      string
 }
+
 type ToolData struct {
 	Id         string
 	Org        string
@@ -132,15 +132,15 @@ func addFlagsToCommand(cmd *cobra.Command, flags interface{}) {
 	}
 }
 
-// RegisterDynamicCommands function reads the json file and creates the cobra commands
+// RegisterDynamicCommands reads the json file and creates cobra commands
 // according to the json data.
-func RegisterDynamicCommands(javaCmdPass string, cmdLineArgsPass []string, path string, rootCmd *cobra.Command) error {
+func RegisterDynamicCommands(path string, rootCmd *cobra.Command) error {
 	viper.SetConfigFile(path)
 	viper.SetConfigType("json")
 	if err := viper.ReadInConfig(); err != nil {
 		return fmt.Errorf("error reading config file: %w", err)
 	}
-	//Create Base command
+	// Create Base command
 	toolID := viper.GetString("tool_id")
 	toolShort := viper.GetString("short")
 	toolLong := viper.GetString("help.base.long")
@@ -150,8 +150,8 @@ func RegisterDynamicCommands(javaCmdPass string, cmdLineArgsPass []string, path 
 		Short:   toolShort,
 		Long:    toolLong,
 		Example: toolExamples,
-		Run: func(cmd *cobra.Command, args []string) {
-			_ = utils.ExecuteBallerinaCommand(javaCmdPass, cmdLineArgsPass)
+		RunE: func(cmd *cobra.Command, args []string) error {
+			return fmt.Errorf("tool command '%s' is not yet implemented", toolID)
 		},
 	}
 	flags := viper.Get("base_command.flag")
@@ -165,13 +165,14 @@ func RegisterDynamicCommands(javaCmdPass string, cmdLineArgsPass []string, path 
 					Name:  cast.ToString(m["name"]),
 					Short: cast.ToString(m["short"]),
 				}
+				subCmdName := subconfig.Name
 				subCmd := &cobra.Command{
 					Use:     subconfig.Name,
 					Short:   subconfig.Short,
 					Long:    viper.GetString(fmt.Sprintf("help.%s.long", subconfig.Name)),
 					Example: viper.GetString(fmt.Sprintf("help.%s.examples", subconfig.Name)),
-					Run: func(cmd *cobra.Command, args []string) {
-						_ = utils.ExecuteBallerinaCommand(javaCmdPass, cmdLineArgsPass)
+					RunE: func(cmd *cobra.Command, args []string) error {
+						return fmt.Errorf("tool subcommand '%s' is not yet implemented", subCmdName)
 					},
 				}
 				subFlags := viper.Get(subconfig.Name + ".flag")
@@ -184,9 +185,9 @@ func RegisterDynamicCommands(javaCmdPass string, cmdLineArgsPass []string, path 
 	return nil
 }
 
-// GetTools function reads the bal-tools.toml file and returns the list of tools that are active and
-// creates the cobra commands for the tools that are active.
-func GetTools(javaCmd string, cmdLineArgs []string, rootCmd *cobra.Command) []string {
+// GetTools reads the bal-tools.toml file and returns the list of tools that are active,
+// and creates cobra commands for the active tools.
+func GetTools(rootCmd *cobra.Command) []string {
 	currentUser, _ := user.Current()
 	balToolPath := filepath.Join(currentUser.HomeDir, ".ballerina", ".config")
 	toolList := []string{}
@@ -194,13 +195,13 @@ func GetTools(javaCmd string, cmdLineArgs []string, rootCmd *cobra.Command) []st
 		readToolToml()
 		toolDetails := viper.Get("tool")
 		if toolDetails != nil {
-			toolList = processToolDetails(toolDetails, javaCmd, cmdLineArgs, rootCmd, currentUser)
+			toolList = processToolDetails(toolDetails, rootCmd, currentUser)
 		}
 	}
 	return toolList
 }
 
-func processToolDetails(toolDetails interface{}, javaCmd string, cmdLineArgs []string, rootCmd *cobra.Command, currentUser *user.User) []string {
+func processToolDetails(toolDetails interface{}, rootCmd *cobra.Command, currentUser *user.User) []string {
 	toolList := []string{}
 	for _, table := range toolDetails.([]interface{}) {
 		if m, ok := table.(map[string]interface{}); ok {
@@ -209,7 +210,7 @@ func processToolDetails(toolDetails interface{}, javaCmd string, cmdLineArgs []s
 				repocitoryType := getRepositoryType(toolData)
 				toolList = append(toolList, toolData.Id)
 				jasonPath := getJasonPath(currentUser, repocitoryType, toolData)
-				registerCommands(javaCmd, cmdLineArgs, jasonPath, rootCmd)
+				registerCommands(jasonPath, rootCmd)
 			}
 		}
 	}
@@ -240,8 +241,11 @@ func getJasonPath(currentUser *user.User, repocitoryType string, toolData ToolDa
 	return jasonPath
 }
 
-func registerCommands(javaCmd string, cmdLineArgs []string, jasonPath string, rootCmd *cobra.Command) {
-	err := RegisterDynamicCommands(javaCmd, cmdLineArgs, jasonPath, rootCmd)
+func registerCommands(jasonPath string, rootCmd *cobra.Command) {
+	if !fileExists(jasonPath) {
+		return
+	}
+	err := RegisterDynamicCommands(jasonPath, rootCmd)
 	if err != nil {
 		log.Println("Error registering dynamic commands:", err)
 	}
