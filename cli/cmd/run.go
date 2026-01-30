@@ -83,8 +83,8 @@ var runOpts struct {
 
 func NewRunCommand() *cobra.Command {
 	cmd := &cobra.Command{
-		Use:           "run [OPTIONS] [<package>|<source-file>|<executable>] [-- <args...> <(-Ckey=value)...>]",
-		Short:         "Compile and run the current package or a Ballerina source file",
+		Use:           "run [OPTIONS] [<package>|<source-file>] [-- <args...> <(-Ckey=value)...>]",
+		Short:         "Compile and run the current package",
 		Long:          runLongDesc,
 		Example:       templates.FormatExamples(runExamples),
 		SilenceUsage:  true,

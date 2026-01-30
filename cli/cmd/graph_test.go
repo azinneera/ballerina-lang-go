@@ -24,58 +24,45 @@ import (
 	"testing"
 
 	"ballerina-lang-go/cli/pkg/templates"
-
-	"github.com/spf13/cobra"
 )
 
-func TestBuildCommandExecuteReturnsNotImplemented(t *testing.T) {
-	cmd := NewBuildCommand()
+func TestGraphCommandReturnsNotImplemented(t *testing.T) {
+	cmd := NewGraphCommand()
 	err := cmd.RunE(cmd, []string{})
 	if err == nil {
 		t.Fatal("RunE() should return an error")
 	}
-	expected := "command 'build' is not yet implemented"
-	if err.Error() != expected {
-		t.Errorf("RunE() error = %q, want %q", err.Error(), expected)
+	if !strings.Contains(err.Error(), "not yet implemented") {
+		t.Errorf("expected 'not yet implemented' error, got: %v", err)
 	}
 }
 
-func TestBuildCommandHelpText(t *testing.T) {
-	cmd := NewBuildCommand()
+func TestGraphCommandHelpText(t *testing.T) {
+	cmd := NewGraphCommand()
 
 	buf := new(bytes.Buffer)
 	templates.PrintCommandHelpToWriter(buf, cmd)
 
 	output := buf.String()
-	if output == "" {
-		t.Fatal("expected help output, got empty string")
-	}
-
 	expectedSubstrings := []string{
 		"NAME",
-		"ballerina-build - Compiles the current package",
+		"ballerina-graph",
+		"Print the dependency graph",
 		"SYNOPSIS",
-		"bal build [OPTIONS] [<package>|<source-file>]",
 		"DESCRIPTION",
-		"Compile a package and its dependencies",
-		"OPTIONS",
-		"--offline",
-		"--graalvm",
-		"--target-dir <path>",
-		"--cloud <provider>",
+		"DOT graph",
 		"EXAMPLES",
-		"$ bal build",
-		"$ bal build app.bal",
+		"$ bal graph",
 	}
 	for _, sub := range expectedSubstrings {
 		if !strings.Contains(output, sub) {
-			t.Errorf("help output missing %q\ngot:\n%s", sub, output)
+			t.Errorf("graph help output missing %q", sub)
 		}
 	}
 }
 
-func TestBuildCommandHelpLineWidth(t *testing.T) {
-	cmd := NewBuildCommand()
+func TestGraphCommandHelpLineWidth(t *testing.T) {
+	cmd := NewGraphCommand()
 
 	buf := new(bytes.Buffer)
 	templates.PrintCommandHelpToWriter(buf, cmd)
@@ -94,24 +81,9 @@ func TestBuildCommandHelpLineWidth(t *testing.T) {
 	}
 }
 
-func TestBuildCommandHelpSanitizesInput(t *testing.T) {
-	cmd := &cobra.Command{
-		Use:     "test [OPTIONS]",
-		Short:   "  Short description  ",
-		Long:    "Description with\r\n  Windows line endings\r  and weird spacing",
-		Example: "",
-	}
-
-	buf := new(bytes.Buffer)
-	templates.PrintCommandHelpToWriter(buf, cmd)
-
-	output := buf.String()
-
-	if strings.Contains(output, "\r") {
-		t.Error("output should not contain carriage returns")
-	}
-
-	if strings.Contains(output, "ballerina-test -   Short") {
-		t.Error("output should have trimmed short description")
+func TestGraphCommandHasExamples(t *testing.T) {
+	cmd := NewGraphCommand()
+	if cmd.Example == "" {
+		t.Error("graph command should have examples")
 	}
 }
