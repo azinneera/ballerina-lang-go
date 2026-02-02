@@ -28,8 +28,6 @@ import (
 	"ballerina-lang-go/ast"
 	"ballerina-lang-go/bir"
 	debugcommon "ballerina-lang-go/common"
-	"ballerina-lang-go/context"
-	"ballerina-lang-go/parser"
 	"ballerina-lang-go/projects"
 	"ballerina-lang-go/runtime"
 
@@ -182,43 +180,46 @@ func runRun(cmd *cobra.Command, args []string) error {
 
 func runBuildProject(cmd *cobra.Command, project *projects.BuildProject, debugCtx *debugcommon.DebugContext) error {
 	pkg := project.CurrentPackage()
-	mod := pkg.DefaultModule()
 
 	// Compile the source
 	fmt.Println("Compiling source")
 	fmt.Printf("\t%s/%s:%s\n", pkg.PackageOrg(), pkg.PackageName(), pkg.PackageVersion())
 
-	cx := context.NewCompilerContext()
-
-	// Get documents from the module
-	docs := mod.Documents()
-	if len(docs) == 0 {
-		return fmt.Errorf("no source files found in module")
-	}
-	if len(docs) > 1 {
-		return fmt.Errorf("multiple source files in a package are not yet supported")
-	}
-
-	doc := docs[0]
-	filePath, err := project.DocumentPath(doc.DocumentId())
-	if err != nil {
-		return fmt.Errorf("failed to get document path: %w", err)
-	}
-
-	syntaxTree, err := parser.GetSyntaxTree(debugCtx, filePath)
+	// Compile through Project API
+	compilation, err := pkg.Compilation()
 	if err != nil {
 		printError(fmt.Errorf("compilation failed: %w", err), "", false, cmd.Name())
 		return fmt.Errorf("compilation failed: %w", err)
 	}
 
-	compilationUnit := ast.GetCompilationUnit(cx, syntaxTree)
-	if runOpts.dumpAST {
-		prettyPrinter := ast.PrettyPrinter{}
-		fmt.Println(prettyPrinter.Print(compilationUnit))
+	// Check for errors via DiagnosticResult
+	diagResult := compilation.DiagnosticResult()
+	if diagResult.HasErrors() {
+		for _, diag := range diagResult.Errors() {
+			fmt.Fprintf(os.Stderr, "%s\n", diag.Error())
+		}
+		return fmt.Errorf("compilation failed with %d error(s)", diagResult.ErrorCount())
 	}
-	astPkg := ast.ToPackage(compilationUnit)
 
-	birPkg := bir.GenBir(cx, astPkg)
+	// Get compiled artifacts from module
+	mod := pkg.DefaultModule()
+
+	// Dump AST if requested
+	if runOpts.dumpAST {
+		astPkg := mod.BLangPackage()
+		if astPkg != nil {
+			prettyPrinter := ast.PrettyPrinter{}
+			fmt.Println(prettyPrinter.Print(astPkg))
+		}
+	}
+
+	// Get BIR for execution
+	birPkg := mod.BIRPackage()
+	if birPkg == nil {
+		return fmt.Errorf("compilation did not produce BIR")
+	}
+
+	// Dump BIR if requested
 	if runOpts.dumpBIR {
 		prettyPrinter := bir.PrettyPrinter{}
 		fmt.Println("==================BEGIN BIR==================")
@@ -239,41 +240,47 @@ func runBuildProject(cmd *cobra.Command, project *projects.BuildProject, debugCt
 }
 
 func runSingleFileProject(cmd *cobra.Command, project *projects.SingleFileProject, debugCtx *debugcommon.DebugContext) error {
-	// Use Project API: project -> package -> module -> document
 	pkg := project.CurrentPackage()
-	mod := pkg.DefaultModule()
 
 	// Compile the source
 	fmt.Println("Compiling source")
 	fmt.Printf("\t%s\n", filepath.Base(project.FilePath()))
 
-	cx := context.NewCompilerContext()
-
-	// Get the single document from the module
-	docs := mod.Documents()
-	if len(docs) == 0 {
-		return fmt.Errorf("no source files found")
-	}
-
-	doc := docs[0]
-	filePath, err := project.DocumentPath(doc.DocumentId())
-	if err != nil {
-		return fmt.Errorf("failed to get document path: %w", err)
-	}
-
-	syntaxTree, err := parser.GetSyntaxTree(debugCtx, filePath)
+	// Compile through Project API
+	compilation, err := pkg.Compilation()
 	if err != nil {
 		printError(fmt.Errorf("compilation failed: %w", err), "", false, cmd.Name())
 		return fmt.Errorf("compilation failed: %w", err)
 	}
 
-	compilationUnit := ast.GetCompilationUnit(cx, syntaxTree)
-	if runOpts.dumpAST {
-		prettyPrinter := ast.PrettyPrinter{}
-		fmt.Println(prettyPrinter.Print(compilationUnit))
+	// Check for errors via DiagnosticResult
+	diagResult := compilation.DiagnosticResult()
+	if diagResult.HasErrors() {
+		for _, diag := range diagResult.Errors() {
+			fmt.Fprintf(os.Stderr, "%s\n", diag.Error())
+		}
+		return fmt.Errorf("compilation failed with %d error(s)", diagResult.ErrorCount())
 	}
-	astPkg := ast.ToPackage(compilationUnit)
-	birPkg := bir.GenBir(cx, astPkg)
+
+	// Get compiled artifacts from module
+	mod := pkg.DefaultModule()
+
+	// Dump AST if requested
+	if runOpts.dumpAST {
+		astPkg := mod.BLangPackage()
+		if astPkg != nil {
+			prettyPrinter := ast.PrettyPrinter{}
+			fmt.Println(prettyPrinter.Print(astPkg))
+		}
+	}
+
+	// Get BIR for execution
+	birPkg := mod.BIRPackage()
+	if birPkg == nil {
+		return fmt.Errorf("compilation did not produce BIR")
+	}
+
+	// Dump BIR if requested
 	if runOpts.dumpBIR {
 		prettyPrinter := bir.PrettyPrinter{}
 		fmt.Println("==================BEGIN BIR==================")

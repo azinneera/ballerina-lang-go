@@ -18,13 +18,18 @@
 
 package projects
 
+import "sync"
+
 // Package represents a Ballerina package.
 type Package struct {
-	project    Project
-	id         PackageId
-	descriptor PackageDescriptor
-	defaultMod *Module
-	modules    map[ModuleId]*Module
+	project         Project
+	id              PackageId
+	descriptor      PackageDescriptor
+	defaultMod      *Module
+	modules         map[ModuleId]*Module
+	compilation     *PackageCompilation
+	compilationOnce sync.Once
+	compilationErr  error
 }
 
 // NewPackageFromConfig creates a Package from a PackageConfig.
@@ -107,14 +112,19 @@ func (p *Package) Modules() []*Module {
 	return mods
 }
 
-// Manifest returns the parsed package manifest (Phase 2).
+// Manifest returns the parsed package manifest (Phase 3).
 func (p *Package) Manifest() (*PackageManifest, error) {
 	return nil, ErrUnsupported
 }
 
-// GetCompilation returns the package compilation (Phase 2).
-func (p *Package) GetCompilation() error {
-	return ErrUnsupported
+// Compilation compiles the package and returns the compilation result.
+// Results are cached; subsequent calls return the same compilation.
+// Thread-safe via sync.Once.
+func (p *Package) Compilation() (*PackageCompilation, error) {
+	p.compilationOnce.Do(func() {
+		p.compilation, p.compilationErr = newPackageCompilation(p)
+	})
+	return p.compilation, p.compilationErr
 }
 
 // GetResolution returns the package resolution (Phase 3).

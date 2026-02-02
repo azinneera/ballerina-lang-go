@@ -18,6 +18,20 @@
 
 package projects
 
+import (
+	"ballerina-lang-go/ast"
+	"ballerina-lang-go/bir"
+	"ballerina-lang-go/context"
+)
+
+// moduleContext holds internal compilation state for a module.
+// This is unexported to match Java's package-private ModuleContext.
+type moduleContext struct {
+	bLangPackage *ast.BLangPackage // AST representation
+	birPackage   *bir.BIRPackage   // BIR representation
+	compiled     bool
+}
+
 // Module represents a Ballerina module within a package.
 type Module struct {
 	pkg       *Package
@@ -25,6 +39,7 @@ type Module struct {
 	desc      ModuleDescriptor
 	documents map[DocumentId]*Document
 	testDocs  map[DocumentId]*Document
+	ctx       *moduleContext
 }
 
 // NewModuleFromConfig creates a Module from a ModuleConfig.
@@ -123,7 +138,95 @@ func (m *Module) TestDocument(id DocumentId) *Document {
 	return m.testDocs[id]
 }
 
-// GetCompilation returns the module compilation (Phase 2).
-func (m *Module) GetCompilation() error {
-	return ErrUnsupported
+// compile compiles the module and returns diagnostics.
+// This is called internally by PackageCompilation.
+func (m *Module) compile(compilerCtx *context.CompilerContext) ([]Diagnostic, error) {
+	if m.ctx == nil {
+		m.ctx = &moduleContext{}
+	}
+	if m.ctx.compiled {
+		return nil, nil
+	}
+
+	var diagnostics []Diagnostic
+
+	// Get documents and compile each
+	docs := m.Documents()
+	if len(docs) == 0 {
+		diagnostics = append(diagnostics, Diagnostic{
+			Severity: SeverityError,
+			Message:  "no source files found in module",
+		})
+		m.ctx.compiled = true
+		return diagnostics, nil
+	}
+
+	// For now, only support single document per module
+	// TODO: Handle multiple documents in future phases
+	if len(docs) > 1 {
+		diagnostics = append(diagnostics, Diagnostic{
+			Severity: SeverityWarning,
+			Message:  "multiple source files in a module are not yet fully supported",
+		})
+	}
+
+	doc := docs[0]
+	syntaxTree, err := doc.SyntaxTree()
+	if err != nil {
+		diagnostics = append(diagnostics, Diagnostic{
+			Severity: SeverityError,
+			Message:  err.Error(),
+		})
+		m.ctx.compiled = true
+		return diagnostics, nil
+	}
+
+	// Transform to AST
+	compilationUnit := ast.GetCompilationUnit(compilerCtx, syntaxTree)
+	m.ctx.bLangPackage = ast.ToPackage(compilationUnit)
+
+	// Generate BIR if no errors
+	if !hasErrors(diagnostics) {
+		m.ctx.birPackage = bir.GenBir(compilerCtx, m.ctx.bLangPackage)
+	}
+
+	m.ctx.compiled = true
+	return diagnostics, nil
+}
+
+// ensureCompiled ensures the module has been compiled.
+func (m *Module) ensureCompiled(compilerCtx *context.CompilerContext) error {
+	if m.ctx != nil && m.ctx.compiled {
+		return nil
+	}
+	_, err := m.compile(compilerCtx)
+	return err
+}
+
+// BLangPackage returns the AST representation of this module.
+// Returns nil if the module has not been compiled yet.
+func (m *Module) BLangPackage() *ast.BLangPackage {
+	if m.ctx == nil {
+		return nil
+	}
+	return m.ctx.bLangPackage
+}
+
+// BIRPackage returns the BIR representation of this module.
+// Returns nil if the module has not been compiled yet.
+func (m *Module) BIRPackage() *bir.BIRPackage {
+	if m.ctx == nil {
+		return nil
+	}
+	return m.ctx.birPackage
+}
+
+// hasErrors checks if the diagnostics slice contains any errors.
+func hasErrors(diagnostics []Diagnostic) bool {
+	for _, d := range diagnostics {
+		if d.Severity == SeverityError {
+			return true
+		}
+	}
+	return false
 }
