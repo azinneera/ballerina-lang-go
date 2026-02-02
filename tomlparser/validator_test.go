@@ -413,3 +413,26 @@ func TestSchemaInvalidJSON(t *testing.T) {
 		t.Error("Should fail for invalid JSON schema")
 	}
 }
+
+func TestBallerinaTomlSchemaValidation(t *testing.T) {
+	schema, err := NewSchemaFromPath(fsys, "testdata/ballerina-toml-schema.json")
+	if err != nil {
+		t.Fatalf("Failed to load ballerina-toml-schema.json: %v", err)
+	}
+
+	tomlDoc, err := Read(fsys, "testdata/ballerina-package.toml")
+	if err != nil {
+		t.Fatalf("Failed to read ballerina-package.toml: %v", err)
+	}
+
+	err = tomlDoc.Validate(schema)
+	if err != nil {
+		t.Errorf("Validation failed: %v", err)
+	}
+
+	if len(tomlDoc.Diagnostics()) > 0 {
+		for _, diag := range tomlDoc.Diagnostics() {
+			t.Errorf("Unexpected diagnostic: %s", diag.Message)
+		}
+	}
+}

@@ -29,10 +29,12 @@ type Schema interface {
 	Validate(data any) error
 	FromPath(fsys fs.FS, path string) (Schema, error)
 	FromString(content string) (Schema, error)
+	Source() map[string]any // Returns the original schema JSON for custom message lookup
 }
 
 type schemaImpl struct {
 	compiled *jsonschema.Schema
+	source   map[string]any // Original schema JSON for custom message extraction
 }
 
 func NewSchemaFromPath(fsys fs.FS, path string) (Schema, error) {
@@ -60,8 +62,12 @@ func NewSchemaFromString(content string) (Schema, error) {
 		return nil, fmt.Errorf("failed to compile schema: %w", err)
 	}
 
+	// Convert schema to map for custom message lookup
+	schemaMap, _ := schemaDoc.(map[string]any)
+
 	return &schemaImpl{
 		compiled: schema,
+		source:   schemaMap,
 	}, nil
 }
 
@@ -90,4 +96,8 @@ func (s *schemaImpl) FromPath(fsys fs.FS, path string) (Schema, error) {
 
 func (s *schemaImpl) FromString(content string) (Schema, error) {
 	return NewSchemaFromString(content)
+}
+
+func (s *schemaImpl) Source() map[string]any {
+	return s.source
 }

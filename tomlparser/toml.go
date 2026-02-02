@@ -121,7 +121,8 @@ func ReadStringWithSchema(content string, schema Schema) (*Toml, error) {
 		return t, err
 	}
 
-	validator := NewValidator(schema)
+	// Use validator with source for custom message extraction
+	validator := NewValidatorWithSource(schema, schema.Source())
 	validationErr := validator.Validate(t)
 	if validationErr != nil {
 		return t, validationErr
@@ -131,7 +132,7 @@ func ReadStringWithSchema(content string, schema Schema) (*Toml, error) {
 }
 
 func (t *Toml) Validate(schema Schema) error {
-	validator := NewValidator(schema)
+	validator := NewValidatorWithSource(schema, schema.Source())
 	return validator.Validate(t)
 }
 
