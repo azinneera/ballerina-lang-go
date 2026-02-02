@@ -30,6 +30,7 @@ import (
 	debugcommon "ballerina-lang-go/common"
 	"ballerina-lang-go/context"
 	"ballerina-lang-go/parser"
+	"ballerina-lang-go/projects"
 	"ballerina-lang-go/runtime"
 
 	"ballerina-lang-go/cli/pkg/templates"
@@ -108,7 +109,7 @@ func addRunFlags(cmd *cobra.Command) {
 }
 
 func runRun(cmd *cobra.Command, args []string) error {
-	fileName := args[0]
+	path := args[0]
 
 	var debugCtx *debugcommon.DebugContext
 	var wg sync.WaitGroup
@@ -161,13 +162,50 @@ func runRun(cmd *cobra.Command, args []string) error {
 		}()
 	}
 
+	// Load the project using ProjectLoader
+	project, err := projects.Load(path)
+	if err != nil {
+		printError(fmt.Errorf("failed to load project: %w", err), "", false, cmd.Name())
+		return fmt.Errorf("failed to load project: %w", err)
+	}
+
+	// Handle different project types
+	switch project.Kind() {
+	case projects.BuildProjectKind:
+		return runBuildProject(cmd, project.(*projects.BuildProject), debugCtx)
+	case projects.SingleFileProjectKind:
+		return runSingleFileProject(cmd, project.(*projects.SingleFileProject), debugCtx)
+	default:
+		return fmt.Errorf("project type not yet supported: %v", project.Kind())
+	}
+}
+
+func runBuildProject(cmd *cobra.Command, project *projects.BuildProject, debugCtx *debugcommon.DebugContext) error {
+	pkg := project.CurrentPackage()
+	mod := pkg.DefaultModule()
+
 	// Compile the source
 	fmt.Println("Compiling source")
-	fmt.Println("\t" + filepath.Base(fileName))
+	fmt.Printf("\t%s/%s:%s\n", pkg.PackageOrg(), pkg.PackageName(), pkg.PackageVersion())
 
 	cx := context.NewCompilerContext()
 
-	syntaxTree, err := parser.GetSyntaxTree(debugCtx, fileName)
+	// Get documents from the module
+	docs := mod.Documents()
+	if len(docs) == 0 {
+		return fmt.Errorf("no source files found in module")
+	}
+	if len(docs) > 1 {
+		return fmt.Errorf("multiple source files in a package are not yet supported")
+	}
+
+	doc := docs[0]
+	filePath, err := project.DocumentPath(doc.DocumentId())
+	if err != nil {
+		return fmt.Errorf("failed to get document path: %w", err)
+	}
+
+	syntaxTree, err := parser.GetSyntaxTree(debugCtx, filePath)
 	if err != nil {
 		printError(fmt.Errorf("compilation failed: %w", err), "", false, cmd.Name())
 		return fmt.Errorf("compilation failed: %w", err)
@@ -178,11 +216,66 @@ func runRun(cmd *cobra.Command, args []string) error {
 		prettyPrinter := ast.PrettyPrinter{}
 		fmt.Println(prettyPrinter.Print(compilationUnit))
 	}
-	pkg := ast.ToPackage(compilationUnit)
-	birPkg := bir.GenBir(cx, pkg)
+	astPkg := ast.ToPackage(compilationUnit)
+
+	birPkg := bir.GenBir(cx, astPkg)
 	if runOpts.dumpBIR {
 		prettyPrinter := bir.PrettyPrinter{}
-		// Print the BIR with separators
+		fmt.Println("==================BEGIN BIR==================")
+		fmt.Println(strings.TrimSpace(prettyPrinter.Print(*birPkg)))
+		fmt.Println("===================END BIR===================")
+	}
+
+	// Run the executable
+	fmt.Fprintln(os.Stderr)
+	fmt.Fprintln(os.Stderr, "Running executable")
+	fmt.Fprintln(os.Stderr)
+
+	rt := runtime.NewRuntime()
+	if err := rt.Interpret(*birPkg); err != nil {
+		return err
+	}
+	return nil
+}
+
+func runSingleFileProject(cmd *cobra.Command, project *projects.SingleFileProject, debugCtx *debugcommon.DebugContext) error {
+	// Use Project API: project -> package -> module -> document
+	pkg := project.CurrentPackage()
+	mod := pkg.DefaultModule()
+
+	// Compile the source
+	fmt.Println("Compiling source")
+	fmt.Printf("\t%s\n", filepath.Base(project.FilePath()))
+
+	cx := context.NewCompilerContext()
+
+	// Get the single document from the module
+	docs := mod.Documents()
+	if len(docs) == 0 {
+		return fmt.Errorf("no source files found")
+	}
+
+	doc := docs[0]
+	filePath, err := project.DocumentPath(doc.DocumentId())
+	if err != nil {
+		return fmt.Errorf("failed to get document path: %w", err)
+	}
+
+	syntaxTree, err := parser.GetSyntaxTree(debugCtx, filePath)
+	if err != nil {
+		printError(fmt.Errorf("compilation failed: %w", err), "", false, cmd.Name())
+		return fmt.Errorf("compilation failed: %w", err)
+	}
+
+	compilationUnit := ast.GetCompilationUnit(cx, syntaxTree)
+	if runOpts.dumpAST {
+		prettyPrinter := ast.PrettyPrinter{}
+		fmt.Println(prettyPrinter.Print(compilationUnit))
+	}
+	astPkg := ast.ToPackage(compilationUnit)
+	birPkg := bir.GenBir(cx, astPkg)
+	if runOpts.dumpBIR {
+		prettyPrinter := bir.PrettyPrinter{}
 		fmt.Println("==================BEGIN BIR==================")
 		fmt.Println(strings.TrimSpace(prettyPrinter.Print(*birPkg)))
 		fmt.Println("===================END BIR===================")
