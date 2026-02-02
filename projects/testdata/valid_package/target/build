@@ -1,0 +1,55 @@
+{
+  "last_build_time": 1770032984202,
+  "last_update_time": 1770032984202,
+  "last_bal_toml_update_time": 1770031462934,
+  "distribution_version": "2201.13.1",
+  "last_modified_time": {
+    "myapp": 1770031462934
+  },
+  "last_build_options": {
+    "testReport": false,
+    "codeCoverage": false,
+    "skipTests": true,
+    "compilationOptions": {
+      "experimental": false,
+      "cloud": "",
+      "dumpGraph": false,
+      "dumpRawGraphs": false
+    }
+  },
+  "src_meta_info": [
+    {
+      "file": "/Users/asmaj/ballerina/ballerina-lang-go/projects/testdata/valid_package/main.bal",
+      "hash": "fcbb74e56ce8b06c5bebe2ffff17863309007d2c43b36d63bed3db74a09a1205",
+      "size": 82,
+      "lastModifiedTime": 1770029474203
+    },
+    {
+      "file": "/Users/asmaj/ballerina/ballerina-lang-go/projects/testdata/valid_package/Ballerina.toml",
+      "hash": "947b976dd812c12980052e531746ae026c231472cc6533084c524fc9f7d5767e",
+      "size": 59,
+      "lastModifiedTime": 1770031462934
+    }
+  ],
+  "target_exec_meta_info": {
+    "file": "/Users/asmaj/ballerina/ballerina-lang-go/projects/testdata/valid_package/target/backup/bin/myapp.jar",
+    "hash": "b581510cba83cc931a8389b041f2d4dc25f1eaf66c3efb25dba95212b3d79c36",
+    "size": 10436623,
+    "lastModifiedTime": 1770032984410
+  },
+  "settings_meta_info": {
+    "file": "/Users/asmaj/.ballerina/Settings.toml",
+    "hash": "1cc270096bd574cdcfe3e9da0a2f509cc55d06b76874b79b939d75dcaeefb916",
+    "size": 259,
+    "lastModifiedTime": 1769504571955
+  },
+  "ballerina_toml_meta_info": {
+    "file": "/Users/asmaj/ballerina/ballerina-lang-go/projects/testdata/valid_package/Ballerina.toml",
+    "hash": "947b976dd812c12980052e531746ae026c231472cc6533084c524fc9f7d5767e",
+    "size": 59,
+    "lastModifiedTime": 1770031462934
+  },
+  "imports": [
+    "ballerina/io"
+  ]
+}
