@@ -72,6 +72,7 @@ func (v *validatorImpl) extractDiagnostics(err error, toml *Toml) []Diagnostic {
 	if !errors.As(err, &validationErr) {
 		// Not a validation error, return generic diagnostic
 		return []Diagnostic{{
+			Code:     ErrorSchemaValidation,
 			Message:  err.Error(),
 			Severity: diagnostics.Error,
 		}}
@@ -116,9 +117,13 @@ func (v *validatorImpl) collectValidationErrors(err *jsonschema.ValidationError,
 		// Get location from toml metadata if available
 		loc := v.getLocationForPath(err.InstanceLocation, toml)
 
+		// Determine error code based on keyword
+		code := classifyValidationError(keyword, err.InstanceLocation)
+
 		*diags = append(*diags, Diagnostic{
+			Code:     code,
 			Message:  customMsg,
-			Severity: diagnostics.Error,
+			Severity: code.Severity(),
 			Location: loc,
 		})
 		return

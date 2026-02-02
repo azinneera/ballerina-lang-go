@@ -37,6 +37,7 @@ type Toml struct {
 }
 
 type Diagnostic struct {
+	Code     TomlDiagnosticCode
 	Message  string
 	Severity diagnostics.DiagnosticSeverity
 	Location *Location
@@ -296,13 +297,23 @@ func (t *Toml) getValueByPath(keys []string) (any, bool) {
 }
 
 func parseErrorDiagnostic(err error) Diagnostic {
+	errMsg := err.Error()
+	code := ClassifyError(errMsg)
+
 	diagnostic := Diagnostic{
-		Message:  err.Error(),
-		Severity: diagnostics.Error,
+		Code:     code,
+		Message:  errMsg,
+		Severity: code.Severity(),
 	}
+
 	var parseErr toml.ParseError
 	if errors.As(err, &parseErr) {
 		diagnostic.Message = parseErr.Message
+		// Re-classify with the more specific message if available
+		if parseErr.Message != "" {
+			code = ClassifyError(parseErr.Message)
+			diagnostic.Code = code
+		}
 		diagnostic.Location = &Location{
 			StartLine:   parseErr.Position.Line,
 			StartColumn: parseErr.Position.Col,
@@ -310,5 +321,6 @@ func parseErrorDiagnostic(err error) Diagnostic {
 			EndColumn:   parseErr.Position.Col + parseErr.Position.Len,
 		}
 	}
+
 	return diagnostic
 }
