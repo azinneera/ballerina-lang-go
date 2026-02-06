@@ -147,7 +147,6 @@ func runBallerina(cmd *cobra.Command, args []string) error {
 	}
 
 	// Load project using ProjectLoader (auto-detects type)
-	// Java: io.ballerina.projects.directory.ProjectLoader.loadProject
 	result, err := directory.LoadProject(path, directory.WithBuildOptions(buildOpts))
 	if err != nil {
 		printError(err, "run [<source-file.bal> | <package-dir> | .]", false)
@@ -161,21 +160,17 @@ func runBallerina(cmd *cobra.Command, args []string) error {
 		return fmt.Errorf("project loading contains errors")
 	}
 
-	// Get default module for compilation
 	project := result.Project()
 	pkg := project.CurrentPackage()
-	defaultModule := pkg.GetDefaultModule()
+	defaultModule := pkg.DefaultModule()
 
 	// Compile the source
 	fmt.Fprintln(os.Stderr, "Compiling source")
-	// Print package identifier based on project type
 	if project.Kind() == projects.ProjectKindSingleFile {
-		// Single file project - show filename
 		docId := defaultModule.DocumentIDs()[0]
 		doc := defaultModule.Document(docId)
 		fmt.Fprintf(os.Stderr, "\t%s\n", doc.Name())
 	} else {
-		// Build project - show org/packageName:version
 		fmt.Fprintf(os.Stderr, "\t%s/%s:%s\n",
 			pkg.PackageOrg().Value(),
 			pkg.PackageName().Value(),
@@ -183,8 +178,7 @@ func runBallerina(cmd *cobra.Command, args []string) error {
 	}
 
 	// Trigger the package compilation pipeline.
-	// Java: CompileTask.execute() -> project.currentPackage().getCompilation()
-	compilation := pkg.GetCompilation()
+	compilation := pkg.Compilation()
 	compilationDiagResult := compilation.DiagnosticResult()
 	if compilationDiagResult.DiagnosticCount() > 0 {
 		printDiagnostics(compilationDiagResult)
@@ -193,8 +187,12 @@ func runBallerina(cmd *cobra.Command, args []string) error {
 		return fmt.Errorf("compilation contains errors")
 	}
 
-	// Generate BIR from the compiled package. This is a temporary step TODO:
-	birPkg := compilation.GetBir()
+	// Generate BIR via the backend. NewBallerinaBackend triggers performCodeGen()
+	// which populates BIR on all compiled module contexts.
+	// Java: JBallerinaBackend.from(compilation, JvmTarget)
+	backend := projects.NewBallerinaBackend(compilation)
+
+	birPkg := backend.BIR()
 	if buildOpts.DumpBIR() {
 		prettyPrinter := bir.PrettyPrinter{}
 		// Print the BIR with separators
