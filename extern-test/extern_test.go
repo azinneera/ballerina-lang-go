@@ -64,20 +64,11 @@ func TestExternValid(t *testing.T) {
 	backend := projects.NewBallerinaBackend(compilation)
 	birPkg := backend.BIR()
 
-	var stdoutBuf bytes.Buffer
-	rt := runtime.NewRuntime()
+	stdoutBuf := &bytes.Buffer{}
 
-	// Register println to capture output
-	runtime.RegisterExternFunction(rt, "ballerina", "io", "println", func(args []values.BalValue) (values.BalValue, error) {
-		var b strings.Builder
-		visited := make(map[uintptr]bool)
-		for _, arg := range args {
-			b.WriteString(values.String(arg, visited))
-		}
-		b.WriteByte('\n')
-		stdoutBuf.WriteString(b.String())
-		return nil, nil
-	})
+	platform := runtime.NativePlatform()
+	platform.IO.Stdout = stdoutBuf
+	rt := runtime.NewRuntime(platform)
 
 	// Register foo() returns "$foo"
 	runtime.RegisterExternFunction(rt, "$anon", "1-v", "foo", func(args []values.BalValue) (values.BalValue, error) {
@@ -200,19 +191,11 @@ func TestExternHandle(t *testing.T) {
 	backend := projects.NewBallerinaBackend(compilation)
 	birPkg := backend.BIR()
 
-	var stdoutBuf bytes.Buffer
-	rt := runtime.NewRuntime()
+	stdoutBuf := &bytes.Buffer{}
 
-	runtime.RegisterExternFunction(rt, "ballerina", "io", "println", func(args []values.BalValue) (values.BalValue, error) {
-		var b strings.Builder
-		visited := make(map[uintptr]bool)
-		for _, arg := range args {
-			b.WriteString(values.String(arg, visited))
-		}
-		b.WriteByte('\n')
-		stdoutBuf.WriteString(b.String())
-		return nil, nil
-	})
+	platform := runtime.NativePlatform()
+	platform.IO.Stdout = stdoutBuf
+	rt := runtime.NewRuntime(platform)
 
 	type myHandle struct {
 		data string
