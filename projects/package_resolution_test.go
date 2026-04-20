@@ -59,7 +59,7 @@ func TestPackageResolution_WithCache(t *testing.T) {
 	cachePath, err := filepath.Abs("testdata/repo/bala")
 	require.NoError(err)
 
-	repo := repository.NewRepository(os.DirFS(cachePath), cachePath, nil)
+	repo := repository.NewRepository(os.DirFS(cachePath), cachePath)
 
 	// Load mock package from repository (auto-caches via InitPackage)
 	pkg, err := repo.GetPackage(context.Background(), "mockorg", "mockpkg", "1.0.0")
@@ -144,7 +144,7 @@ func TestRepository_Integration(t *testing.T) {
 	cachePath, err := filepath.Abs("testdata/repo/bala")
 	require.NoError(err)
 
-	repo := repository.NewRepository(os.DirFS(cachePath), cachePath, nil)
+	repo := repository.NewRepository(os.DirFS(cachePath), cachePath)
 
 	// Test GetPackageVersions
 	versions, err := repo.GetPackageVersions(context.Background(), "mockorg", "mockpkg")
@@ -197,15 +197,8 @@ func TestPackageResolution_ExternalDependencyCompilation(t *testing.T) {
 	require.NoError(err)
 
 	result, err := loadProject(absPath, projects.ProjectLoadConfig{
-		RepositoryFactories: []projects.RepositoryFactory{
-			func(env *projects.Environment) projects.Repository {
-				return projects.NewFileSystemRepository(
-					"test-repo",
-					os.DirFS(testRepoPath),
-					".",
-					env,
-				)
-			},
+		Repositories: []projects.Repository{
+			projects.NewFileSystemRepository(os.DirFS(testRepoPath), "."),
 		},
 	})
 	require.NoError(err)
@@ -271,15 +264,8 @@ func TestPackageResolution_TransitiveDependency(t *testing.T) {
 	require.NoError(err)
 
 	result, err := loadProject(absPath, projects.ProjectLoadConfig{
-		RepositoryFactories: []projects.RepositoryFactory{
-			func(env *projects.Environment) projects.Repository {
-				return projects.NewFileSystemRepository(
-					"test-repo",
-					os.DirFS(testRepoPath),
-					".",
-					env,
-				)
-			},
+		Repositories: []projects.Repository{
+			projects.NewFileSystemRepository(os.DirFS(testRepoPath), "."),
 		},
 	})
 	require.NoError(err)
@@ -369,15 +355,8 @@ func TestPackageResolution_MultiModuleDependencies(t *testing.T) {
 	require.NoError(err)
 
 	result, err := loadProject(absPath, projects.ProjectLoadConfig{
-		RepositoryFactories: []projects.RepositoryFactory{
-			func(env *projects.Environment) projects.Repository {
-				return projects.NewFileSystemRepository(
-					"test-repo",
-					os.DirFS(testRepoPath),
-					".",
-					env,
-				)
-			},
+		Repositories: []projects.Repository{
+			projects.NewFileSystemRepository(os.DirFS(testRepoPath), "."),
 		},
 	})
 	require.NoError(err)
@@ -401,4 +380,46 @@ func TestPackageResolution_MultiModuleDependencies(t *testing.T) {
 		t.Logf("Diagnostic: %s", diag.Message())
 	}
 	assert.Equal(0, diagnosticResult.DiagnosticCount(), "expected no compilation errors")
+}
+
+// TestPackageResolution_ProjectLevelCache tests that when BallerinaHomeFs is not set,
+// the loader defaults to using <projectFs>/.ballerina/ for package resolution.
+func TestPackageResolution_ProjectLevelCache(t *testing.T) {
+	require := test_util.NewRequire(t)
+	assert := test_util.New(t)
+
+	// Load project WITHOUT setting BallerinaHomeFs or Repositories
+	// This should default to using .ballerina/ within the project directory
+	projectPath := filepath.Join("testdata", "project-with-local-cache")
+	absPath, err := filepath.Abs(projectPath)
+	require.NoError(err)
+
+	fsys := os.DirFS(absPath)
+
+	// Load with empty config - should use default .ballerina/ cache
+	result, err := projects.Load(fsys, ".")
+	require.NoError(err)
+	require.NotNil(result)
+
+	mainProject := result.Project()
+	require.NotNil(mainProject)
+
+	// Get the package and trigger compilation
+	pkg := mainProject.CurrentPackage()
+	require.NotNil(pkg)
+
+	compilation := pkg.Compilation()
+	require.NotNil(compilation, "compilation should not be nil")
+
+	// Verify external package was resolved from local cache
+	env := mainProject.Environment()
+	cachedPkg := env.PackageCache().Get("mockorg", "mockpkg", "1.0.0")
+	require.NotNil(cachedPkg, "mockpkg should be resolved from .ballerina/ cache")
+
+	// Verify no compilation errors
+	diagnostics := compilation.DiagnosticResult()
+	for _, diag := range diagnostics.Diagnostics() {
+		t.Logf("Diagnostic: %s", diag.Message())
+	}
+	assert.Equal(0, diagnostics.DiagnosticCount(), "expected no compilation errors")
 }

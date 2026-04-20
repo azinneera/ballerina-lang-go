@@ -29,7 +29,7 @@ import (
 )
 
 func newTestRepository(path string) *repository.Repository {
-	return repository.NewRepository(os.DirFS(path), path, nil)
+	return repository.NewRepository(os.DirFS(path), path)
 }
 
 func TestRepository_GetPackageVersions(t *testing.T) {
@@ -184,13 +184,6 @@ func TestRepository_ContextCancellation(t *testing.T) {
 			t.Errorf("expected context.Canceled, got %v", err)
 		}
 	})
-}
-
-func TestRepository_Name(t *testing.T) {
-	repo := newTestRepository("testdata/repo/bala")
-	if repo.Name() != "filesystem" {
-		t.Errorf("expected 'filesystem', got %q", repo.Name())
-	}
 }
 
 func TestRepository_Root(t *testing.T) {

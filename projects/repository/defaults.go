@@ -29,21 +29,14 @@ const (
 	defaultCacheSubpath = "repositories/central.ballerina.io/bala"
 )
 
-// DefaultFactories returns repository factories for the standard repositories
+// DefaultRepositories returns repositories for the standard repository locations
 // using the given ballerinaHomeFs.
 // Currently only queries the central cache.
 //
 // Deprecated: Default repositories are now created automatically when calling
-// projects.Load() without explicit RepositoryFactories.
-func DefaultFactories(ballerinaHomeFs fs.FS) []projects.RepositoryFactory {
-	return []projects.RepositoryFactory{
-		func(env *projects.Environment) projects.Repository {
-			return projects.NewFileSystemRepository(
-				"central",
-				ballerinaHomeFs,
-				defaultCacheSubpath,
-				env,
-			)
-		},
+// projects.Load() with BallerinaHomeFs set in ProjectLoadConfig.
+func DefaultRepositories(ballerinaHomeFs fs.FS) []projects.Repository {
+	return []projects.Repository{
+		projects.NewFileSystemRepository(ballerinaHomeFs, defaultCacheSubpath),
 	}
 }

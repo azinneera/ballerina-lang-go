@@ -29,7 +29,8 @@ import (
 type FileSystemRepository = projects.FileSystemRepository
 
 // NewFileSystemRepository creates a repository that uses fs.FS for file access.
+// The repository must be bound to an Environment before use via ProjectEnvironmentBuilder.
 // Deprecated: Use projects.NewFileSystemRepository directly.
-func NewFileSystemRepository(name string, fsys fs.FS, basePath string, env *projects.Environment) *FileSystemRepository {
-	return projects.NewFileSystemRepository(name, fsys, basePath, env)
+func NewFileSystemRepository(fsys fs.FS, basePath string) *FileSystemRepository {
+	return projects.NewFileSystemRepository(fsys, basePath)
 }

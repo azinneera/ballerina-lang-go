@@ -55,9 +55,10 @@ type Repository struct {
 //
 // The fsys should be rooted at the repository root (e.g., os.DirFS(rootPath)).
 // The rootPath is used for write operations like PushPackage.
-func NewRepository(fsys fs.FS, rootPath string, env *projects.Environment) *Repository {
+// The repository must be bound to an Environment before use via ProjectEnvironmentBuilder.
+func NewRepository(fsys fs.FS, rootPath string) *Repository {
 	return &Repository{
-		fsRepo:   NewFileSystemRepository("filesystem", fsys, ".", env),
+		fsRepo:   NewFileSystemRepository(fsys, "."),
 		rootPath: rootPath,
 	}
 }
@@ -65,11 +66,6 @@ func NewRepository(fsys fs.FS, rootPath string, env *projects.Environment) *Repo
 // Root returns the root directory path of this repository.
 func (r *Repository) Root() string {
 	return r.rootPath
-}
-
-// Name returns "filesystem" for logging and debugging.
-func (r *Repository) Name() string {
-	return r.fsRepo.Name()
 }
 
 // GetPackage loads and returns a package from this repository.
@@ -164,11 +160,6 @@ func NewRemoteRepository(cache *Repository, baseURL string, client *http.Client)
 		client:     client,
 		baseURL:    baseURL,
 	}
-}
-
-// Name returns "remote" for logging and debugging.
-func (r *RemoteRepository) Name() string {
-	return "remote"
 }
 
 // BaseURL returns the remote registry URL.
