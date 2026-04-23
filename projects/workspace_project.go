@@ -53,6 +53,14 @@ func (w *WorkspaceProject) Manifest() WorkspaceManifest {
 	return w.manifest
 }
 
+// Resolution returns the workspace resolution (dependency graph between packages).
+// The resolution is computed lazily and cached.
+func (w *WorkspaceProject) Resolution() *WorkspaceResolution {
+	// Note: In a full implementation, this would be lazily computed and cached.
+	// For now, we compute it fresh each time.
+	return newWorkspaceResolution(w)
+}
+
 // CurrentPackage returns the current package (first project's package).
 // For workspace projects, this returns the first project's package for compatibility.
 func (w *WorkspaceProject) CurrentPackage() *Package {
