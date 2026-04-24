@@ -48,10 +48,6 @@ const (
 	corpusProjectBaseDir            = "../corpus/project"
 	corpusProjectIntegrationBaseDir = "../corpus/integration/project"
 
-	externOrgName    = "ballerina"
-	externModuleName = "io"
-	externFuncName   = "println"
-
 	panicPrefix = "panic: "
 )
 
