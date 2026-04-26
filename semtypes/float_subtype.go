@@ -87,13 +87,13 @@ func createFloatSubtype(allowed bool, values []enumerableType[float64]) ProperSu
 	return newFloatSubtypeFromBoolEnumerableFloats(allowed, values)
 }
 
-func (this *floatSubtype) Allowed() bool {
-	return this.allowed
+func (f *floatSubtype) Allowed() bool {
+	return f.allowed
 }
 
-func (this *floatSubtype) Values() []enumerableType[float64] {
+func (f *floatSubtype) Values() []enumerableType[float64] {
 	var values []enumerableType[float64]
-	for _, value := range this.values {
+	for _, value := range f.values {
 		values = append(values, &value)
 	}
 	return values
