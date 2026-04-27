@@ -454,12 +454,12 @@ func (n *BLangVariableReferenceBase) SetSymbol(symbolRef model.SymbolRef) {
 // Symbol returns the resolved SymbolRef for this invocation.
 // Panics if the symbol has not been resolved yet (i.e. is a deferred method symbol).
 // Only call this after type resolution.
-func (n *BLangInvocation) Symbol() model.SymbolRef {
-	return *n.RawSymbol.(*model.SymbolRef)
+func (b *BLangInvocation) Symbol() model.SymbolRef {
+	return *b.RawSymbol.(*model.SymbolRef)
 }
 
-func (n *BLangInvocation) SetSymbol(symbolRef model.SymbolRef) {
-	n.RawSymbol = &symbolRef
+func (b *BLangInvocation) SetSymbol(symbolRef model.SymbolRef) {
+	b.RawSymbol = &symbolRef
 }
 
 func (b *BLangGroupExpr) GetKind() model.NodeKind {

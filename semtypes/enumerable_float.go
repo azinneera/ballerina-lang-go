@@ -44,11 +44,5 @@ func (t1 *enumerableFloat) Compare(t2 enumerableType[float64]) int {
 }
 
 func newEnumerableFloatFromFloat64(value float64) enumerableFloat {
-	this := enumerableFloat{}
-	this.value = value
-	return this
-}
-
-func enumerableFloatFrom(d float64) enumerableFloat {
-	return newEnumerableFloatFromFloat64(d)
+	return enumerableFloat{value: value}
 }
