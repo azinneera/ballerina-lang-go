@@ -21,7 +21,7 @@ import (
 )
 
 const (
-	BallerinaEnvVar   = "BAL_ENV"
+	BallerinaEnvVar       = "BAL_ENV"
 	UserHomeDirName       = ".ballerina"
 	RepositoriesDirName   = "repositories"
 	CentralRepositoryName = "central.ballerina.io"

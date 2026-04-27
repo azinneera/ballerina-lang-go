@@ -171,7 +171,7 @@ func runBallerina(cmd *cobra.Command, args []string) error {
 
 	result, err := projects.Load(fsys, path, projects.ProjectLoadConfig{
 		BallerinaEnvFs: ballerinaEnvFs,
-		BuildOptions:    &buildOpts,
+		BuildOptions:   &buildOpts,
 	})
 	if err != nil {
 		printRunError(err)

@@ -105,7 +105,7 @@ func TestSingleFileTargetDirectoryWithBuildOptions(t *testing.T) {
 	ballerinaEnvFs := os.DirFS(ballerinaEnvPath)
 
 	result, err := projects.Load(fsys, fileName, projects.ProjectLoadConfig{
-		BuildOptions:    &buildOpts,
+		BuildOptions:   &buildOpts,
 		BallerinaEnvFs: ballerinaEnvFs,
 	})
 	require.NoError(err)

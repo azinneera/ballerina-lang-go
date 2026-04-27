@@ -41,14 +41,14 @@ type ProjectLoadConfig struct {
 
 // ProjectLoader loads Ballerina projects from the filesystem.
 type ProjectLoader struct {
-	projectFs       fs.FS
+	projectFs      fs.FS
 	ballerinaEnvFs fs.FS
 }
 
 // newProjectLoader creates a new ProjectLoader.
 func newProjectLoader(projectFs fs.FS, ballerinaEnvFs fs.FS) *ProjectLoader {
 	return &ProjectLoader{
-		projectFs:       projectFs,
+		projectFs:      projectFs,
 		ballerinaEnvFs: ballerinaEnvFs,
 	}
 }
