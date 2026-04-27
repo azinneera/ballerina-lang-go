@@ -57,17 +57,17 @@
 //	fsys := os.DirFS("/path/to/project/parent")
 //
 //	// Set up Ballerina home filesystem (for langlib and cached packages)
-//	// Determine home path from BAL_HOME env var or ~/.ballerina
-//	ballerinaHomePath := os.Getenv(projects.BallerinaHomeEnvVar)
-//	if ballerinaHomePath == "" {
+//	// Determine home path from BAL_ENV env var or ~/.ballerina
+//	ballerinaEnvPath := os.Getenv(projects.BallerinaEnvVar)
+//	if ballerinaEnvPath == "" {
 //	    userHome, _ := os.UserHomeDir()
-//	    ballerinaHomePath = filepath.Join(userHome, projects.UserHomeDirName)
+//	    ballerinaEnvPath = filepath.Join(userHome, projects.UserHomeDirName)
 //	}
-//	ballerinaHomeFs := os.DirFS(ballerinaHomePath)
+//	ballerinaEnvFs := os.DirFS(ballerinaEnvPath)
 //
 //	// Load with default options
 //	result, err := projects.Load(fsys, "myproject", projects.ProjectLoadConfig{
-//	    BallerinaHomeFs: ballerinaHomeFs,
+//	    BallerinaEnvFs: ballerinaEnvFs,
 //	})
 //
 //	// Load with custom build options
@@ -76,19 +76,19 @@
 //	    WithSkipTests(true).
 //	    Build()
 //	result, err := projects.Load(fsys, "./myproject", projects.ProjectLoadConfig{
-//	    BallerinaHomeFs: ballerinaHomeFs,
+//	    BallerinaEnvFs: ballerinaEnvFs,
 //	    BuildOptions: &buildOpts,
 //	})
 //
 //	// Load a single .bal file
 //	result, err := projects.Load(fsys, "./main.bal", projects.ProjectLoadConfig{
-//	    BallerinaHomeFs: ballerinaHomeFs,
+//	    BallerinaEnvFs: ballerinaEnvFs,
 //	})
 //
 // [ProjectLoadConfig] allows optional configuration:
 //   - BuildOptions: Compilation settings (offline mode, skip tests, etc.)
 //   - Repositories: Package repositories for dependency resolution
-//   - BallerinaHomeFs: Filesystem for Ballerina home (defaults to <projectFs>/.ballerina/)
+//   - BallerinaEnvFs: Filesystem for Ballerina home (defaults to <projectFs>/.ballerina/)
 //
 // # Compilation Pipeline
 //
@@ -103,7 +103,7 @@
 //
 //	// Load project
 //	result, err := projects.Load(fsys, "./myproject", projects.ProjectLoadConfig{
-//	    BallerinaHomeFs: ballerinaHomeFs,
+//	    BallerinaEnvFs: ballerinaEnvFs,
 //	})
 //	if err != nil {
 //	    log.Fatal(err)

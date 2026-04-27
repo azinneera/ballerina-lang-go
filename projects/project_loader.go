@@ -29,27 +29,27 @@ type ProjectLoadConfig struct {
 	// BuildOptions configures compilation behavior.
 	BuildOptions *BuildOptions
 	// Repositories specifies custom repositories for package resolution.
-	// If nil, default repositories will be created from BallerinaHomeFs.
+	// If nil, default repositories will be created from BallerinaEnvFs.
 	Repositories []Repository
-	// BallerinaHomeFs is the filesystem containing the Ballerina home directory.
+	// BallerinaEnvFs is the filesystem containing the Ballerina home directory.
 	// Used to locate default repositories (central cache) when Repositories is nil.
 	// If nil, defaults to fs.Sub(projectFs, ".ballerina") — which resolves to
 	// <project-path>/.ballerina for build projects and <file-path-parent>/.ballerina
 	// for single-file projects.
-	BallerinaHomeFs fs.FS
+	BallerinaEnvFs fs.FS
 }
 
 // ProjectLoader loads Ballerina projects from the filesystem.
 type ProjectLoader struct {
 	projectFs       fs.FS
-	ballerinaHomeFs fs.FS
+	ballerinaEnvFs fs.FS
 }
 
 // newProjectLoader creates a new ProjectLoader.
-func newProjectLoader(projectFs fs.FS, ballerinaHomeFs fs.FS) *ProjectLoader {
+func newProjectLoader(projectFs fs.FS, ballerinaEnvFs fs.FS) *ProjectLoader {
 	return &ProjectLoader{
 		projectFs:       projectFs,
-		ballerinaHomeFs: ballerinaHomeFs,
+		ballerinaEnvFs: ballerinaEnvFs,
 	}
 }
 
@@ -133,7 +133,7 @@ func loadBalaProjectInEnvironment(fsys fs.FS, platformDir string, sharedEnv *Env
 //
 // Repository resolution order:
 //  1. If Repositories is explicitly set in config, use those
-//  2. If BallerinaHomeFs is set in config, create default repositories from it
+//  2. If BallerinaEnvFs is set in config, create default repositories from it
 //  3. Otherwise, default to fs.Sub(projectFs, ".ballerina") — which resolves to
 //     <project-path>/.ballerina for build projects and
 //     <file-path-parent>/.ballerina for single-file projects.
@@ -141,7 +141,7 @@ func (l *ProjectLoader) createEnvironmentWithRepositories(cfg ProjectLoadConfig)
 	repos := cfg.Repositories
 
 	if len(repos) == 0 {
-		homeFs := l.ballerinaHomeFs
+		homeFs := l.ballerinaEnvFs
 		if homeFs == nil {
 			if subFs, err := fs.Sub(l.projectFs, ".ballerina"); err == nil {
 				homeFs = subFs
@@ -244,14 +244,14 @@ func (l *ProjectLoader) loadSingleFileProject(projectPath string, cfg ProjectLoa
 // This is the main entry point for loading projects.
 //
 // The config parameter allows specifying custom repositories and build options.
-// If no repositories are provided and BallerinaHomeFs is set, default repositories
+// If no repositories are provided and BallerinaEnvFs is set, default repositories
 // (central cache) will be created automatically.
 func Load(projectFs fs.FS, projectPath string, config ...ProjectLoadConfig) (ProjectLoadResult, error) {
 	var cfg ProjectLoadConfig
 	if len(config) > 0 {
 		cfg = config[0]
 	}
-	loader := newProjectLoader(projectFs, cfg.BallerinaHomeFs)
+	loader := newProjectLoader(projectFs, cfg.BallerinaEnvFs)
 
 	info, err := fs.Stat(projectFs, projectPath)
 	if err != nil {

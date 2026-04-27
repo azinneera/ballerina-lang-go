@@ -200,10 +200,10 @@ var _ Repository = (*FileSystemRepository)(nil)
 var _ bindableRepository = (*FileSystemRepository)(nil)
 
 // defaultRepositories returns repositories for the standard repository locations
-// using the given ballerinaHomeFs.
+// using the given ballerinaEnvFs.
 // Currently only queries the central cache.
-func defaultRepositories(ballerinaHomeFs fs.FS) []Repository {
+func defaultRepositories(ballerinaEnvFs fs.FS) []Repository {
 	return []Repository{
-		NewFileSystemRepository(ballerinaHomeFs, centralCacheSubpath),
+		NewFileSystemRepository(ballerinaEnvFs, centralCacheSubpath),
 	}
 }

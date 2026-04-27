@@ -42,11 +42,11 @@ func TestExternValid(t *testing.T) {
 
 	fsys := os.DirFS(filepath.Dir(absPath))
 
-	ballerinaHomePath := getBallerinaHomePath(t)
-	ballerinaHomeFs := os.DirFS(ballerinaHomePath)
+	ballerinaEnvPath := getBallerinaEnvPath(t)
+	ballerinaEnvFs := os.DirFS(ballerinaEnvPath)
 
 	result, err := projects.Load(fsys, filepath.Base(absPath), projects.ProjectLoadConfig{
-		BallerinaHomeFs: ballerinaHomeFs,
+		BallerinaEnvFs: ballerinaEnvFs,
 	})
 	if err != nil {
 		t.Fatalf("failed to load project: %v", err)
@@ -110,11 +110,11 @@ func TestExternTypeMismatchArg(t *testing.T) {
 
 	fsys := os.DirFS(filepath.Dir(absPath))
 
-	ballerinaHomePath := getBallerinaHomePath(t)
-	ballerinaHomeFs := os.DirFS(ballerinaHomePath)
+	ballerinaEnvPath := getBallerinaEnvPath(t)
+	ballerinaEnvFs := os.DirFS(ballerinaEnvPath)
 
 	result, err := projects.Load(fsys, filepath.Base(absPath), projects.ProjectLoadConfig{
-		BallerinaHomeFs: ballerinaHomeFs,
+		BallerinaEnvFs: ballerinaEnvFs,
 	})
 	if err != nil {
 		t.Fatalf("failed to load project: %v", err)
@@ -147,11 +147,11 @@ func TestExternTypeMismatchReturn(t *testing.T) {
 
 	fsys := os.DirFS(filepath.Dir(absPath))
 
-	ballerinaHomePath := getBallerinaHomePath(t)
-	ballerinaHomeFs := os.DirFS(ballerinaHomePath)
+	ballerinaEnvPath := getBallerinaEnvPath(t)
+	ballerinaEnvFs := os.DirFS(ballerinaEnvPath)
 
 	result, err := projects.Load(fsys, filepath.Base(absPath), projects.ProjectLoadConfig{
-		BallerinaHomeFs: ballerinaHomeFs,
+		BallerinaEnvFs: ballerinaEnvFs,
 	})
 	if err != nil {
 		t.Fatalf("failed to load project: %v", err)
@@ -237,9 +237,9 @@ func TestExternHandle(t *testing.T) {
 	}
 }
 
-func getBallerinaHomePath(t *testing.T) string {
-	if balHome := os.Getenv(projects.BallerinaHomeEnvVar); balHome != "" {
-		return balHome
+func getBallerinaEnvPath(t *testing.T) string {
+	if balEnv := os.Getenv(projects.BallerinaEnvVar); balEnv != "" {
+		return balEnv
 	}
 
 	userHome, err := os.UserHomeDir()

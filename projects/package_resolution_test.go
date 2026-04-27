@@ -382,7 +382,7 @@ func TestPackageResolution_MultiModuleDependencies(t *testing.T) {
 }
 
 // TestPackageResolution_ProjectLevelCache verifies the build-project default:
-// when BallerinaHomeFs is not set, the loader falls back to
+// when BallerinaEnvFs is not set, the loader falls back to
 // fs.Sub(projectFs, ".ballerina"), which resolves to <project-path>/.ballerina/.
 // External packages staged there must be picked up without any caller config.
 func TestPackageResolution_ProjectLevelCache(t *testing.T) {
@@ -395,7 +395,7 @@ func TestPackageResolution_ProjectLevelCache(t *testing.T) {
 
 	fsys := os.DirFS(absPath)
 
-	// Intentionally do not pass BallerinaHomeFs — exercises the default fallback.
+	// Intentionally do not pass BallerinaEnvFs — exercises the default fallback.
 	result, err := projects.Load(fsys, ".")
 	require.NoError(err)
 	require.NotNil(result)
@@ -424,7 +424,7 @@ func TestPackageResolution_ProjectLevelCache(t *testing.T) {
 }
 
 // TestPackageResolution_SingleFileProjectLevelCache verifies the single-file
-// default: when BallerinaHomeFs is not set, the loader falls back to
+// default: when BallerinaEnvFs is not set, the loader falls back to
 // fs.Sub(projectFs, ".ballerina"), which resolves to <file-path-parent>/.ballerina/
 // for a single .bal file. External packages staged there must be picked up
 // without any caller config.
@@ -440,7 +440,7 @@ func TestPackageResolution_SingleFileProjectLevelCache(t *testing.T) {
 	fileName := filepath.Base(absPath)
 	fsys := os.DirFS(baseDir)
 
-	// Intentionally do not pass BallerinaHomeFs — exercises the default fallback.
+	// Intentionally do not pass BallerinaEnvFs — exercises the default fallback.
 	result, err := projects.Load(fsys, fileName)
 	require.NoError(err)
 	require.NotNil(result)

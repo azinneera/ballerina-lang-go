@@ -226,15 +226,15 @@ func runCompilePhase(balFile string, stdoutBuf, stderrBuf *bytes.Buffer) (pkg *b
 
 	fsys := os.DirFS(filepath.Dir(balFile))
 
-	ballerinaHomePath, err := getBallerinaHomePath()
+	ballerinaEnvPath, err := getBallerinaEnvPath()
 	if err != nil {
 		fmt.Fprintf(stdoutBuf, "%s\n", err.Error())
 		return nil, err
 	}
-	ballerinaHomeFs := os.DirFS(ballerinaHomePath)
+	ballerinaEnvFs := os.DirFS(ballerinaEnvPath)
 
 	result, err := projects.Load(fsys, filepath.Base(balFile), projects.ProjectLoadConfig{
-		BallerinaHomeFs: ballerinaHomeFs,
+		BallerinaEnvFs: ballerinaEnvFs,
 	})
 	if err != nil {
 		fmt.Fprintf(stdoutBuf, "%s\n", err.Error())
@@ -369,15 +369,15 @@ func runProjectCompilePhase(projectDir string, stdoutBuf, stderrBuf *bytes.Buffe
 
 	fsys := os.DirFS(projectDir)
 
-	ballerinaHomePath, err := getBallerinaHomePath()
+	ballerinaEnvPath, err := getBallerinaEnvPath()
 	if err != nil {
 		fmt.Fprintf(stdoutBuf, "%s\n", err.Error())
 		return nil, err
 	}
-	ballerinaHomeFs := os.DirFS(ballerinaHomePath)
+	ballerinaEnvFs := os.DirFS(ballerinaEnvPath)
 
 	result, err := projects.Load(fsys, ".", projects.ProjectLoadConfig{
-		BallerinaHomeFs: ballerinaHomeFs,
+		BallerinaEnvFs: ballerinaEnvFs,
 	})
 	if err != nil {
 		fmt.Fprintf(stdoutBuf, "%s\n", err.Error())
@@ -477,14 +477,14 @@ func runProjectSerializationRoundtrip(projectDir string) (stdout, stderr string)
 	}
 
 	fsys := os.DirFS(projectDir)
-	ballerinaHomePath, err := getBallerinaHomePath()
+	ballerinaEnvPath, err := getBallerinaEnvPath()
 	if err != nil {
 		fmt.Fprintf(&stdoutBuf, "%s\n", err.Error())
 		return stdoutBuf.String(), stderrBuf.String()
 	}
-	ballerinaHomeFs := os.DirFS(ballerinaHomePath)
+	ballerinaEnvFs := os.DirFS(ballerinaEnvPath)
 	result, err := projects.Load(fsys, ".", projects.ProjectLoadConfig{
-		BallerinaHomeFs: ballerinaHomeFs,
+		BallerinaEnvFs: ballerinaEnvFs,
 	})
 	if err != nil {
 		fmt.Fprintf(&stdoutBuf, "%s\n", err.Error())
@@ -703,9 +703,9 @@ func compileModuleFromSource(env *context.CompilerEnvironment, project projects.
 	return bir.GenBir(cx, pkg), nil
 }
 
-func getBallerinaHomePath() (string, error) {
-	if balHome := os.Getenv(projects.BallerinaHomeEnvVar); balHome != "" {
-		return balHome, nil
+func getBallerinaEnvPath() (string, error) {
+	if balEnv := os.Getenv(projects.BallerinaEnvVar); balEnv != "" {
+		return balEnv, nil
 	}
 
 	userHome, err := os.UserHomeDir()

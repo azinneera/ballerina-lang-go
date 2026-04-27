@@ -162,15 +162,15 @@ func runBallerina(cmd *cobra.Command, args []string) error {
 
 	fsys := os.DirFS(baseDir)
 
-	ballerinaHomePath, err := getBallerinaHomePath()
+	ballerinaEnvPath, err := getBallerinaEnvPath()
 	if err != nil {
 		printRunError(err)
 		return err
 	}
-	ballerinaHomeFs := os.DirFS(ballerinaHomePath)
+	ballerinaEnvFs := os.DirFS(ballerinaEnvPath)
 
 	result, err := projects.Load(fsys, path, projects.ProjectLoadConfig{
-		BallerinaHomeFs: ballerinaHomeFs,
+		BallerinaEnvFs: ballerinaEnvFs,
 		BuildOptions:    &buildOpts,
 	})
 	if err != nil {
@@ -240,9 +240,9 @@ func printRunError(err error) {
 	printError(err, "run [<source-file.bal> | <package-dir> | .]", false)
 }
 
-func getBallerinaHomePath() (string, error) {
-	if balHome := os.Getenv(projects.BallerinaHomeEnvVar); balHome != "" {
-		return balHome, nil
+func getBallerinaEnvPath() (string, error) {
+	if balEnv := os.Getenv(projects.BallerinaEnvVar); balEnv != "" {
+		return balEnv, nil
 	}
 
 	userHome, err := os.UserHomeDir()

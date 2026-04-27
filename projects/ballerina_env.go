@@ -21,42 +21,42 @@ import (
 )
 
 const (
-	BallerinaHomeEnvVar   = "BAL_HOME"
+	BallerinaEnvVar   = "BAL_ENV"
 	UserHomeDirName       = ".ballerina"
 	RepositoriesDirName   = "repositories"
 	CentralRepositoryName = "central.ballerina.io"
 	BalaDirName           = "bala"
 )
 
-type BallerinaHome struct {
-	homePath string
+type BallerinaEnv struct {
+	envPath string
 }
 
-// NewBallerinaHome creates a BallerinaHome with an explicit path.
-func NewBallerinaHome(homePath string) *BallerinaHome {
-	return &BallerinaHome{homePath: homePath}
+// NewBallerinaEnv creates a BallerinaEnv with an explicit path.
+func NewBallerinaEnv(envPath string) *BallerinaEnv {
+	return &BallerinaEnv{envPath: envPath}
 }
 
-func (h *BallerinaHome) HomePath() string {
-	return h.homePath
+func (h *BallerinaEnv) EnvPath() string {
+	return h.envPath
 }
 
-func (h *BallerinaHome) RepositoriesPath() string {
-	return filepath.Join(h.homePath, RepositoriesDirName)
+func (h *BallerinaEnv) RepositoriesPath() string {
+	return filepath.Join(h.envPath, RepositoriesDirName)
 }
 
-func (h *BallerinaHome) CentralCachePath() string {
-	return filepath.Join(h.homePath, RepositoriesDirName, CentralRepositoryName, BalaDirName)
+func (h *BallerinaEnv) CentralCachePath() string {
+	return filepath.Join(h.envPath, RepositoriesDirName, CentralRepositoryName, BalaDirName)
 }
 
-func (h *BallerinaHome) LocalRepositoryPath() string {
-	return filepath.Join(h.homePath, RepositoriesDirName, "local", BalaDirName)
+func (h *BallerinaEnv) LocalRepositoryPath() string {
+	return filepath.Join(h.envPath, RepositoriesDirName, "local", BalaDirName)
 }
 
-func (h *BallerinaHome) DistributionRepositoryPath(distributionHome string) string {
+func (h *BallerinaEnv) DistributionRepositoryPath(distributionHome string) string {
 	return filepath.Join(distributionHome, "repo", BalaDirName)
 }
 
-func (h *BallerinaHome) RepositoryPath(repositoryName string) string {
-	return filepath.Join(h.homePath, RepositoriesDirName, repositoryName, BalaDirName)
+func (h *BallerinaEnv) RepositoryPath(repositoryName string) string {
+	return filepath.Join(h.envPath, RepositoriesDirName, repositoryName, BalaDirName)
 }

@@ -34,27 +34,27 @@ func loadProject(path string, config ...projects.ProjectLoadConfig) (projects.Pr
 
 	fsys := os.DirFS(baseDir)
 
-	ballerinaHomePath, err := getBallerinaHomePath()
+	ballerinaEnvPath, err := getBallerinaEnvPath()
 	if err != nil {
 		return projects.ProjectLoadResult{}, err
 	}
-	ballerinaHomeFs := os.DirFS(ballerinaHomePath)
+	ballerinaEnvFs := os.DirFS(ballerinaEnvPath)
 
-	// Merge BallerinaHomeFs into config if not already set
+	// Merge BallerinaEnvFs into config if not already set
 	var cfg projects.ProjectLoadConfig
 	if len(config) > 0 {
 		cfg = config[0]
 	}
-	if cfg.BallerinaHomeFs == nil {
-		cfg.BallerinaHomeFs = ballerinaHomeFs
+	if cfg.BallerinaEnvFs == nil {
+		cfg.BallerinaEnvFs = ballerinaEnvFs
 	}
 
 	return projects.Load(fsys, path, cfg)
 }
 
-func getBallerinaHomePath() (string, error) {
-	if balHome := os.Getenv(projects.BallerinaHomeEnvVar); balHome != "" {
-		return balHome, nil
+func getBallerinaEnvPath() (string, error) {
+	if balEnv := os.Getenv(projects.BallerinaEnvVar); balEnv != "" {
+		return balEnv, nil
 	}
 
 	userHome, err := os.UserHomeDir()
