@@ -84,7 +84,7 @@ func (c *PackageCompilation) compileModulesInternal() {
 		de := c.compilerEnv.DiagnosticEnv()
 		for _, moduleCtx := range c.packageResolution.topologicallySortedModuleList {
 			for _, docCtx := range moduleCtx.srcDocContextMap {
-				de.RegisterFile(docCtx.getQualifiedName(), docCtx.getTextDocument())
+				de.RegisterFile(docCtx.getName(), docCtx.getTextDocument())
 			}
 		}
 
