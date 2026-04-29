@@ -24,6 +24,7 @@ import (
 	"strings"
 
 	"ballerina-lang-go/cli/templates"
+	"ballerina-lang-go/common/tomlparser"
 	"ballerina-lang-go/projects"
 
 	"github.com/spf13/cobra"
@@ -65,6 +66,10 @@ func createNewCmd() *cobra.Command {
 	packages, they will be discovered and added to the workspace.`,
 		Args: validateNewArgs,
 		RunE: func(cmd *cobra.Command, args []string) error {
+			if err := validateTemplate(template); err != nil {
+				printErrorTo(cmd.ErrOrStderr(), err, "new <project-path>", false)
+				return err
+			}
 			return runNew(cmd, args, workspace, template)
 		},
 	}
@@ -74,6 +79,15 @@ func createNewCmd() *cobra.Command {
 		"Acceptable values: [main, service, lib] default: default")
 
 	return cmd
+}
+
+// validateTemplate ensures --template names a known template.
+func validateTemplate(template string) error {
+	switch template {
+	case "default", "main", "service", "lib":
+		return nil
+	}
+	return fmt.Errorf("invalid template '%s'. Acceptable values: [default, main, service, lib]", template)
 }
 
 // validateNewArgs validates the arguments for the 'new' command.
@@ -332,13 +346,20 @@ func validateWorkspacePath(path string) error {
 	return nil
 }
 
-// isWorkspaceToml checks if a Ballerina.toml file contains a [workspace] section.
+// isWorkspaceToml reports whether the file at tomlPath defines a top-level [workspace] table.
+// IO errors and parse errors return false so malformed or missing files don't get classified
+// as workspaces.
 func isWorkspaceToml(tomlPath string) bool {
 	content, err := os.ReadFile(tomlPath)
 	if err != nil {
 		return false
 	}
-	return strings.Contains(string(content), "[workspace]")
+	t, err := tomlparser.ReadString(string(content))
+	if err != nil {
+		return false
+	}
+	_, ok := t.GetTable("workspace")
+	return ok
 }
 
 // findWorkspaceRoot searches for a workspace root starting from the given path.
@@ -362,15 +383,22 @@ func findWorkspaceRoot(startPath string) string {
 	}
 }
 
-// getOrgNameFromWorkspace gets the organization name from the first package in the workspace.
+// getOrgNameFromWorkspace gets the organization name from the first package
+// declared in the workspace manifest. Reading the manifest (rather than scanning
+// immediate child directories) ensures nested member paths like
+// `packages = ["nested/pkg-a"]` are honored.
 func getOrgNameFromWorkspace(workspaceRoot string) string {
-	packages := discoverExistingPackages(workspaceRoot)
+	wsToml, err := os.ReadFile(filepath.Join(workspaceRoot, projects.BallerinaTomlFile))
+	if err != nil {
+		return ""
+	}
+	packages := parseWorkspacePackages(string(wsToml))
 	if len(packages) == 0 {
 		return ""
 	}
 
-	// Read the first package's Ballerina.toml to get org name
-	tomlPath := filepath.Join(workspaceRoot, packages[0], projects.BallerinaTomlFile)
+	// packages stores forward-slash paths; convert to OS-native for filesystem access.
+	tomlPath := filepath.Join(workspaceRoot, filepath.FromSlash(packages[0]), projects.BallerinaTomlFile)
 	content, err := os.ReadFile(tomlPath)
 	if err != nil {
 		return ""
@@ -398,6 +426,10 @@ func addPackageToWorkspace(workspaceRoot, packagePath string) error {
 	if err != nil {
 		return fmt.Errorf("failed to read workspace Ballerina.toml: %w", err)
 	}
+
+	// Always store forward-slash paths in the workspace TOML so the file is portable
+	// across platforms.
+	packagePath = filepath.ToSlash(packagePath)
 
 	contentStr := string(content)
 
