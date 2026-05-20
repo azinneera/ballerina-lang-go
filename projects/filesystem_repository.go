@@ -23,6 +23,8 @@ import (
 	"io/fs"
 	"path"
 	"sort"
+
+	"ballerina-lang-go/lib/stdlibs"
 )
 
 const (
@@ -162,13 +164,17 @@ func (r *FileSystemRepository) findPlatformDir(versionDir string) (string, bool,
 		return "", false, err
 	}
 
-	packageJSON := path.Join(platformPath, "package.json")
-	_, exists, err = statIfExists(r.fsys, packageJSON)
-	if err != nil || !exists {
-		return "", false, err
+	// New-format balas carry Bala.toml; legacy v3 balas carry package.json.
+	// Accept either as the platform-dir marker so config_creator's auto-detect
+	// can dispatch on the actual contents.
+	for _, marker := range []string{BalaTomlFile, "package.json"} {
+		if _, found, err := statIfExists(r.fsys, path.Join(platformPath, marker)); err != nil {
+			return "", false, err
+		} else if found {
+			return platformPath, true, nil
+		}
 	}
-
-	return platformPath, true, nil
+	return "", false, nil
 }
 
 // statIfExists returns (info, true, nil) if path exists, (nil, false, nil) if not found,
@@ -190,12 +196,18 @@ var _ bindableRepository = (*FileSystemRepository)(nil)
 // defaultRepositories returns repositories for the standard repository locations
 // using the given ballerinaEnvFs.
 //
+// The bundled repository is searched first so standard libraries baked into
+// the binary resolve without touching the central cache. Falls through to the
+// central cache when the bundle does not advertise the requested package.
+//
 // The central repository is exposed as a RemoteRepository whose on-disk cache
 // is the central bala directory. The RemoteRepository currently has no remote
 // source wired in, so it behaves as a cache-only read until that arrives.
 func defaultRepositories(ballerinaEnvFs fs.FS) []Repository {
+	bundled := NewFileSystemRepository(stdlibs.FS, ".")
 	centralCache := NewFileSystemRepository(ballerinaEnvFs, centralCacheSubpath)
 	return []Repository{
+		bundled,
 		NewRemoteRepository(centralCache),
 	}
 }
