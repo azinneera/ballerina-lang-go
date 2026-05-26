@@ -23,6 +23,7 @@ import (
 	"strings"
 
 	"ballerina-lang-go/common/tomlparser"
+	"ballerina-lang-go/lib/stdlibs"
 	"ballerina-lang-go/tools/diagnostics"
 )
 
@@ -195,6 +196,11 @@ func (l *ProjectLoader) createEnvironmentWithRepositories(cfg ProjectLoadConfig,
 		if homeFs != nil {
 			repos = defaultRepositories(homeFs)
 		}
+	} else {
+		// Always prepend the production bundled stdlib so embedded packages
+		// (e.g. ballerina/io) are available even when callers supply their own
+		// repository list. This mirrors the priority order in defaultRepositories.
+		repos = append([]Repository{NewFileSystemRepository(stdlibs.FS, ".")}, repos...)
 	}
 
 	return NewProjectEnvironmentBuilder(l.projectFs).

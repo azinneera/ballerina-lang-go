@@ -31,7 +31,6 @@ import (
 	bError "ballerina-lang-go/lib/error/compile"
 	bHttp "ballerina-lang-go/lib/http/compile"
 	bInt "ballerina-lang-go/lib/int/compile"
-	io "ballerina-lang-go/lib/io/compile"
 	langinternal "ballerina-lang-go/lib/langinternal/compile"
 	bMap "ballerina-lang-go/lib/map/compile"
 	bString "ballerina-lang-go/lib/string/compile"
@@ -491,10 +490,6 @@ func ResolveImports(ctx *context.CompilerContext, pkg *ast.BLangPackage, implici
 		// the publicSymbols path once their bala bundles are in place. io and
 		// http are handled as intrinsics below temporarily.
 		if imp.OrgName != nil && imp.OrgName.Value == "ballerina" {
-			if isIoImport(&imp) {
-				bindIntrinsicImport(&imp, "io", io.GetIoSymbols(ctx), result)
-				continue
-			}
 			if isLangImport(&imp, "array") {
 				bindIntrinsicImport(&imp, "array", array.GetArraySymbols(ctx), result)
 				continue

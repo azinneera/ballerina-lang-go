@@ -591,9 +591,11 @@ func TestDependentlyTypedCrossModuleRoundtrip(t *testing.T) {
 	// symbols. If dependent-fn metadata failed to survive serialization, type
 	// resolution of `int a = helper:inferred(0)` would widen to VAL (or error)
 	// and main compilation would fail.
-	publicSymbols := map[semantics.PackageIdentifier]model.ExportedSymbolSpace{
-		{OrgName: org, ModuleName: helperMod}: deserializedHelperExported,
+	publicSymbols, err := projects.BundledStdlibSymbols(env2)
+	if err != nil {
+		t.Fatalf("BundledStdlibSymbols: %v", err)
 	}
+	publicSymbols[semantics.PackageIdentifier{OrgName: org, ModuleName: helperMod}] = deserializedHelperExported
 	_, mainBIR := compileSingleFileModule(t, env2, mainBalPath,
 		model.Name(org),
 		[]model.Name{model.Name(packageRoot)},

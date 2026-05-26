@@ -349,10 +349,6 @@ func (sa *SemanticAnalyzer) processImport(importNode *ast.BLangImportPackage) {
 	sa.importedPkgs[alias] = importNode
 }
 
-func isIoImport(importNode *ast.BLangImportPackage) bool {
-	return len(importNode.PkgNameComps) == 1 && importNode.PkgNameComps[0].GetValue() == "io"
-}
-
 func isHttpImport(importNode *ast.BLangImportPackage) bool {
 	return len(importNode.PkgNameComps) == 1 && importNode.PkgNameComps[0].GetValue() == "http"
 }

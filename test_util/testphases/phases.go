@@ -26,8 +26,8 @@ import (
 	"ballerina-lang-go/bir"
 	"ballerina-lang-go/context"
 	"ballerina-lang-go/desugar"
-	"ballerina-lang-go/model"
 	"ballerina-lang-go/parser"
+	"ballerina-lang-go/projects"
 	"ballerina-lang-go/semantics"
 	"ballerina-lang-go/tools/text"
 )
@@ -97,7 +97,11 @@ func RunPipeline(cx *context.CompilerContext, phase Phase, inputPath string) (*P
 	}
 
 	// Phase 3: Symbol Resolution
-	importedSymbols := semantics.ResolveImports(cx, result.Package, semantics.GetImplicitImports(cx), make(map[semantics.PackageIdentifier]model.ExportedSymbolSpace), "")
+	publicSymbols, err := projects.BundledStdlibSymbols(cx.Environment())
+	if err != nil {
+		return nil, fmt.Errorf("stdlib pre-compilation: %w", err)
+	}
+	importedSymbols := semantics.ResolveImports(cx, result.Package, semantics.GetImplicitImports(cx), publicSymbols, "")
 	semantics.ResolveSymbols(cx, result.Package, importedSymbols)
 	if phase == PhaseSymbolResolution || cx.HasDiagnostics() {
 		return result, nil
