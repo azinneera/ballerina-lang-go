@@ -12,6 +12,10 @@ F(9) = 34
 -- stderr --
 
 ==================BEGIN BIR==================
+module ballerina.io v 0.0.1;
+===================END BIR===================
+
+==================BEGIN BIR==================
 module $anon.run-and-print v 0.0.0;
 import ballerina.io v 0.0.0;
 main() -> nil{
