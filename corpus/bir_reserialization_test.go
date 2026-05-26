@@ -22,6 +22,7 @@ import (
 	"strings"
 	"testing"
 
+	"ballerina-lang-go/bir"
 	bircodec "ballerina-lang-go/bir/codec"
 	"ballerina-lang-go/context"
 	"ballerina-lang-go/semtypes"
@@ -67,10 +68,12 @@ func testBIRSerializationRoundtrip(t *testing.T, testPair test_util.TestCase) {
 
 	// Step 1: Compile .bal to BIR.
 	var stdoutBuf, stderrBuf bytes.Buffer
-	birPkg, tyEnv, _, compileErr := runCompilePhase(testPair.InputPath, &stdoutBuf, &stderrBuf)
-	if birPkg == nil || compileErr != nil {
+	birPkgs, tyEnv, _, compileErr := runCompilePhase(testPair.InputPath, &stdoutBuf, &stderrBuf)
+	if len(birPkgs) == 0 || compileErr != nil {
 		t.Fatalf("compilation failed for %s: %v", testPair.InputPath, compileErr)
 	}
+	// Serialize only the root (user) module — the last in topological order.
+	birPkg := birPkgs[len(birPkgs)-1]
 
 	// Step 2: Serialize BIR.
 	serialized, err := bircodec.Marshal(tyEnv, birPkg)
@@ -87,8 +90,14 @@ func testBIRSerializationRoundtrip(t *testing.T, testPair test_util.TestCase) {
 	}
 
 	// Step 4: Execute the deserialized BIR.
+	// Dependencies (all packages except the user module) must also be loaded
+	// so that default-parameter lambdas and other stdlib functions are available.
+	deps := birPkgs[:len(birPkgs)-1]
+	execPkgs := make([]*bir.BIRPackage, 0, len(deps)+1)
+	execPkgs = append(execPkgs, deps...)
+	execPkgs = append(execPkgs, deserialized)
 	var rtStdoutBuf, rtStderrBuf bytes.Buffer
-	runInterpretPhase(deserialized, freshEnv.GetTypeEnv(), &rtStdoutBuf, &rtStderrBuf)
+	runInterpretPhase(execPkgs, freshEnv.GetTypeEnv(), &rtStdoutBuf, &rtStderrBuf)
 
 	// Step 5: Compare against expected output.
 	expectedStdout, expectedStderr, err := test_util.LoadTxtarStdoutStderr(testPair.ExpectedPath)
