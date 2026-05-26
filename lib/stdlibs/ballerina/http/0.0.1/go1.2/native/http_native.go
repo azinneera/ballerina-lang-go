@@ -14,7 +14,7 @@
 // specific language governing permissions and limitations
 // under the License.
 
-package http
+package native
 
 import (
 	"encoding/json"
