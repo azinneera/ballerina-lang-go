@@ -19,6 +19,7 @@ package semantics
 import (
 	"fmt"
 	"maps"
+	"slices"
 	"strings"
 
 	"ballerina-lang-go/ast"
@@ -29,7 +30,6 @@ import (
 
 	array "ballerina-lang-go/lib/array/compile"
 	bError "ballerina-lang-go/lib/error/compile"
-	bHttp "ballerina-lang-go/lib/http/compile"
 	bInt "ballerina-lang-go/lib/int/compile"
 	langinternal "ballerina-lang-go/lib/langinternal/compile"
 	bMap "ballerina-lang-go/lib/map/compile"
@@ -508,10 +508,6 @@ func ResolveImports(ctx *context.CompilerContext, pkg *ast.BLangPackage, implici
 			}
 			if isLangImport(&imp, "value") {
 				bindIntrinsicImport(&imp, "value", bValue.GetValueSymbols(ctx), result)
-				continue
-			}
-			if isHttpImport(&imp) {
-				bindIntrinsicImport(&imp, "http", bHttp.GetHttpSymbols(ctx), result)
 				continue
 			}
 		}
@@ -1138,7 +1134,7 @@ func resolveClassDefinition(ms *moduleSymbolResolver, classDef *ast.BLangClassDe
 
 	isPublicClass := classDef.IsPublic()
 	className := classDef.Name.Value
-	for methodName := range classDef.Methods {
+	for _, methodName := range slices.Sorted(maps.Keys(classDef.Methods)) {
 		method := classDef.Methods[methodName]
 		if _, sk, exists := classResolver.GetSymbol(methodName); exists && sk == blockScopeKind {
 			semanticError(classResolver, "redeclared symbol '"+model.StripRemotePrefix(methodName)+"'", method.Name.GetPosition())
@@ -1185,7 +1181,8 @@ func resolveClassDefinition(ms *moduleSymbolResolver, classDef *ast.BLangClassDe
 		allocateDefaultParamSymbols(ms, ms.scope, classDef.InitFunction)
 	}
 
-	for _, method := range classDef.Methods {
+	for _, methodName := range slices.Sorted(maps.Keys(classDef.Methods)) {
+		method := classDef.Methods[methodName]
 		methodResolver := newFunctionResolver(classResolver, method)
 		method.SetScope(methodResolver.scope)
 		resolveFunction(methodResolver, method)
@@ -1193,9 +1190,12 @@ func resolveClassDefinition(ms *moduleSymbolResolver, classDef *ast.BLangClassDe
 	}
 
 	classSym := ms.ctx.GetSymbol(classDef.Symbol()).(*model.ClassSymbol)
-	methodTable := make(map[string]model.SymbolRef, len(classDef.Methods))
+	methodTable := make(map[string]model.SymbolRef, len(classDef.Methods)+1)
 	for name, method := range classDef.Methods {
 		methodTable[name] = method.Symbol()
+	}
+	if classDef.InitFunction != nil {
+		methodTable["init"] = classDef.InitFunction.Symbol()
 	}
 	classSym.SetMethods(methodTable)
 }
