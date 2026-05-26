@@ -14,6 +14,31 @@
 // specific language governing permissions and limitations
 // under the License.
 
-public function dummy() returns int {
-    return 42;
+package foo
+
+import (
+	"ballerina-lang-go/runtime"
+	"ballerina-lang-go/runtime/extern"
+	"ballerina-lang-go/values"
+)
+
+const (
+	orgName    = "ballerina"
+	moduleName = "foo"
+)
+
+func addExtern(_ *runtime.Runtime) extern.NativeFunc {
+	return func(_ *extern.Context, args []values.BalValue) (values.BalValue, error) {
+		a, _ := args[0].(int64)
+		b, _ := args[1].(int64)
+		return a + b, nil
+	}
+}
+
+func initFooModule(rt *runtime.Runtime) {
+	runtime.RegisterExternFunction(rt, orgName, moduleName, "add", addExtern(rt))
+}
+
+func init() {
+	runtime.RegisterModuleInitializer(initFooModule)
 }
