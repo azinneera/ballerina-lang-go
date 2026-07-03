@@ -234,10 +234,16 @@ func statIfExists(fsys fs.FS, path string) (fs.FileInfo, bool, error) {
 var _ Repository = (*FileSystemRepository)(nil)
 var _ bindableRepository = (*FileSystemRepository)(nil)
 
-// defaultRepositories returns the default chain and the custom-repo registry
-// (currently just "local") for the given ballerinaEnvFs.
-// Bundled repositories (lang libs, std libs) are searched first so packages
-// baked into the binary resolve without touching the central cache.
+// defaultRepositories returns repositories for the standard repository locations
+// the custom-repo registry (currently just "local") using the given ballerinaEnvFs.
+//
+// The bundled repository is searched first so standard libraries baked into
+// the binary resolve without touching the central cache. Falls through to the
+// central cache when the bundle does not advertise the requested package.
+//
+// The central repository is exposed as a RemoteRepository whose on-disk cache
+// is the central bala directory. The RemoteRepository currently has no remote
+// source wired in, so it behaves as a cache-only read until that arrives.
 func defaultRepositories(ballerinaEnvFs fs.FS) ([]Repository, map[string]Repository) {
 	centralCache := NewFileSystemRepository(ballerinaEnvFs, centralCacheSubpath)
 	localCache := NewFileSystemRepository(ballerinaEnvFs, localRepoCacheSubpath)
