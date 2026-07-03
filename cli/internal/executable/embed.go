@@ -30,6 +30,7 @@ import (
 	"encoding/binary"
 	"fmt"
 	"io"
+	"math"
 	"os"
 	"path/filepath"
 
@@ -70,6 +71,12 @@ func Pack(stubPath string, birPkgs []*bir.BIRPackage, tyEnv semtypes.Env, outPat
 	out, err := os.OpenFile(outPath, os.O_CREATE|os.O_WRONLY|os.O_TRUNC, 0o755)
 	if err != nil {
 		return fmt.Errorf("creating output file: %w", err)
+	}
+	// Ensure execute bits are set even when the file already existed (O_TRUNC
+	// reuses the inode and does not apply the mode argument).
+	if err := os.Chmod(outPath, 0o755); err != nil {
+		_ = out.Close()
+		return fmt.Errorf("setting output file permissions: %w", err)
 	}
 	defer func() { _ = out.Close() }()
 
@@ -124,7 +131,13 @@ func TryLoad() ([]*bir.BIRPackage, semtypes.Env, error) {
 		return nil, nil, nil
 	}
 
-	payloadOffset := int64(binary.LittleEndian.Uint64(trailer[:8]))
+	rawOffset := binary.LittleEndian.Uint64(trailer[:8])
+	// Guard against corrupt offsets that wrap to negative when cast to int64,
+	// which would make payloadSize a large positive value and cause OOM.
+	if rawOffset > uint64(info.Size()-int64(trailerSize)) {
+		return nil, nil, fmt.Errorf("invalid embedded payload offset %d", rawOffset)
+	}
+	payloadOffset := int64(rawOffset)
 	payloadSize := info.Size() - payloadOffset - int64(trailerSize)
 	if payloadSize <= 0 {
 		return nil, nil, fmt.Errorf("invalid embedded payload size %d", payloadSize)
@@ -144,6 +157,9 @@ func TryLoad() ([]*bir.BIRPackage, semtypes.Env, error) {
 
 func marshalPayload(birPkgs []*bir.BIRPackage, tyEnv semtypes.Env) ([]byte, error) {
 	// Format: [uint32 count] ([uint32 len] [BIR bytes])*
+	if len(birPkgs) > math.MaxUint32 {
+		return nil, fmt.Errorf("too many BIR packages: %d", len(birPkgs))
+	}
 	count := make([]byte, 4)
 	binary.BigEndian.PutUint32(count, uint32(len(birPkgs)))
 	buf := append([]byte(nil), count...)
@@ -152,6 +168,9 @@ func marshalPayload(birPkgs []*bir.BIRPackage, tyEnv semtypes.Env) ([]byte, erro
 		data, err := bircodec.Marshal(tyEnv, pkg)
 		if err != nil {
 			return nil, fmt.Errorf("serializing %s: %w", pkg.PackageID.PkgName.Value(), err)
+		}
+		if len(data) > math.MaxUint32 {
+			return nil, fmt.Errorf("serialized BIR package too large: %d bytes", len(data))
 		}
 		lenBytes := make([]byte, 4)
 		binary.BigEndian.PutUint32(lenBytes, uint32(len(data)))
@@ -171,6 +190,9 @@ func unmarshalPayload(payload []byte) ([]*bir.BIRPackage, semtypes.Env, error) {
 	ctx := balctx.NewCompilerContext(env)
 
 	count := int(binary.BigEndian.Uint32(payload[:4]))
+	if count > (len(payload)-4)/4 {
+		return nil, nil, fmt.Errorf("invalid package count %d", count)
+	}
 	pos := 4
 	pkgs := make([]*bir.BIRPackage, 0, count)
 

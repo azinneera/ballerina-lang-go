@@ -157,9 +157,11 @@ func runBuild(cmd *cobra.Command, args []string, opts *buildOptions) error {
 		return buildError(stderr, "failed to load package: %w", err)
 	}
 
-	if diagResult := result.Diagnostics(); diagResult.HasErrors() {
+	if diagResult := result.Diagnostics(); diagResult.HasErrors() || diagResult.HasWarnings() {
 		printDiagnostics(os.DirFS(absPath), stderr, diagResult, !isTerminal(), diagnostics.NewDiagnosticEnv())
-		return buildError(stderr, "package loading reported errors")
+		if diagResult.HasErrors() {
+			return buildError(stderr, "package loading reported errors")
+		}
 	}
 
 	project := result.Project()
@@ -169,15 +171,17 @@ func runBuild(cmd *cobra.Command, args []string, opts *buildOptions) error {
 
 	pkg := project.CurrentPackage()
 	compilation := pkg.Compilation()
-	if cd := compilation.DiagnosticResult(); cd.HasErrors() {
+	if cd := compilation.DiagnosticResult(); cd.HasErrors() || cd.HasWarnings() {
 		printDiagnostics(os.DirFS(absPath), stderr, cd, !isTerminal(), compilation.DiagnosticEnv())
-		return buildError(stderr, "compilation failed; executable not produced")
+		if cd.HasErrors() {
+			return buildError(stderr, "compilation failed; executable not produced")
+		}
 	}
 
 	if opts.statsOneline {
-		fmt.Fprint(stderr, compilation.StatsReportOneline())
+		_, _ = fmt.Fprint(stderr, compilation.StatsReportOneline())
 	} else if opts.stats {
-		fmt.Fprint(stderr, compilation.StatsReport())
+		_, _ = fmt.Fprint(stderr, compilation.StatsReport())
 	}
 
 	backend := projects.NewBallerinaBackend(compilation)
