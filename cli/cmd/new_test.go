@@ -651,6 +651,48 @@ func TestNewPackage_WithTemplate(t *testing.T) {
 	}
 }
 
+// TestNewPackage_LibTemplateGeneratesReadme verifies `bal new -t lib` creates
+// a README.md with the package name substituted into the import example,
+// and that other templates don't generate a README.md at all.
+func TestNewPackage_LibTemplateGeneratesReadme(t *testing.T) {
+	t.Parallel()
+
+	tmpDir := t.TempDir()
+	libPkgPath := filepath.Join(tmpDir, "mylib")
+	_, stderr, err := executeNewCommandWithArgs(t, libPkgPath, "-t", "lib")
+	if err != nil {
+		t.Fatalf("command failed: %v\nstderr: %s", err, stderr)
+	}
+
+	readmePath := filepath.Join(libPkgPath, projects.ReadmeMdFile)
+	content, err := os.ReadFile(readmePath)
+	if err != nil {
+		t.Fatalf("expected README.md to exist for lib template: %v", err)
+	}
+	contentStr := string(content)
+
+	if strings.Contains(contentStr, "PKG_NAME") || strings.Contains(contentStr, "ORG_NAME") {
+		t.Errorf("README.md still has unsubstituted placeholders:\n%s", contentStr)
+	}
+	if !strings.Contains(contentStr, "/mylib") {
+		t.Errorf("README.md import example missing package name 'mylib':\n%s", contentStr)
+	}
+
+	for _, tc := range []string{"default", "main", "service"} {
+		t.Run(tc, func(t *testing.T) {
+			t.Parallel()
+			pkgPath := filepath.Join(t.TempDir(), "mypackage")
+			_, stderr, err := executeNewCommandWithArgs(t, pkgPath, "-t", tc)
+			if err != nil {
+				t.Fatalf("command failed: %v\nstderr: %s", err, stderr)
+			}
+			if _, err := os.Stat(filepath.Join(pkgPath, projects.ReadmeMdFile)); err == nil {
+				t.Errorf("unexpected README.md generated for template %q", tc)
+			}
+		})
+	}
+}
+
 // TestNewPackage_InsideWorkspace_WithTemplate tests creating a package with template inside workspace.
 func TestNewPackage_InsideWorkspace_WithTemplate(t *testing.T) {
 	t.Parallel()

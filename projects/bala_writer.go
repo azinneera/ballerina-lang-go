@@ -19,8 +19,10 @@ package projects
 import (
 	"archive/zip"
 	"bytes"
+	"errors"
 	"fmt"
 	"io"
+	"io/fs"
 	"os"
 	"path"
 	"path/filepath"
@@ -37,6 +39,7 @@ const (
 	balaImplementationVendor = "WSO2"
 	balaLanguageSpecVersion  = "2024R1"
 	dependenciesTomlVersion  = "2"
+	balaDocsDir              = "docs"
 )
 
 // writeBala builds the bala zip at outputDir/<org>-<name>-any-<ver>.bala.
@@ -90,6 +93,12 @@ func populateBalaArchive(zw *zip.Writer, pkg *Package, resolution *PackageResolu
 	if err := writeModuleSources(zw, pkg); err != nil {
 		return err
 	}
+	if err := addBalaDocs(zw, pkg); err != nil {
+		return err
+	}
+	if err := addIncludes(zw, pkg); err != nil {
+		return err
+	}
 	return nil
 }
 
@@ -115,7 +124,13 @@ func copyBallerinaToml(zw *zip.Writer, pkg *Package) error {
 		return fmt.Errorf("writeBala: package has no Ballerina.toml")
 	}
 
-	return writeZipEntry(zw, BallerinaTomlFile, []byte(bt.Content()))
+	content := bt.Content()
+	manifest := pkg.Manifest()
+	if manifest.Readme() != "" {
+		content = rewriteBallerinaTomlForBala(content, manifest)
+	}
+
+	return writeZipEntry(zw, BallerinaTomlFile, []byte(content))
 }
 
 // writeDependenciesToml emits Dependencies.toml into zw: a lock file with one
@@ -190,6 +205,154 @@ func writeModuleSources(zw *zip.Writer, pkg *Package) error {
 			}
 		}
 	}
+	return nil
+}
+
+// addBalaDocs bundles the package readme, icon, and per-module readmes into
+// a docs/ directory inside the bala archive: docs/<readme>, docs/<icon>,
+// docs/modules/<module-name>/<readme>. Mirrors a quirk in Java's
+// implementation: if the package has no readme, nothing is bundled at all
+// — not even a lone icon.
+// Java source: io.ballerina.projects.BalaWriter#addPackageDoc
+func addBalaDocs(zw *zip.Writer, pkg *Package) error {
+	manifest := pkg.Manifest()
+	if manifest.Readme() == "" {
+		return nil
+	}
+
+	fsys := pkg.Project().Environment().fs()
+	root := pkg.Project().SourceRoot()
+
+	if err := addBalaDoc(zw, fsys, root, manifest.Readme(), balaDocPath(manifest.Readme())); err != nil {
+		return balaDocError(fmt.Sprintf("could not locate the readme file '%s'", manifest.Readme()), err)
+	}
+	if manifest.Icon() != "" {
+		if err := addBalaDoc(zw, fsys, root, manifest.Icon(), balaDocPath(manifest.Icon())); err != nil {
+			return balaDocError(fmt.Sprintf("could not locate icon path '%s'", manifest.Icon()), err)
+		}
+	}
+	for _, mod := range manifest.Modules() {
+		if mod.Readme() == "" {
+			continue
+		}
+		zipPath := balaModuleDocPath(mod.Name(), mod.Readme())
+		if err := addBalaDoc(zw, fsys, root, mod.Readme(), zipPath); err != nil {
+			return balaDocError(fmt.Sprintf("could not locate the readme file '%s' for module '%s'", mod.Readme(), mod.Name()), err)
+		}
+	}
+	return nil
+}
+
+// addBalaDoc reads the file at relPath (relative to root within fsys) and
+// writes it into zw at zipPath.
+//
+// fs.FS rejects paths escaping the project (absolute, or ".."), failing
+// the pack instead of reading them — intentional, not a bug.
+func addBalaDoc(zw *zip.Writer, fsys fs.FS, root, relPath, zipPath string) error {
+	content, err := fs.ReadFile(fsys, joinRoot(root, relPath))
+	if err != nil {
+		return err
+	}
+	return writeZipEntry(zw, zipPath, content)
+}
+
+// balaDocError formats a doc-file read failure. For the common case (the
+// file doesn't exist), it matches the wording Java's ManifestBuilder uses
+// ("could not locate the readme file '<path>'", "could not locate icon
+// path '<path>'") without the raw OS error attached, same as Java's clean
+// diagnostic message. Anything else (e.g. a permission error) keeps the
+// underlying error, since that wording doesn't otherwise explain it.
+func balaDocError(message string, err error) error {
+	if errors.Is(err, fs.ErrNotExist) {
+		return errors.New(message)
+	}
+	return fmt.Errorf("%s: %w", message, err)
+}
+
+// balaDocPath returns where a package-level doc (readme/icon) lands inside
+// the bala archive. Used both to write the file (addBalaDocs) and to
+// rewrite the copied Ballerina.toml to match (rewriteBallerinaTomlForBala).
+func balaDocPath(relPath string) string {
+	return path.Join(balaDocsDir, path.Base(relPath))
+}
+
+// balaModuleDocPath returns where a module-level readme lands inside the
+// bala archive. Used both to write the file (addBalaDocs) and to rewrite
+// the copied Ballerina.toml to match (rewriteBallerinaTomlForBala).
+func balaModuleDocPath(moduleName, relPath string) string {
+	return path.Join(balaDocsDir, ModulesDir, moduleName, path.Base(relPath))
+}
+
+// addIncludes copies files matching the package manifest's `include` glob
+// patterns into zw, at the same path they occupy relative to the project
+// root. A pattern matching a directory bundles the whole directory
+// recursively. Reads go through the project's own fs.FS, same as every
+// other project source read — pkg.Project().SourceRoot() is a path within
+// that fs.FS (conventionally "."), not necessarily an OS-walkable directory.
+// Java source: io.ballerina.projects.BalaWriter#addIncludes
+func addIncludes(zw *zip.Writer, pkg *Package) error {
+	patterns := pkg.Manifest().Include()
+	if len(patterns) == 0 {
+		return nil
+	}
+
+	fsys := pkg.Project().Environment().fs()
+	root := pkg.Project().SourceRoot()
+	relPaths, err := resolveIncludePaths(fsys, patterns, root)
+	if err != nil {
+		return err
+	}
+
+	written := make(map[string]bool)
+	for _, relPath := range relPaths {
+		fsPath := joinRoot(root, relPath)
+		info, err := fs.Stat(fsys, fsPath)
+		if err != nil {
+			return fmt.Errorf("writeBala: stat include path %s: %w", relPath, err)
+		}
+		if info.IsDir() {
+			if err := addIncludeDir(zw, fsys, fsPath, relPath, written); err != nil {
+				return err
+			}
+			continue
+		}
+		if err := addIncludeFile(zw, fsys, fsPath, relPath, written); err != nil {
+			return err
+		}
+	}
+	return nil
+}
+
+// addIncludeDir recursively adds every file under fsDir (whose path
+// relative to the project root is relDir) into zw.
+func addIncludeDir(zw *zip.Writer, fsys fs.FS, fsDir, relDir string, written map[string]bool) error {
+	return fs.WalkDir(fsys, fsDir, func(p string, d fs.DirEntry, err error) error {
+		if err != nil {
+			return err
+		}
+		if d.IsDir() {
+			return nil
+		}
+		sub := strings.TrimPrefix(p, fsDir+"/")
+		relPath := path.Join(relDir, sub)
+		return addIncludeFile(zw, fsys, p, relPath, written)
+	})
+}
+
+// addIncludeFile writes a single include file into zw at relPath, skipping
+// paths already written (an include pattern may match the same path twice).
+func addIncludeFile(zw *zip.Writer, fsys fs.FS, fsPath, relPath string, written map[string]bool) error {
+	if written[relPath] {
+		return nil
+	}
+	content, err := fs.ReadFile(fsys, fsPath)
+	if err != nil {
+		return fmt.Errorf("writeBala: read include file %s: %w", relPath, err)
+	}
+	if err := writeZipEntry(zw, relPath, content); err != nil {
+		return err
+	}
+	written[relPath] = true
 	return nil
 }
 
