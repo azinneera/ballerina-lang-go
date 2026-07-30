@@ -260,7 +260,7 @@ func compileBundledLib(cx *context.CompilerContext, cache map[string]model.Expor
 	// lang libraries do not themselves import migrated libs, so the
 	// still-intrinsic implicit imports are sufficient here.
 	importedByCU := semantics.ResolveCompilationUnitImports(cx, compilationUnits, semantics.GetImplicitImports(cx),
-		make(map[semantics.PackageIdentifier]model.ExportedSymbolSpace), lib.org)
+		make(map[semantics.PackageIdentifier]model.ExportedSymbolSpace), nil, lib.org, "")
 	pkgScope, exported := semantics.ResolveSymbols(cx, *pkgID, importedByCU)
 	pkg := nodebuilder.ToPackageFromCompilationUnits(compilationUnits)
 	pkg.PackageID = pkgID

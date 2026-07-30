@@ -39,6 +39,15 @@ type PackageIdentifier struct {
 	ModuleName string
 }
 
+// ModuleVisibility records whether a module is exported, so cross-package
+// imports of non-exported modules can be rejected while same-package
+// imports are exempt.
+type ModuleVisibility struct {
+	PackageOrg  string
+	PackageName string
+	Exported    bool
+}
+
 // CompilationUnitImports contains the imports resolved for one compilation unit.
 type CompilationUnitImports struct {
 	CompilationUnit *ast.BLangCompilationUnit
@@ -58,13 +67,22 @@ func ResolveCompilationUnitImports(
 	compilationUnits []*ast.BLangCompilationUnit,
 	implicitImports map[string]model.ExportedSymbolSpace,
 	publicSymbols map[PackageIdentifier]model.ExportedSymbolSpace,
-	defaultOrg string,
+	moduleVisibility map[PackageIdentifier]ModuleVisibility,
+	defaultOrg, currentPackageName string,
 ) []CompilationUnitImports {
 	internalPublicSymbols := make(map[symbols.PackageIdentifier]model.ExportedSymbolSpace, len(publicSymbols))
 	for id, symbolSpace := range publicSymbols {
 		internalPublicSymbols[symbols.PackageIdentifier{OrgName: id.OrgName, ModuleName: id.ModuleName}] = symbolSpace
 	}
-	resolved := symbols.ResolveCompilationUnitImports(ctx, compilationUnits, implicitImports, internalPublicSymbols, defaultOrg)
+	internalModuleVisibility := make(map[symbols.PackageIdentifier]symbols.ModuleVisibility, len(moduleVisibility))
+	for id, visibility := range moduleVisibility {
+		internalModuleVisibility[symbols.PackageIdentifier{OrgName: id.OrgName, ModuleName: id.ModuleName}] = symbols.ModuleVisibility{
+			PackageOrg:  visibility.PackageOrg,
+			PackageName: visibility.PackageName,
+			Exported:    visibility.Exported,
+		}
+	}
+	resolved := symbols.ResolveCompilationUnitImports(ctx, compilationUnits, implicitImports, internalPublicSymbols, internalModuleVisibility, defaultOrg, currentPackageName)
 	result := make([]CompilationUnitImports, len(resolved))
 	for i, imports := range resolved {
 		result[i] = CompilationUnitImports{CompilationUnit: imports.CompilationUnit, Imports: imports.Imports}

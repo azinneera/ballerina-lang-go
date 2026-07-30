@@ -269,10 +269,13 @@ func resolveTypesAndSymbols(moduleCtx *moduleContext) {
 	// Resolve symbols (imports) before type resolution
 	compilerCtx.StartStage(context.StageImportResolution)
 	publicSymbols := moduleCtx.getProject().Environment().publicSymbols
+	moduleVisibility := moduleCtx.getProject().Environment().moduleVisibility
 	// PR-TODO: remove this after migration all lang libraries
 	implicitImports := semantics.GetImplicitImports(compilerCtx)
 	seedMigratedLangLibs(implicitImports, publicSymbols)
-	importedSymbolsByCU := semantics.ResolveCompilationUnitImports(compilerCtx, compilationUnits, implicitImports, publicSymbols, moduleCtx.moduleDescriptor.Org().value)
+	importedSymbolsByCU := semantics.ResolveCompilationUnitImports(
+		compilerCtx, compilationUnits, implicitImports, publicSymbols, moduleVisibility,
+		moduleCtx.moduleDescriptor.Org().value, moduleCtx.moduleDescriptor.PackageName().Value())
 	moduleCtx.importedSymbols = mergeCompilationUnitImports(importedSymbolsByCU)
 	compilerCtx.EndStage()
 
@@ -291,10 +294,17 @@ func resolveTypesAndSymbols(moduleCtx *moduleContext) {
 		return
 	}
 
-	publicSymbols[semantics.PackageIdentifier{
+	moduleID := semantics.PackageIdentifier{
 		OrgName:    moduleCtx.moduleDescriptor.Org().value,
 		ModuleName: moduleCtx.moduleID.moduleName,
-	}] = exported
+	}
+	publicSymbols[moduleID] = exported
+	manifest := moduleCtx.getProject().CurrentPackage().Manifest()
+	moduleVisibility[moduleID] = semantics.ModuleVisibility{
+		PackageOrg:  moduleCtx.moduleDescriptor.Org().value,
+		PackageName: moduleCtx.moduleDescriptor.PackageName().Value(),
+		Exported:    slices.Contains(manifest.ExportedModules(), moduleCtx.moduleID.moduleName),
+	}
 
 	// Add type resolution step (this only resolve types of top level nodes)
 	compilerCtx.StartStage(context.StageTopLevelTypeResolution)

@@ -1115,13 +1115,14 @@ func resolveLambdaFunction(functionResolver *blockSymbolResolver, parent *blockS
 // ResolveCompilationUnitImports Used to seed hardcoded import symbols
 // Deprecated: should be removed with https://github.com/ballerina-nutcracker/ballerina/issues/688
 func ResolveCompilationUnitImports(ctx *context.CompilerContext, compilationUnits []*ast.BLangCompilationUnit,
-	implicitImports map[string]model.ExportedSymbolSpace, publicSymbols map[PackageIdentifier]model.ExportedSymbolSpace, defaultOrg string,
+	implicitImports map[string]model.ExportedSymbolSpace, publicSymbols map[PackageIdentifier]model.ExportedSymbolSpace,
+	moduleVisibility map[PackageIdentifier]ModuleVisibility, defaultOrg, currentPackageName string,
 ) []CompilationUnitImports {
 	result := make([]CompilationUnitImports, len(compilationUnits))
 	for i, cu := range compilationUnits {
 		imports := make(map[string]model.ExportedSymbolSpace)
 		for _, imp := range compilationUnitImports(cu) {
-			resolveExternalImport(ctx, &imp, defaultOrg, publicSymbols, imports)
+			resolveExternalImport(ctx, &imp, defaultOrg, currentPackageName, publicSymbols, moduleVisibility, imports)
 		}
 		maps.Copy(imports, implicitImports)
 		result[i] = CompilationUnitImports{CompilationUnit: cu, Imports: imports}
@@ -1132,12 +1133,17 @@ func ResolveCompilationUnitImports(ctx *context.CompilerContext, compilationUnit
 // resolveExternalImport looks up the import's exported symbols in publicSymbols
 // (populated as each dependency's module is compiled) and binds them to the
 // import alias or the last name component. Reports an "Unknown import" error
-// when the package was not resolved upstream.
+// when the package was not resolved upstream, or a "not exported" error when
+// the resolved module belongs to a different package and isn't in that
+// package's exported-modules list — same-package imports are always exempt.
+// Java source: org.wso2.ballerinalang.compiler.semantics.analyzer.SymbolEnter
+// (the bPackageSymbol.exported check around import-declaration visiting)
 func resolveExternalImport(
 	ctx *context.CompilerContext,
 	imp *ast.BLangImportPackage,
-	defaultOrg string,
+	defaultOrg, currentPackageName string,
 	publicSymbols map[PackageIdentifier]model.ExportedSymbolSpace,
+	moduleVisibility map[PackageIdentifier]ModuleVisibility,
 	result map[string]model.ExportedSymbolSpace,
 ) {
 	id := resolveImportPackageIdentifier(imp, defaultOrg)
@@ -1145,6 +1151,15 @@ func resolveExternalImport(
 	if !ok {
 		ctx.SemanticError("Unknown import: "+id.OrgName+"/"+id.ModuleName, imp.GetPosition())
 		return
+	}
+	if vis, ok := moduleVisibility[id]; ok {
+		samePackage := vis.PackageOrg == defaultOrg && vis.PackageName == currentPackageName
+		if !samePackage && !vis.Exported {
+			ctx.SemanticError(
+				fmt.Sprintf("%s/%s:%s is not exported", vis.PackageOrg, vis.PackageName, id.ModuleName),
+				imp.GetPosition())
+			return
+		}
 	}
 	var key string
 	if imp.Alias != nil {
@@ -1159,6 +1174,18 @@ func resolveExternalImport(
 type PackageIdentifier struct {
 	OrgName    string
 	ModuleName string
+}
+
+// ModuleVisibility records which package owns a module and whether that
+// module is exported, so cross-package imports of non-exported modules can
+// be rejected while same-package imports are exempt.
+// Java source: io.ballerina.projects.internal.ManifestBuilder /
+// org.wso2.ballerinalang.compiler.semantics.analyzer.SymbolEnter (the
+// `bPackageSymbol.exported` check around import resolution)
+type ModuleVisibility struct {
+	PackageOrg  string
+	PackageName string
+	Exported    bool
 }
 
 func resolveImportPackageIdentifier(imp *ast.BLangImportPackage, defaultOrg string) PackageIdentifier {

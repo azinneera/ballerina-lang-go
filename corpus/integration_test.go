@@ -643,7 +643,7 @@ func compileModuleFromSource(env *context.CompilerEnvironment, project projects.
 	if err != nil {
 		return nil, fmt.Errorf("loading lang libraries failed: %w", err)
 	}
-	importedSymbolsByCU := semantics.ResolveCompilationUnitImports(cx, syntaxTrees, langlibs.ImplicitImports, langlibs.PublicSymbols, defaultOrg)
+	importedSymbolsByCU := semantics.ResolveCompilationUnitImports(cx, syntaxTrees, langlibs.ImplicitImports, langlibs.PublicSymbols, nil, defaultOrg, "")
 	pkgScope, _ := semantics.ResolveSymbols(cx, *pkgID, importedSymbolsByCU)
 	if cx.HasDiagnostics() {
 		return nil, fmt.Errorf("symbol resolution failed")
