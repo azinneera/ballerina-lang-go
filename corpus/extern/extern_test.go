@@ -785,7 +785,9 @@ func compileSingleFileModule(
 		compilationUnits,
 		langlibs.ImplicitImports,
 		langlibs.PublicSymbols,
+		nil,
 		defaultOrg,
+		"",
 	)
 	assertNoDiagnostics(t, cx, "ResolveSymbols")
 	pkg := nodebuilder.ToPackageFromCompilationUnits(compilationUnits)

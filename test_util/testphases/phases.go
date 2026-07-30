@@ -139,7 +139,9 @@ func loadBuiltinPublicSymbols(env *context.CompilerEnvironment) map[semantics.Pa
 			compilationUnits,
 			make(map[string]model.ExportedSymbolSpace),
 			result,
+			nil,
 			entry.org,
+			"",
 		)
 		if cx.HasErrors() {
 			continue
@@ -223,6 +225,8 @@ func RunPipelineWithContent(env *context.CompilerEnvironment, cx *context.Compil
 		compilationUnits,
 		langlibs.ImplicitImports,
 		langlibs.PublicSymbols,
+		nil,
+		"",
 		"",
 	)
 	result.Package = nodebuilder.ToPackageFromCompilationUnits(compilationUnits)
