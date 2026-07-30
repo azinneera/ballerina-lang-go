@@ -49,6 +49,7 @@ func main() {
 	rootCmd.SetErrPrefix("ballerina:")
 
 	rootCmd.AddCommand(newCmd)
+	rootCmd.AddCommand(addCmd)
 	rootCmd.AddCommand(runCmd)
 	rootCmd.AddCommand(packCmd)
 	rootCmd.AddCommand(buildCmd)
