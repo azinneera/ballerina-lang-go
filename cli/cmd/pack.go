@@ -85,8 +85,7 @@ func createPackCmd() *cobra.Command {
 	cmd.Flags().BoolVar(&opts.statsOneline, "stats-oneline", false, "Print per-stage compilation timing totals only")
 	cmd.Flags().StringVar(&opts.logFile, "log-file", "", "Write debug output to specified file")
 	cmd.Flags().StringVar(&opts.format, "format", "", "Output format for dump operations (dot)")
-	cmd.Flags().StringVar(&opts.targetDir, "target-dir", "",
-		"Directory to use for build output instead of the default 'target' directory")
+	cmd.Flags().StringVar(&opts.targetDir, "target-dir", "", "target directory path")
 	// Profiler flags are registered onto the global packCmd from prof_*.go's init().
 	// They are intentionally NOT registered inside createPackCmd, so test-instantiated
 	// commands skip profiler flags (the tests don't exercise profiling).

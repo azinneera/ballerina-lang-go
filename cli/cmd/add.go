@@ -46,10 +46,16 @@ func createAddCmd() *cobra.Command {
 		Short: "Add a new module to the current package",
 		Long: `	Add a new module to the current package.
 
-	Creates modules/<module-name>/<module-name>.bal and
-	modules/<module-name>/tests/<module-name>_test.bal from the given
+	Creates modules/<module-name>/<module-name>.bal from the given
 	template. Must be run inside an existing Ballerina package; it does not
-	create a package or modify Ballerina.toml.`,
+	create a package or modify Ballerina.toml.
+
+	The resulting module's fully-qualified name is <package-name>.<module-name>.
+	Use that qualified name to import it:
+		import <org-name>/<package-name>.<module-name>;
+
+	Module names can contain only alphanumerics, underscores, and periods,
+	and the maximum length is 256 characters.`,
 		Args: validateAddArgs,
 		RunE: func(cmd *cobra.Command, args []string) error {
 			return runAdd(cmd, args[0], template)
@@ -118,12 +124,12 @@ func runAdd(cmd *cobra.Command, moduleName, template string) error {
 		return addError("%w", err)
 	}
 
-	sourceContent, testContent, err := getAddTemplateSource(tmpl)
+	sourceContent, err := getAddTemplateSource(tmpl)
 	if err != nil {
 		return addError("failed to read template: %w", err)
 	}
 
-	if err := createModule(modulePath, moduleName, sourceContent, testContent); err != nil {
+	if err := createModule(modulePath, moduleName, sourceContent); err != nil {
 		return addError("error occurred while creating module : %w", err)
 	}
 
@@ -131,58 +137,27 @@ func runAdd(cmd *cobra.Command, moduleName, template string) error {
 	return nil
 }
 
-// getAddTemplateSource returns the module source file content and test file
-// content for the given template.
-func getAddTemplateSource(template addTemplateName) (sourceContent, testContent string, err error) {
+// getAddTemplateSource returns the module source file content for the given
+// template.
+func getAddTemplateSource(template addTemplateName) (sourceContent string, err error) {
 	switch template {
 	case addTemplateService:
-		sourceContent, err = templates.ReadTemplate(templates.ServiceBal)
-		if err != nil {
-			return "", "", err
-		}
-		testContent, err = templates.ReadTemplate(templates.ServiceTest)
-		return sourceContent, testContent, err
+		return templates.ReadTemplate(templates.ServiceBal)
 	default: // addTemplateLib
-		sourceContent, err = templates.ReadTemplate(templates.LibBal)
-		if err != nil {
-			return "", "", err
-		}
-		testContent, err = templates.ReadTemplate(templates.LibTest)
-		return sourceContent, testContent, err
+		return templates.ReadTemplate(templates.LibBal)
 	}
 }
 
-// createModule writes modulePath/<moduleName>.bal and
-// modulePath/tests/<moduleName>_test.bal, cleaning up on error.
-func createModule(modulePath, moduleName, sourceContent, testContent string) error {
-	var createdPaths []string
-	cleanup := func() {
-		for i := len(createdPaths) - 1; i >= 0; i-- {
-			_ = os.RemoveAll(createdPaths[i])
-		}
-	}
-
+// createModule writes modulePath/<moduleName>.bal, cleaning up on error.
+func createModule(modulePath, moduleName, sourceContent string) error {
 	if err := os.MkdirAll(modulePath, 0755); err != nil {
 		return fmt.Errorf("failed to create module directory: %w", err)
 	}
-	createdPaths = append(createdPaths, modulePath)
 
 	sourcePath := filepath.Join(modulePath, moduleName+".bal")
 	if err := os.WriteFile(sourcePath, []byte(sourceContent), 0644); err != nil {
-		cleanup()
+		_ = os.RemoveAll(modulePath)
 		return fmt.Errorf("failed to create %s: %w", sourcePath, err)
-	}
-
-	testsDir := filepath.Join(modulePath, "tests")
-	if err := os.MkdirAll(testsDir, 0755); err != nil {
-		cleanup()
-		return fmt.Errorf("failed to create tests directory: %w", err)
-	}
-
-	testPath := filepath.Join(testsDir, moduleName+"_test.bal")
-	if err := os.WriteFile(testPath, []byte(testContent), 0644); err != nil {
-		cleanup()
-		return fmt.Errorf("failed to create %s: %w", testPath, err)
 	}
 
 	return nil

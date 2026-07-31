@@ -55,8 +55,7 @@ func createCleanCmd() *cobra.Command {
 		},
 	}
 
-	cmd.Flags().StringVar(&targetDir, "target-dir", "",
-		"Clean the given target directory directly, instead of resolving one from the current project")
+	cmd.Flags().StringVar(&targetDir, "target-dir", "", "target directory path")
 
 	return cmd
 }
