@@ -46,6 +46,7 @@ type packOptions struct {
 	statsOneline     bool
 	logFile          string
 	format           string
+	targetDir        string
 }
 
 var packCmd = createPackCmd()
@@ -84,6 +85,8 @@ func createPackCmd() *cobra.Command {
 	cmd.Flags().BoolVar(&opts.statsOneline, "stats-oneline", false, "Print per-stage compilation timing totals only")
 	cmd.Flags().StringVar(&opts.logFile, "log-file", "", "Write debug output to specified file")
 	cmd.Flags().StringVar(&opts.format, "format", "", "Output format for dump operations (dot)")
+	cmd.Flags().StringVar(&opts.targetDir, "target-dir", "",
+		"Directory to use for build output instead of the default 'target' directory")
 	// Profiler flags are registered onto the global packCmd from prof_*.go's init().
 	// They are intentionally NOT registered inside createPackCmd, so test-instantiated
 	// commands skip profiler flags (the tests don't exercise profiling).
@@ -97,6 +100,17 @@ func packError(format string, args ...any) error {
 func runPack(cmd *cobra.Command, args []string, opts *packOptions) error {
 	stderr := cmd.ErrOrStderr()
 
+	// --target-dir is resolved relative to the process cwd (matching
+	// clean.go's own --target-dir), independent of the package-dir arg.
+	var targetDirOverride string
+	if opts.targetDir != "" {
+		abs, err := filepath.Abs(opts.targetDir)
+		if err != nil {
+			return packError("resolve target directory: %w", err)
+		}
+		targetDirOverride = abs
+	}
+
 	// Build options from CLI flags. Constructed before debug setup so
 	// buildOpts is the single source of truth for all flag reads.
 	buildOpts := projects.NewBuildOptionsBuilder().
@@ -109,6 +123,7 @@ func runPack(cmd *cobra.Command, args []string, opts *packOptions) error {
 		WithDumpST(opts.dumpST).
 		WithTraceRecovery(opts.traceRecovery).
 		WithStats(opts.stats || opts.statsOneline).
+		WithTargetDir(targetDirOverride).
 		Build()
 
 	// Profiler flags are bound only when prof_*.go's init() registers them
@@ -219,7 +234,11 @@ func runPack(cmd *cobra.Command, args []string, opts *packOptions) error {
 		return packError("compilation failed; .bala not produced")
 	}
 
-	balaDir := filepath.Join(absPath, projects.TargetDir, balaSubdir)
+	targetDir := targetDirOverride
+	if targetDir == "" {
+		targetDir = filepath.Join(absPath, projects.TargetDir)
+	}
+	balaDir := filepath.Join(targetDir, balaSubdir)
 	backend := projects.NewBallerinaBackend(compilation)
 	balaPath, err := backend.EmitBala(balaDir)
 	if err != nil {
