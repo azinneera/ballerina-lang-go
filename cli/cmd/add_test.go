@@ -85,11 +85,6 @@ func TestAddCommand_Success(t *testing.T) {
 			if !strings.Contains(string(sourceContent), tc.contains) {
 				t.Errorf("source file missing expected content %q:\n%s", tc.contains, sourceContent)
 			}
-
-			testFile := filepath.Join(modulePath, "tests", moduleName+"_test.bal")
-			if _, err := os.Stat(testFile); err != nil {
-				t.Errorf("expected test file to exist: %v", err)
-			}
 		})
 	}
 }

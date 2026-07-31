@@ -98,8 +98,7 @@ func init() {
 	runCmd.Flags().BoolVar(&runOpts.statsOneline, "stats-oneline", false, "Print per-stage compilation timing totals only")
 	runCmd.Flags().StringVar(&runOpts.logFile, "log-file", "", "Write debug output to specified file")
 	runCmd.Flags().StringVar(&runOpts.format, "format", "", "Output format for dump operations (dot)")
-	runCmd.Flags().StringVar(&runOpts.targetDir, "target-dir", "",
-		"Directory to use for build output instead of the default 'target' directory")
+	runCmd.Flags().StringVar(&runOpts.targetDir, "target-dir", "", "target directory path")
 	profiler.RegisterFlags(runCmd)
 }
 
