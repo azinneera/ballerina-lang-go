@@ -424,6 +424,398 @@ func TestBalBuildCorpus(t *testing.T) {
 	}
 }
 
+// TestBalCleanCorpus exercises `bal clean` end-to-end through the
+// coverage-aware CLI harness. It deliberately adds no new checked-in project
+// fixtures of its own: "basic"/"noop-absent-target"/"workspace" copy
+// existing pack/run fixtures into a temp dir (via copyDir) and inject the
+// target/ marker directories clean needs to delete, and
+// "single-file-rejected"/"not-ballerina-project" point straight at existing
+// pack fixtures through the sandboxCLICommandArgs path-rewrite (so the
+// destructive delete never touches a checked-in tree either way). Only
+// "non-bal-file-rejected" needs genuinely new content — no other fixture in
+// the repo is a bare non-.bal, non-project file — so that one small fixture
+// stays under testdata/clean. The --target-dir scenarios build their own ad
+// hoc temp directory, since that flag operates on an arbitrary directory
+// rather than a loaded package.
+//
+// Java equivalent: N/A — clean is Go-only CLI integration coverage.
+func TestBalCleanCorpus(t *testing.T) {
+	if runtime.GOOS == "js" || runtime.GOARCH == "wasm" {
+		t.Skip("skipping CLI integration test on WASM (js/wasm)")
+	}
+	balBin, repoRoot, coverDir := integrationTestBalCLI(t, false)
+	testdataRoot := filepath.Join("corpus", "cli", "testdata", "clean")
+	outputsRoot := filepath.Join(repoRoot, "corpus", "cli", "output", "clean")
+	packBasicFixture := filepath.Join(repoRoot, "corpus", "cli", "testdata", "pack", "basic", "project")
+	runWorkspaceFixture := filepath.Join(repoRoot, "corpus", "cli", "testdata", "run", "workspaces", "run-workspace-corpus")
+
+	// runCleanInCopy copies src into a fresh temp dir, optionally injecting
+	// target/ marker directories (paths relative to the copy root), then runs
+	// `bal clean` against that copy.
+	runCleanInCopy := func(t *testing.T, src string, targetDirsToCreate []string) (stdout, stderr string, exitCode int) {
+		t.Helper()
+		workDir := t.TempDir()
+		copyDir(t, src, workDir)
+		for _, rel := range targetDirsToCreate {
+			if err := os.MkdirAll(filepath.Join(workDir, rel), 0o755); err != nil {
+				t.Fatalf("failed to create %s: %v", rel, err)
+			}
+		}
+		return runCLICommand(t, balBin, repoRoot, coverDir, "clean", workDir)
+	}
+
+	t.Run("basic", func(t *testing.T) {
+		t.Parallel()
+		stdout, stderr, exitCode := runCleanInCopy(t, packBasicFixture, []string{filepath.Join("target", "cache")})
+		if exitCode != 0 {
+			t.Fatalf("expected exit code 0, got %d\nstdout: %s\nstderr: %s", exitCode, stdout, stderr)
+		}
+		if !strings.Contains(stdout, "Successfully deleted") {
+			t.Errorf("stdout = %q, want to contain 'Successfully deleted'", stdout)
+		}
+	})
+
+	t.Run("noop-absent-target", func(t *testing.T) {
+		t.Parallel()
+		stdout, stderr, exitCode := runCleanInCopy(t, packBasicFixture, nil)
+		if exitCode != 0 {
+			t.Fatalf("expected exit code 0, got %d\nstdout: %s\nstderr: %s", exitCode, stdout, stderr)
+		}
+		if stdout != "" {
+			t.Errorf("stdout = %q, want empty (silent no-op when target/ is already absent)", stdout)
+		}
+	})
+
+	t.Run("workspace", func(t *testing.T) {
+		t.Parallel()
+		stdout, stderr, exitCode := runCleanInCopy(t, runWorkspaceFixture, []string{
+			filepath.Join("pkgmain", "target", "cache"),
+			filepath.Join("pkglib", "target", "cache"),
+		})
+		if exitCode != 0 {
+			t.Fatalf("expected exit code 0, got %d\nstdout: %s\nstderr: %s", exitCode, stdout, stderr)
+		}
+		if !strings.Contains(stdout, "Successfully deleted") {
+			t.Errorf("stdout = %q, want to contain 'Successfully deleted'", stdout)
+		}
+	})
+
+	tests := []struct {
+		name  string
+		args  []string
+		txtar string
+	}{
+		{
+			// Reuses pack's fixture rather than adding a near-identical
+			// "empty directory" fixture under testdata/clean.
+			name:  "not-ballerina-project",
+			args:  []string{"clean", filepath.Join("corpus", "cli", "testdata", "pack", "not-ballerina-project", "empty")},
+			txtar: "not-ballerina-project.txtar",
+		},
+		{
+			// Reuses pack's single-.bal-file fixture rather than adding a
+			// near-identical one under testdata/clean.
+			name:  "single-file-rejected",
+			args:  []string{"clean", filepath.Join("corpus", "cli", "testdata", "pack", "rejects-single-file", "main.bal")},
+			txtar: "single-file-rejected.txtar",
+		},
+		{
+			name:  "non-bal-file-rejected",
+			args:  []string{"clean", filepath.Join(testdataRoot, "non-bal-file", "notes.txt")},
+			txtar: "non-bal-file-rejected.txtar",
+		},
+		{
+			name:  "too-many-args",
+			args:  []string{"clean", "a", "b"},
+			txtar: "too-many-args.txtar",
+		},
+		{
+			name:  "help",
+			args:  []string{"clean", "--help"},
+			txtar: "help.txtar",
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			t.Parallel()
+			assertBalCommandMatchesTxtarFragmentsLoose(t, balBin, repoRoot, coverDir,
+				tt.args, filepath.Join(outputsRoot, tt.txtar))
+		})
+	}
+
+	// --target-dir scenarios build their own temp directory rather than a
+	// checked-in fixture, since the flag operates directly on an arbitrary
+	// directory (identified by marker subdirs) instead of a loaded package.
+	// The exhaustive per-branch validation (missing/not-a-directory/every
+	// marker combination) already lives in cli/cmd/clean_test.go; these two
+	// cases only need to prove the flag works end-to-end through the real
+	// binary.
+	t.Run("target-dir-valid", func(t *testing.T) {
+		t.Parallel()
+		dir := t.TempDir()
+		if err := os.MkdirAll(filepath.Join(dir, "cache"), 0o755); err != nil {
+			t.Fatalf("failed to create cache dir: %v", err)
+		}
+		if err := os.MkdirAll(filepath.Join(dir, "bala"), 0o755); err != nil {
+			t.Fatalf("failed to create bala dir: %v", err)
+		}
+		stdout, stderr, exitCode := runCLICommand(t, balBin, repoRoot, coverDir, "clean", "--target-dir", dir)
+		if exitCode != 0 {
+			t.Fatalf("expected exit code 0, got %d\nstdout: %s\nstderr: %s", exitCode, stdout, stderr)
+		}
+		if !strings.Contains(stdout, "Successfully deleted") {
+			t.Errorf("stdout = %q, want to contain 'Successfully deleted'", stdout)
+		}
+	})
+
+	t.Run("target-dir-invalid", func(t *testing.T) {
+		t.Parallel()
+		dir := t.TempDir()
+		if err := os.MkdirAll(filepath.Join(dir, "unrelated"), 0o755); err != nil {
+			t.Fatalf("failed to create unrelated dir: %v", err)
+		}
+		stdout, stderr, exitCode := runCLICommand(t, balBin, repoRoot, coverDir, "clean", "--target-dir", dir)
+		if exitCode == 0 {
+			t.Fatalf("expected a non-zero exit code\nstdout: %s\nstderr: %s", stdout, stderr)
+		}
+		if !strings.Contains(stderr, "is not a valid target directory") {
+			t.Errorf("stderr = %q, want to contain 'is not a valid target directory'", stderr)
+		}
+	})
+}
+
+// TestBalAddCorpus exercises `bal add` end-to-end through the coverage-aware
+// CLI harness. Unlike pack/clean, `bal add` takes no package-path argument —
+// it always operates on the process cwd — so each scenario needing a real
+// package copies its checked-in fixture (under corpus/cli/testdata/add) into
+// a fresh t.TempDir() via copyDir and runs the binary with that copy as its
+// working directory, rather than relying on sandboxCLICommandArgs (which
+// only rewrites path arguments, not cwd). This keeps the checked-in
+// fixtures — which `bal add` would otherwise write new files into —
+// untouched. There's no dedicated testdata/add fixture at all: every
+// scenario needing a real package reuses pack's existing basic/project
+// fixture (a plain valid package with no modules/ yet, which is all `add`
+// needs); "duplicate-module" pre-creates modules/util/util.bal in its own
+// copy rather than checking in a near-identical second project fixture.
+//
+// Java equivalent: N/A — add is Go-only CLI integration coverage.
+func TestBalAddCorpus(t *testing.T) {
+	if runtime.GOOS == "js" || runtime.GOARCH == "wasm" {
+		t.Skip("skipping CLI integration test on WASM (js/wasm)")
+	}
+	balBin, repoRoot, coverDir := integrationTestBalCLI(t, false)
+	basicFixture := filepath.Join(repoRoot, "corpus", "cli", "testdata", "pack", "basic", "project")
+	outputsRoot := filepath.Join(repoRoot, "corpus", "cli", "output", "add")
+
+	// runInFixtureCopy copies src into a fresh temp dir and runs `bal add`
+	// with that copy as the working directory.
+	runInFixtureCopy := func(t *testing.T, src string, addArgs ...string) (stdout, stderr string, exitCode int) {
+		t.Helper()
+		workDir := t.TempDir()
+		copyDir(t, src, workDir)
+		env := os.Environ()
+		if coverDir != "" {
+			env = append(env, "GOCOVERDIR="+coverDir)
+		}
+		args := append([]string{"add"}, addArgs...)
+		return runNativeCLICommandWithEnv(t, balBin, workDir, args, env)
+	}
+
+	assertMatches := func(t *testing.T, stdout, stderr string, exitCode int, txtar string) {
+		t.Helper()
+		stdout = test_util.NormalizeNewlines(stdout)
+		stderr = test_util.NormalizeNewlines(stderr)
+		expectedStdout, expectedStderr, expectedExitCode, err := test_util.LoadTxtarStdoutStderrExitcode(filepath.Join(outputsRoot, txtar))
+		if err != nil {
+			t.Fatalf("failed to parse txtar file %s: %v", txtar, err)
+		}
+		if strconv.Itoa(exitCode) != expectedExitCode {
+			t.Fatalf("unexpected exit code, want %s got %d\nstdout:\n%s\nstderr:\n%s", expectedExitCode, exitCode, stdout, stderr)
+		}
+		combined := stdout + "\n" + stderr
+		for _, fragment := range strings.Split(expectedStdout, "\n") {
+			if strings.TrimSpace(fragment) == "" {
+				continue
+			}
+			if !strings.Contains(combined, fragment) {
+				t.Errorf("output missing expected fragment %q\nstdout:\n%s\nstderr:\n%s", fragment, stdout, stderr)
+			}
+		}
+		for _, fragment := range strings.Split(expectedStderr, "\n") {
+			if strings.TrimSpace(fragment) == "" {
+				continue
+			}
+			if !strings.Contains(stderr, fragment) {
+				t.Errorf("stderr missing expected fragment %q\nstderr:\n%s", fragment, stderr)
+			}
+		}
+	}
+
+	t.Run("basic-lib", func(t *testing.T) {
+		t.Parallel()
+		stdout, stderr, code := runInFixtureCopy(t, basicFixture, "util")
+		assertMatches(t, stdout, stderr, code, "basic-lib.txtar")
+	})
+
+	t.Run("basic-service", func(t *testing.T) {
+		t.Parallel()
+		stdout, stderr, code := runInFixtureCopy(t, basicFixture, "svc", "-t", "service")
+		assertMatches(t, stdout, stderr, code, "basic-service.txtar")
+	})
+
+	t.Run("duplicate-module", func(t *testing.T) {
+		t.Parallel()
+		workDir := t.TempDir()
+		copyDir(t, basicFixture, workDir)
+		existingModule := filepath.Join(workDir, "modules", "util")
+		if err := os.MkdirAll(existingModule, 0o755); err != nil {
+			t.Fatalf("failed to pre-create modules/util: %v", err)
+		}
+		if err := os.WriteFile(filepath.Join(existingModule, "util.bal"), []byte("public function hello() returns string {\n}\n"), 0o644); err != nil {
+			t.Fatalf("failed to write modules/util/util.bal: %v", err)
+		}
+		env := os.Environ()
+		if coverDir != "" {
+			env = append(env, "GOCOVERDIR="+coverDir)
+		}
+		stdout, stderr, code := runNativeCLICommandWithEnv(t, balBin, workDir, []string{"add", "util"}, env)
+		assertMatches(t, stdout, stderr, code, "duplicate-module.txtar")
+	})
+
+	t.Run("invalid-name", func(t *testing.T) {
+		t.Parallel()
+		stdout, stderr, code := runInFixtureCopy(t, basicFixture, "bad-name!")
+		assertMatches(t, stdout, stderr, code, "invalid-name.txtar")
+	})
+
+	t.Run("invalid-template", func(t *testing.T) {
+		t.Parallel()
+		stdout, stderr, code := runInFixtureCopy(t, basicFixture, "util", "-t", "bogus")
+		assertMatches(t, stdout, stderr, code, "invalid-template.txtar")
+	})
+
+	t.Run("not-a-package", func(t *testing.T) {
+		t.Parallel()
+		workDir := t.TempDir()
+		env := os.Environ()
+		if coverDir != "" {
+			env = append(env, "GOCOVERDIR="+coverDir)
+		}
+		stdout, stderr, code := runNativeCLICommandWithEnv(t, balBin, workDir, []string{"add", "util"}, env)
+		assertMatches(t, stdout, stderr, code, "not-a-package.txtar")
+	})
+
+	t.Run("no-args", func(t *testing.T) {
+		t.Parallel()
+		stdout, stderr, code := runInFixtureCopy(t, basicFixture)
+		assertMatches(t, stdout, stderr, code, "no-args.txtar")
+	})
+
+	t.Run("too-many-args", func(t *testing.T) {
+		t.Parallel()
+		stdout, stderr, code := runInFixtureCopy(t, basicFixture, "a", "b")
+		assertMatches(t, stdout, stderr, code, "too-many-args.txtar")
+	})
+
+	t.Run("help", func(t *testing.T) {
+		t.Parallel()
+		stdout, stderr, code := runInFixtureCopy(t, basicFixture, "--help")
+		assertMatches(t, stdout, stderr, code, "help.txtar")
+	})
+}
+
+// TestBalNewCorpus exercises `bal new` end-to-end through the coverage-aware
+// CLI harness. `new.go` already has extensive branch-level unit coverage
+// (cli/cmd/new_test.go), so this is a representative sample proving the
+// command works through the real binary + cobra wiring + filesystem, not an
+// exhaustive re-verification of every validation branch. Scenarios targeting
+// a not-yet-existing path (basic, template-*, invalid-package-name,
+// workspace-new) don't need a checked-in fixture — sandboxCLICommandArgs
+// copies the whole testdata/new tree into a temp sandbox and `bal new`
+// creates the target directory fresh inside it. Of the two
+// pre-existing-directory scenarios, "already-a-project" reuses pack's
+// basic/project fixture (any directory with a Ballerina.toml triggers the
+// same rejection) rather than checking in a near-identical one; only
+// "conflicting-files" needs its own minimal fixture, since no existing
+// fixture is a bare directory containing just a conflicting marker file.
+//
+// Java equivalent: N/A — this is CLI-level integration coverage for the Go
+// implementation of `bal new`.
+func TestBalNewCorpus(t *testing.T) {
+	if runtime.GOOS == "js" || runtime.GOARCH == "wasm" {
+		t.Skip("skipping CLI integration test on WASM (js/wasm)")
+	}
+	balBin, repoRoot, coverDir := integrationTestBalCLI(t, false)
+	testdataRoot := filepath.Join("corpus", "cli", "testdata", "new")
+	outputsRoot := filepath.Join(repoRoot, "corpus", "cli", "output", "new")
+
+	tests := []struct {
+		name  string
+		args  []string
+		txtar string
+	}{
+		{
+			name:  "basic",
+			args:  []string{"new", filepath.Join(testdataRoot, "basic", "newpkg")},
+			txtar: "basic.txtar",
+		},
+		{
+			name:  "template-service",
+			args:  []string{"new", filepath.Join(testdataRoot, "template-service", "newpkg"), "-t", "service"},
+			txtar: "template-service.txtar",
+		},
+		{
+			name:  "template-lib",
+			args:  []string{"new", filepath.Join(testdataRoot, "template-lib", "newpkg"), "-t", "lib"},
+			txtar: "template-lib.txtar",
+		},
+		{
+			name:  "already-a-project",
+			args:  []string{"new", filepath.Join("corpus", "cli", "testdata", "pack", "basic", "project")},
+			txtar: "already-a-project.txtar",
+		},
+		{
+			name:  "conflicting-files",
+			args:  []string{"new", filepath.Join(testdataRoot, "conflicting-files", "project")},
+			txtar: "conflicting-files.txtar",
+		},
+		{
+			name:  "invalid-package-name",
+			args:  []string{"new", filepath.Join(testdataRoot, "invalid-package-name", "Bad-Name!")},
+			txtar: "invalid-package-name.txtar",
+		},
+		{
+			name:  "workspace-new",
+			args:  []string{"new", "--workspace", filepath.Join(testdataRoot, "workspace-new", "newws")},
+			txtar: "workspace-new.txtar",
+		},
+		{
+			name:  "no-args",
+			args:  []string{"new"},
+			txtar: "no-args.txtar",
+		},
+		{
+			name:  "too-many-args",
+			args:  []string{"new", "a", "b"},
+			txtar: "too-many-args.txtar",
+		},
+		{
+			name:  "help",
+			args:  []string{"new", "--help"},
+			txtar: "help.txtar",
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			t.Parallel()
+			assertBalCommandMatchesTxtarFragmentsLoose(t, balBin, repoRoot, coverDir,
+				tt.args, filepath.Join(outputsRoot, tt.txtar))
+		})
+	}
+}
+
 // substituteScenarioPlaceholders replaces the token "{{TMPDIR}}" in each arg
 // with a fresh t.TempDir() (one TempDir per scenario, reused across args).
 // Any other "{{...}}" token is treated as an unknown placeholder and fails
