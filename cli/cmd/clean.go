@@ -78,11 +78,20 @@ func runClean(cmd *cobra.Command, args []string, targetDir string) error {
 	if err != nil {
 		return cleanError("invalid project path %q: %w", path, err)
 	}
+
+	// A non-directory path is loaded the same way run.go handles single .bal
+	// files: root the fs.FS at the parent directory and pass the file's own
+	// name as the load path, so projects.Load can classify it (ProjectKindSingleFile
+	// for a .bal file, or a load error for anything else) instead of us
+	// guessing from the path alone.
+	baseDir := path
+	loadPath := "."
 	if !info.IsDir() {
-		return cleanError("clean command is not supported for single file projects")
+		baseDir = filepath.Dir(path)
+		loadPath = filepath.Base(path)
 	}
 
-	absPath, err := filepath.Abs(path)
+	absPath, err := filepath.Abs(baseDir)
 	if err != nil {
 		return cleanError("resolve absolute path: %w", err)
 	}
@@ -94,7 +103,7 @@ func runClean(cmd *cobra.Command, args []string, targetDir string) error {
 	}
 
 	buildOpts := projects.NewBuildOptionsBuilder().Build()
-	result, err := projects.Load(fsys, ".", projects.ProjectLoadConfig{
+	result, err := projects.Load(fsys, loadPath, projects.ProjectLoadConfig{
 		BallerinaEnvFs: os.DirFS(ballerinaEnvPath),
 		BuildOptions:   &buildOpts,
 	})
@@ -105,11 +114,6 @@ func runClean(cmd *cobra.Command, args []string, targetDir string) error {
 	project := result.Project()
 	switch project.Kind() {
 	case projects.ProjectKindSingleFile:
-		// Defensive: unreachable in practice — the !info.IsDir() check above
-		// already rejects a .bal file path before Load ever runs (single-file
-		// mode requires the loaded path to name the .bal file directly, as
-		// pack.go's own caller-side check does) — kept for parity with
-		// Java's CleanCommand switch.
 		return cleanError("clean command is not supported for single file projects")
 	case projects.ProjectKindWorkspace:
 		ws, ok := project.(*projects.WorkspaceProject)

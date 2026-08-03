@@ -22,6 +22,7 @@ import (
 	"bytes"
 	"os"
 	"path/filepath"
+	"runtime"
 	"strings"
 	"testing"
 
@@ -175,6 +176,39 @@ func TestAddCommand_InvalidTemplate(t *testing.T) {
 	}
 	if !strings.Contains(stderr, "unsupported template provided") {
 		t.Errorf("stderr = %q, want 'unsupported template provided' message", stderr)
+	}
+}
+
+// TestCreateModule_CleansUpOnWriteFailure covers createModule's cleanup
+// path: runAdd's own pre-check always guarantees modulePath doesn't exist
+// yet, so this calls createModule directly (white-box) with a
+// pre-existing, write-protected module directory to force the
+// os.WriteFile failure after MkdirAll's no-op success on an already-existing
+// dir, and asserts the directory is removed rather than left behind
+// half-written.
+func TestCreateModule_CleansUpOnWriteFailure(t *testing.T) {
+	if runtime.GOOS == "windows" {
+		t.Skip("permission-based write-failure injection is unix-only")
+	}
+	dir := t.TempDir()
+	modulePath := filepath.Join(dir, "util")
+	if err := os.MkdirAll(modulePath, 0755); err != nil {
+		t.Fatalf("failed to pre-create module dir: %v", err)
+	}
+	if err := os.Chmod(modulePath, 0555); err != nil {
+		t.Fatalf("failed to chmod module dir read-only: %v", err)
+	}
+	t.Cleanup(func() { _ = os.Chmod(modulePath, 0755) })
+
+	err := createModule(modulePath, "util", "public function hello() returns string {\n}\n")
+	if err == nil {
+		t.Fatal("expected an error writing into a read-only module directory")
+	}
+	if !strings.Contains(err.Error(), "failed to create") {
+		t.Errorf("err = %q, want 'failed to create' message", err)
+	}
+	if _, statErr := os.Stat(modulePath); !os.IsNotExist(statErr) {
+		t.Errorf("expected module directory to be cleaned up, stat err = %v", statErr)
 	}
 }
 
