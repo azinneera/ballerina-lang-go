@@ -22,6 +22,7 @@ import (
 	"bytes"
 	"os"
 	"path/filepath"
+	"runtime"
 	"strings"
 	"testing"
 )
@@ -93,6 +94,38 @@ func TestCleanCommand_WithPathArgument(t *testing.T) {
 	}
 }
 
+// TestCleanDir_DeleteFailure covers cleanDir's error branch. Removing a
+// directory requires write permission on its *parent*, not on the directory
+// itself, so this makes the parent read-only rather than the target — the
+// only reliable way to force os.RemoveAll to fail on an otherwise normal,
+// non-empty directory.
+func TestCleanDir_DeleteFailure(t *testing.T) {
+	if runtime.GOOS == "windows" {
+		t.Skip("permission-based delete-failure injection is unix-only")
+	}
+	parent := t.TempDir()
+	target := filepath.Join(parent, "target")
+	if err := os.MkdirAll(filepath.Join(target, "cache"), 0755); err != nil {
+		t.Fatalf("failed to create target/cache: %v", err)
+	}
+	if err := os.Chmod(parent, 0555); err != nil {
+		t.Fatalf("failed to chmod parent read-only: %v", err)
+	}
+	t.Cleanup(func() { _ = os.Chmod(parent, 0755) })
+
+	cmd := createCleanCmd()
+	var outBuf bytes.Buffer
+	cmd.SetOut(&outBuf)
+
+	err := cleanDir(cmd, target)
+	if err == nil {
+		t.Fatal("expected an error deleting a directory whose parent is read-only")
+	}
+	if !strings.Contains(err.Error(), "failed to delete") {
+		t.Errorf("err = %q, want 'failed to delete' message", err)
+	}
+}
+
 func TestCleanCommand_NoOpWhenTargetAbsent(t *testing.T) {
 	dir := t.TempDir()
 	writeBallerinaToml(t, dir)
@@ -117,6 +150,47 @@ func TestCleanCommand_InvalidProjectDirectory(t *testing.T) {
 	}
 	if !strings.Contains(stderr, "invalid project directory") {
 		t.Errorf("stderr = %q, want 'invalid project directory' message", stderr)
+	}
+}
+
+// TestCleanCommand_SingleBalFileRejected covers `bal clean <file>.bal`.
+// projects.Load classifies the path as ProjectKindSingleFile, and clean
+// rejects that kind explicitly, matching Java's CleanCommand.
+func TestCleanCommand_SingleBalFileRejected(t *testing.T) {
+	dir := t.TempDir()
+	balFile := filepath.Join(dir, "main.bal")
+	if err := os.WriteFile(balFile, []byte("public function main() {\n}\n"), 0644); err != nil {
+		t.Fatalf("failed to write main.bal: %v", err)
+	}
+	t.Chdir(dir)
+
+	_, stderr, err := executeCleanCommandWithArgs(t, "main.bal")
+	if err == nil {
+		t.Fatal("expected an error for a single .bal file path")
+	}
+	if !strings.Contains(stderr, "clean command is not supported for single file projects") {
+		t.Errorf("stderr = %q, want 'clean command is not supported for single file projects'", stderr)
+	}
+}
+
+// TestCleanCommand_NonBalFileRejected covers `bal clean <file>` for a
+// non-directory path that isn't a .bal file either. projects.Load rejects it
+// as an unsupported file type rather than misreporting it as a single-file
+// Ballerina project (a .txt file, for instance, is not one).
+func TestCleanCommand_NonBalFileRejected(t *testing.T) {
+	dir := t.TempDir()
+	textFile := filepath.Join(dir, "notes.txt")
+	if err := os.WriteFile(textFile, []byte("hello"), 0644); err != nil {
+		t.Fatalf("failed to write notes.txt: %v", err)
+	}
+	t.Chdir(dir)
+
+	_, stderr, err := executeCleanCommandWithArgs(t, "notes.txt")
+	if err == nil {
+		t.Fatal("expected an error for a non-.bal file path")
+	}
+	if !strings.Contains(stderr, "invalid project directory") || !strings.Contains(stderr, "unsupported file type") {
+		t.Errorf("stderr = %q, want 'invalid project directory' + 'unsupported file type'", stderr)
 	}
 }
 

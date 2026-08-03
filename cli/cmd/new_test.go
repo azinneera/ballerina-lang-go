@@ -380,6 +380,43 @@ func TestNewCommandInExistingProject(t *testing.T) {
 	}
 }
 
+// TestNewCommandWithInvalidTemplate tests error when --template is not one
+// of the accepted values.
+func TestNewCommandWithInvalidTemplate(t *testing.T) {
+	t.Parallel()
+	tmpDir := t.TempDir()
+	projectPath := filepath.Join(tmpDir, "project")
+
+	_, stderr, err := executeNewCommandWithArgs(t, projectPath, "--template", "bogus")
+	if err == nil {
+		t.Fatal("expected error, got success")
+	}
+
+	if !strings.Contains(stderr, "invalid template 'bogus'") {
+		t.Errorf("expected invalid template error, got: %s", stderr)
+	}
+}
+
+// TestNewCommandPathIsExistingFile tests error when the given path already
+// exists as a regular file rather than a directory.
+func TestNewCommandPathIsExistingFile(t *testing.T) {
+	t.Parallel()
+	tmpDir := t.TempDir()
+	filePath := filepath.Join(tmpDir, "not-a-dir")
+	if err := os.WriteFile(filePath, []byte("x"), 0644); err != nil {
+		t.Fatalf("failed to create file: %v", err)
+	}
+
+	_, stderr, err := executeNewCommand(t, filePath)
+	if err == nil {
+		t.Fatal("expected error, got success")
+	}
+
+	if !strings.Contains(stderr, "path exists and is not a directory") {
+		t.Errorf("expected 'path exists and is not a directory' error, got: %s", stderr)
+	}
+}
+
 // TestNewCommandWithExistingBalFiles tests that command succeeds when .bal files exist,
 // but main.bal is NOT created (preserving existing code).
 func TestNewCommandWithExistingBalFiles(t *testing.T) {
@@ -481,6 +518,71 @@ func TestNewCommandWithConflictingFiles(t *testing.T) {
 				t.Errorf("expected conflict error for '%s', got: %s", item.name, stderr)
 			}
 		})
+	}
+}
+
+// TestInitPackage_CleansUpOnWriteFailure covers initPackage's cleanup path.
+// It pre-creates .gitignore as a directory (rather than a file) inside an
+// otherwise-writable project path, so Ballerina.toml and main.bal are
+// written successfully and tracked in createdFiles before the .gitignore
+// os.WriteFile fails (a directory can't be opened for writing as a regular
+// file), triggering cleanup() to remove the two files written so far.
+func TestInitPackage_CleansUpOnWriteFailure(t *testing.T) {
+	if runtime.GOOS == "windows" {
+		t.Skip("permission-based write-failure injection is unix-only")
+	}
+	projectPath := t.TempDir()
+	if err := os.MkdirAll(filepath.Join(projectPath, ".gitignore"), 0755); err != nil {
+		t.Fatalf("failed to pre-create .gitignore as a directory: %v", err)
+	}
+
+	err := initPackage(projectPath, "mypkg", "myorg", templateMain)
+	if err == nil {
+		t.Fatal("expected an error writing .gitignore over an existing directory")
+	}
+	if !strings.Contains(err.Error(), "failed to create .gitignore") {
+		t.Errorf("err = %q, want 'failed to create .gitignore' message", err)
+	}
+
+	if _, statErr := os.Stat(filepath.Join(projectPath, projects.BallerinaTomlFile)); !os.IsNotExist(statErr) {
+		t.Errorf("expected Ballerina.toml to be cleaned up, stat err = %v", statErr)
+	}
+	if _, statErr := os.Stat(filepath.Join(projectPath, "main.bal")); !os.IsNotExist(statErr) {
+		t.Errorf("expected main.bal to be cleaned up, stat err = %v", statErr)
+	}
+}
+
+// TestInitPackage_CleansUpOnReadmeWriteFailure covers the lib-template-only
+// README.md write branch, distinct from TestInitPackage_CleansUpOnWriteFailure
+// above (which fails at .gitignore, before the README branch is ever
+// reached). Pre-creating README.md as a directory lets Ballerina.toml and
+// lib.bal write successfully first, so cleanup() has more than one entry to
+// unwind.
+func TestInitPackage_CleansUpOnReadmeWriteFailure(t *testing.T) {
+	if runtime.GOOS == "windows" {
+		t.Skip("permission-based write-failure injection is unix-only")
+	}
+	projectPath := t.TempDir()
+	if err := os.MkdirAll(filepath.Join(projectPath, projects.ReadmeMdFile), 0755); err != nil {
+		t.Fatalf("failed to pre-create README.md as a directory: %v", err)
+	}
+
+	err := initPackage(projectPath, "mypkg", "myorg", templateLib)
+	if err == nil {
+		t.Fatal("expected an error writing README.md over an existing directory")
+	}
+	if !strings.Contains(err.Error(), "failed to create README.md") {
+		t.Errorf("err = %q, want 'failed to create README.md' message", err)
+	}
+
+	if _, statErr := os.Stat(filepath.Join(projectPath, projects.BallerinaTomlFile)); !os.IsNotExist(statErr) {
+		t.Errorf("expected Ballerina.toml to be cleaned up, stat err = %v", statErr)
+	}
+	if _, statErr := os.Stat(filepath.Join(projectPath, "lib.bal")); !os.IsNotExist(statErr) {
+		t.Errorf("expected lib.bal to be cleaned up, stat err = %v", statErr)
+	}
+	if _, statErr := os.Stat(filepath.Join(projectPath, ".gitignore")); !os.IsNotExist(statErr) {
+		t.Errorf("expected .gitignore to be cleaned up, stat err = %v", statErr)
 	}
 }
 
@@ -803,6 +905,47 @@ func TestNewWorkspace_ConvertExisting(t *testing.T) {
 	}
 }
 
+// TestNewWorkspace_ConvertExisting_NestedMember covers
+// discoverExistingPackages's recursive-descent path: every other discovery
+// test uses only top-level member directories, so the WalkDir branch that
+// keeps descending past a non-package directory (one with no Ballerina.toml
+// of its own) to find a nested member is otherwise never exercised.
+func TestNewWorkspace_ConvertExisting_NestedMember(t *testing.T) {
+	t.Parallel()
+	tmpDir := t.TempDir()
+	workspacePath := filepath.Join(tmpDir, "my-project")
+
+	// "packages" itself has no Ballerina.toml — only its child does.
+	nestedPkgPath := filepath.Join(workspacePath, "packages", "pkg-a")
+	if err := os.MkdirAll(nestedPkgPath, 0755); err != nil {
+		t.Fatalf("failed to create nested pkg-a: %v", err)
+	}
+	if err := os.WriteFile(filepath.Join(nestedPkgPath, projects.BallerinaTomlFile),
+		[]byte("[package]\norg = \"testorg\"\nname = \"pkga\"\nversion = \"1.0.0\"\n"), 0644); err != nil {
+		t.Fatalf("failed to create pkg-a/Ballerina.toml: %v", err)
+	}
+
+	stdout, stderr, err := executeNewCommandWithArgs(t, workspacePath, "--workspace")
+	if err != nil {
+		t.Fatalf("command failed: %v\nstderr: %s", err, stderr)
+	}
+
+	if !strings.Contains(stdout, "Discovered 1 package(s)") {
+		t.Errorf("expected 'Discovered 1 package(s)' message, got stdout: %s", stdout)
+	}
+	if !strings.Contains(stdout, filepath.ToSlash(filepath.Join("packages", "pkg-a"))) {
+		t.Errorf("expected discovered package path 'packages/pkg-a', got stdout: %s", stdout)
+	}
+
+	content, err := os.ReadFile(filepath.Join(workspacePath, projects.BallerinaTomlFile))
+	if err != nil {
+		t.Fatalf("failed to read workspace Ballerina.toml: %v", err)
+	}
+	if !strings.Contains(string(content), `"packages/pkg-a"`) {
+		t.Errorf("workspace Ballerina.toml missing 'packages/pkg-a':\n%s", content)
+	}
+}
+
 // TestNewWorkspace_AlreadyWorkspace tests error when directory is already a workspace.
 func TestNewWorkspace_AlreadyWorkspace(t *testing.T) {
 	t.Parallel()
@@ -850,6 +993,55 @@ func TestNewWorkspace_AlreadyPackage(t *testing.T) {
 
 	if !strings.Contains(stderr, "directory is already a Ballerina package") {
 		t.Errorf("expected 'already a Ballerina package' error, got: %s", stderr)
+	}
+}
+
+// TestValidateWorkspacePath_StatError covers validateWorkspacePath's
+// non-"not exist" os.Stat error branch. Removing the parent directory's
+// execute bit makes any path lookup underneath it fail with a permission
+// error rather than "does not exist", since traversal itself is blocked.
+func TestValidateWorkspacePath_StatError(t *testing.T) {
+	if runtime.GOOS == "windows" {
+		t.Skip("permission-based stat-failure injection is unix-only")
+	}
+	parent := t.TempDir()
+	target := filepath.Join(parent, "wsdir")
+	if err := os.Chmod(parent, 0); err != nil {
+		t.Fatalf("failed to chmod parent unreadable: %v", err)
+	}
+	t.Cleanup(func() { _ = os.Chmod(parent, 0755) })
+
+	err := validateWorkspacePath(target)
+	if err == nil {
+		t.Fatal("expected a stat error for a path under an inaccessible parent")
+	}
+	if strings.Contains(err.Error(), "already a workspace") || strings.Contains(err.Error(), "already a Ballerina package") {
+		t.Errorf("err = %q, want a raw stat error, not a workspace/package classification", err)
+	}
+}
+
+// TestNewWorkspace_MkdirAllFailure covers runNewWorkspace's os.MkdirAll
+// error branch. The parent keeps its execute bit (so os.Stat on the
+// not-yet-existing workspace path still resolves to "not exist", passing
+// validateWorkspacePath) but loses its write bit, so creating the new
+// directory inside it fails.
+func TestNewWorkspace_MkdirAllFailure(t *testing.T) {
+	if runtime.GOOS == "windows" {
+		t.Skip("permission-based mkdir-failure injection is unix-only")
+	}
+	parent := t.TempDir()
+	target := filepath.Join(parent, "newws")
+	if err := os.Chmod(parent, 0555); err != nil {
+		t.Fatalf("failed to chmod parent read-only: %v", err)
+	}
+	t.Cleanup(func() { _ = os.Chmod(parent, 0755) })
+
+	_, stderr, err := executeNewCommandWithArgs(t, target, "--workspace")
+	if err == nil {
+		t.Fatal("expected an error creating a workspace under a read-only parent")
+	}
+	if stderr == "" {
+		t.Error("expected a non-empty stderr message")
 	}
 }
 
@@ -978,6 +1170,117 @@ func TestNewPackage_InsideWorkspace(t *testing.T) {
 
 	if helloAppOrg != newPkgOrg {
 		t.Errorf("org names should match: hello-app has '%s', new-pkg has '%s'", helloAppOrg, newPkgOrg)
+	}
+}
+
+// TestNewPackage_InsideWorkspace_NoPackagesLineYet covers a workspace whose
+// Ballerina.toml has a bare [workspace] table with no packages array yet
+// (e.g. hand-authored, or the workspace has never had a member added
+// through this code path). This exercises three branches at once:
+// getOrgNameFromWorkspace's "no packages listed -> return \"\"" fallback,
+// parseWorkspacePackages's "no packages array in the table -> nil" branch,
+// and addPackageToWorkspace's "no existing packages line -> insert after
+// [workspace]" fallback (rather than replacing an existing line).
+func TestNewPackage_InsideWorkspace_NoPackagesLineYet(t *testing.T) {
+	t.Parallel()
+	tmpDir := t.TempDir()
+	workspacePath := filepath.Join(tmpDir, "my-workspace")
+	if err := os.MkdirAll(workspacePath, 0755); err != nil {
+		t.Fatalf("failed to create workspace dir: %v", err)
+	}
+	tomlPath := filepath.Join(workspacePath, projects.BallerinaTomlFile)
+	if err := os.WriteFile(tomlPath, []byte("[workspace]\n"), 0644); err != nil {
+		t.Fatalf("failed to create workspace Ballerina.toml: %v", err)
+	}
+
+	newPkgPath := filepath.Join(workspacePath, "new-pkg")
+	stdout, stderr, err := executeNewCommandWithArgs(t, newPkgPath)
+	if err != nil {
+		t.Fatalf("failed to create package inside workspace: %v\nstderr: %s", err, stderr)
+	}
+	if !strings.Contains(stdout, "Added package to workspace") {
+		t.Errorf("expected 'Added package to workspace' message, got stdout: %s", stdout)
+	}
+	assertPackageStructure(t, newPkgPath)
+
+	content, err := os.ReadFile(tomlPath)
+	if err != nil {
+		t.Fatalf("failed to read workspace Ballerina.toml: %v", err)
+	}
+	if !strings.Contains(string(content), `packages = ["new-pkg"]`) {
+		t.Errorf("workspace Ballerina.toml should have a fresh packages line with new-pkg:\n%s", content)
+	}
+}
+
+// TestNewPackage_InsideWorkspace_FirstMemberHasNoOrg covers
+// getOrgNameFromWorkspace's fall-through when the first listed member's
+// Ballerina.toml has no "org" line at all — the org-scanning loop finds
+// nothing and returns "", so the new package falls back to a guessed org
+// instead of inheriting one from the workspace.
+func TestNewPackage_InsideWorkspace_FirstMemberHasNoOrg(t *testing.T) {
+	t.Parallel()
+	tmpDir := t.TempDir()
+	workspacePath := filepath.Join(tmpDir, "my-workspace")
+	pkgAPath := filepath.Join(workspacePath, "pkg-a")
+	if err := os.MkdirAll(pkgAPath, 0755); err != nil {
+		t.Fatalf("failed to create pkg-a: %v", err)
+	}
+	if err := os.WriteFile(filepath.Join(workspacePath, projects.BallerinaTomlFile),
+		[]byte("[workspace]\npackages = [\"pkg-a\"]\n"), 0644); err != nil {
+		t.Fatalf("failed to create workspace Ballerina.toml: %v", err)
+	}
+	// Deliberately no "org" line.
+	if err := os.WriteFile(filepath.Join(pkgAPath, projects.BallerinaTomlFile),
+		[]byte("[package]\nname = \"pkga\"\nversion = \"1.0.0\"\n"), 0644); err != nil {
+		t.Fatalf("failed to create pkg-a/Ballerina.toml: %v", err)
+	}
+
+	newPkgPath := filepath.Join(workspacePath, "new-pkg")
+	stdout, stderr, err := executeNewCommandWithArgs(t, newPkgPath)
+	if err != nil {
+		t.Fatalf("failed to create package inside workspace: %v\nstderr: %s", err, stderr)
+	}
+	if !strings.Contains(stdout, "Created new package") {
+		t.Errorf("expected 'Created new package' message, got stdout: %s", stdout)
+	}
+	assertPackageStructure(t, newPkgPath)
+}
+
+// TestNewPackage_InsideWorkspace_AlreadyRegistered covers
+// addPackageToWorkspace's "already exists" no-op branch: a workspace member
+// name can legitimately be pre-declared in Ballerina.toml (hand-authored, or
+// left over) before the directory is actually created with `bal new`. When
+// that member is then created for real, addPackageToWorkspace must not
+// duplicate the entry.
+func TestNewPackage_InsideWorkspace_AlreadyRegistered(t *testing.T) {
+	t.Parallel()
+	tmpDir := t.TempDir()
+	workspacePath := filepath.Join(tmpDir, "my-workspace")
+	if err := os.MkdirAll(workspacePath, 0755); err != nil {
+		t.Fatalf("failed to create workspace dir: %v", err)
+	}
+	tomlPath := filepath.Join(workspacePath, projects.BallerinaTomlFile)
+	// "future-pkg" is already listed even though the directory doesn't exist yet.
+	if err := os.WriteFile(tomlPath, []byte("[workspace]\npackages = [\"future-pkg\"]\n"), 0644); err != nil {
+		t.Fatalf("failed to create workspace Ballerina.toml: %v", err)
+	}
+
+	newPkgPath := filepath.Join(workspacePath, "future-pkg")
+	stdout, stderr, err := executeNewCommandWithArgs(t, newPkgPath)
+	if err != nil {
+		t.Fatalf("failed to create pre-declared package: %v\nstderr: %s", err, stderr)
+	}
+	if !strings.Contains(stdout, "Added package to workspace") {
+		t.Errorf("expected 'Added package to workspace' message, got stdout: %s", stdout)
+	}
+
+	content, err := os.ReadFile(tomlPath)
+	if err != nil {
+		t.Fatalf("failed to read workspace Ballerina.toml: %v", err)
+	}
+	// The entry must not be duplicated.
+	if got := strings.Count(string(content), `"future-pkg"`); got != 1 {
+		t.Errorf("expected exactly one \"future-pkg\" entry, got %d in:\n%s", got, content)
 	}
 }
 
