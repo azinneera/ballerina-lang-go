@@ -20,9 +20,10 @@ package main
 
 import (
 	"bytes"
+	"errors"
+	"io/fs"
 	"os"
 	"path/filepath"
-	"runtime"
 	"strings"
 	"testing"
 
@@ -125,6 +126,11 @@ func TestAddCommand_DuplicateModule(t *testing.T) {
 	if _, stderr, err := executeAddCommandWithArgs(t, "util"); err != nil {
 		t.Fatalf("first add failed: %v\nstderr: %s", err, stderr)
 	}
+	modulePath := filepath.Join(dir, "modules", "util")
+	original, err := os.ReadFile(filepath.Join(modulePath, "util.bal"))
+	if err != nil {
+		t.Fatalf("failed to read the module created by the first add: %v", err)
+	}
 
 	_, stderr, err := executeAddCommandWithArgs(t, "util")
 	if err == nil {
@@ -132,6 +138,17 @@ func TestAddCommand_DuplicateModule(t *testing.T) {
 	}
 	if !strings.Contains(stderr, "a module already exists with the given name") {
 		t.Errorf("stderr = %q, want 'a module already exists' message", stderr)
+	}
+
+	// The rejected second add must leave the existing module untouched —
+	// createModule's atomic os.Mkdir claim fails before ever writing or
+	// removing anything under modulePath.
+	after, err := os.ReadFile(filepath.Join(modulePath, "util.bal"))
+	if err != nil {
+		t.Fatalf("expected the existing module to remain intact: %v", err)
+	}
+	if string(after) != string(original) {
+		t.Errorf("existing module content changed:\nbefore:\n%s\nafter:\n%s", original, after)
 	}
 }
 
@@ -187,28 +204,52 @@ func TestAddCommand_InvalidTemplate(t *testing.T) {
 // dir, and asserts the directory is removed rather than left behind
 // half-written.
 func TestCreateModule_CleansUpOnWriteFailure(t *testing.T) {
-	if runtime.GOOS == "windows" {
-		t.Skip("permission-based write-failure injection is unix-only")
-	}
 	dir := t.TempDir()
 	modulePath := filepath.Join(dir, "util")
-	if err := os.MkdirAll(modulePath, 0755); err != nil {
-		t.Fatalf("failed to pre-create module dir: %v", err)
-	}
-	if err := os.Chmod(modulePath, 0555); err != nil {
-		t.Fatalf("failed to chmod module dir read-only: %v", err)
-	}
-	t.Cleanup(func() { _ = os.Chmod(modulePath, 0755) })
 
-	err := createModule(modulePath, "util", "public function hello() returns string {\n}\n")
+	// os.Mkdir(modulePath, ...) succeeds since modulePath doesn't exist yet;
+	// passing a moduleName containing a path separator makes the later
+	// os.WriteFile target a path whose intermediate directory doesn't
+	// exist, forcing the write itself (not the atomic directory claim) to
+	// fail — portably, with no permission tricks needed.
+	err := createModule(modulePath, "nonexistent/util", "public function hello() returns string {\n}\n")
 	if err == nil {
-		t.Fatal("expected an error writing into a read-only module directory")
+		t.Fatal("expected an error writing to a path with a missing intermediate directory")
 	}
 	if !strings.Contains(err.Error(), "failed to create") {
 		t.Errorf("err = %q, want 'failed to create' message", err)
 	}
 	if _, statErr := os.Stat(modulePath); !os.IsNotExist(statErr) {
 		t.Errorf("expected module directory to be cleaned up, stat err = %v", statErr)
+	}
+}
+
+// TestCreateModule_DuplicateModule covers createModule's atomic-claim
+// branch directly: os.Mkdir on a pre-existing modulePath must fail with
+// fs.ErrExist (mapped by runAdd into the duplicate-module diagnostic)
+// without touching anything already inside it.
+func TestCreateModule_DuplicateModule(t *testing.T) {
+	dir := t.TempDir()
+	modulePath := filepath.Join(dir, "util")
+	if err := os.MkdirAll(modulePath, 0755); err != nil {
+		t.Fatalf("failed to pre-create module dir: %v", err)
+	}
+	existing := filepath.Join(modulePath, "util.bal")
+	if err := os.WriteFile(existing, []byte("original"), 0644); err != nil {
+		t.Fatalf("failed to write pre-existing util.bal: %v", err)
+	}
+
+	err := createModule(modulePath, "util", "public function hello() returns string {\n}\n")
+	if !errors.Is(err, fs.ErrExist) {
+		t.Fatalf("err = %v, want errors.Is(err, fs.ErrExist)", err)
+	}
+
+	content, readErr := os.ReadFile(existing)
+	if readErr != nil {
+		t.Fatalf("expected the pre-existing module to remain intact: %v", readErr)
+	}
+	if string(content) != "original" {
+		t.Errorf("pre-existing util.bal content changed: %q", content)
 	}
 }
 
