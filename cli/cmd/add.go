@@ -17,7 +17,9 @@
 package main
 
 import (
+	"errors"
 	"fmt"
+	"io/fs"
 	"os"
 	"path/filepath"
 	"strings"
@@ -115,9 +117,6 @@ func runAdd(cmd *cobra.Command, moduleName, template string) error {
 	}
 
 	modulePath := filepath.Join(projects.ModulesDir, moduleName)
-	if _, err := os.Stat(modulePath); err == nil {
-		return addError("a module already exists with the given name : '%s' :\nExisting module path %s", moduleName, modulePath)
-	}
 
 	tmpl, err := validateAddTemplate(template)
 	if err != nil {
@@ -130,10 +129,15 @@ func runAdd(cmd *cobra.Command, moduleName, template string) error {
 	}
 
 	if err := createModule(modulePath, moduleName, sourceContent); err != nil {
+		if errors.Is(err, fs.ErrExist) {
+			return addError("a module already exists with the given name : '%s' :\nExisting module path %s", moduleName, modulePath)
+		}
 		return addError("error occurred while creating module : %w", err)
 	}
 
-	fmt.Fprintln(cmd.OutOrStdout(), "Added new Ballerina module at "+modulePath)
+	if _, err := fmt.Fprintln(cmd.OutOrStdout(), "Added new Ballerina module at "+modulePath); err != nil {
+		return addError("failed to write success message: %w", err)
+	}
 	return nil
 }
 
@@ -148,9 +152,19 @@ func getAddTemplateSource(template addTemplateName) (sourceContent string, err e
 	}
 }
 
-// createModule writes modulePath/<moduleName>.bal, cleaning up on error.
+// createModule atomically claims modulePath — os.Mkdir (not MkdirAll) fails
+// with fs.ErrExist if another process created it first, instead of silently
+// succeeding on an existing directory — then writes
+// modulePath/<moduleName>.bal. Since this call is the one that created
+// modulePath, it's always safe to remove on a later write failure: it can
+// never belong to a concurrent invocation. modulePath's parent (normally
+// projects.ModulesDir) is derived from modulePath itself rather than
+// hardcoded, so this stays correct for any modulePath a caller passes.
 func createModule(modulePath, moduleName, sourceContent string) error {
-	if err := os.MkdirAll(modulePath, 0755); err != nil {
+	if err := os.MkdirAll(filepath.Dir(modulePath), 0755); err != nil {
+		return fmt.Errorf("failed to create modules directory: %w", err)
+	}
+	if err := os.Mkdir(modulePath, 0755); err != nil {
 		return fmt.Errorf("failed to create module directory: %w", err)
 	}
 
@@ -168,26 +182,28 @@ func createModule(modulePath, moduleName, sourceContent string) error {
 // the same order: character set, length, then underscore placement, then
 // leading digit. Module names follow the same identifier rules as package
 // names, so this reuses the regexes already defined for that in
-// name_utils.go.
+// name_utils.go. The messages below intentionally keep Java's exact
+// punctuation (including trailing periods), hence the staticcheck ST1005
+// suppressions.
 // Java source: io.ballerina.projects.util.ProjectUtils
 func validateModuleName(name string) error {
 	if !validPackageNamePattern.MatchString(name) || allDotsPattern.MatchString(name) {
-		return fmt.Errorf("invalid module name : '%s' :\nModule name can only contain alphanumerics, underscores and periods.", name)
+		return fmt.Errorf("invalid module name : '%s' :\nModule name can only contain alphanumerics, underscores and periods.", name) //nolint:staticcheck // mirrors Java's exact ProjectUtils wording
 	}
 	if len(name) > maxNameLength {
-		return fmt.Errorf("invalid module name : '%s' :\nMaximum length of module name is 256 characters.", name)
+		return fmt.Errorf("invalid module name : '%s' :\nMaximum length of module name is 256 characters.", name) //nolint:staticcheck // mirrors Java's exact ProjectUtils wording
 	}
 	if strings.HasPrefix(name, "_") {
-		return fmt.Errorf("invalid module name : '%s' :\nModule name cannot have initial underscore characters.", name)
+		return fmt.Errorf("invalid module name : '%s' :\nModule name cannot have initial underscore characters.", name) //nolint:staticcheck // mirrors Java's exact ProjectUtils wording
 	}
 	if strings.HasSuffix(name, "_") {
-		return fmt.Errorf("invalid module name : '%s' :\nModule name cannot have trailing underscore characters.", name)
+		return fmt.Errorf("invalid module name : '%s' :\nModule name cannot have trailing underscore characters.", name) //nolint:staticcheck // mirrors Java's exact ProjectUtils wording
 	}
 	if consecutiveUnderscoresPattern.MatchString(name) {
-		return fmt.Errorf("invalid module name : '%s' :\nModule name cannot have consecutive underscore characters.", name)
+		return fmt.Errorf("invalid module name : '%s' :\nModule name cannot have consecutive underscore characters.", name) //nolint:staticcheck // mirrors Java's exact ProjectUtils wording
 	}
 	if startsWithDigitPattern.MatchString(name) {
-		return fmt.Errorf("invalid module name : '%s' :\nModule name cannot have initial numeric characters.", name)
+		return fmt.Errorf("invalid module name : '%s' :\nModule name cannot have initial numeric characters.", name) //nolint:staticcheck // mirrors Java's exact ProjectUtils wording
 	}
 	return nil
 }

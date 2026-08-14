@@ -143,7 +143,9 @@ func cleanDir(cmd *cobra.Command, dir string) error {
 	if err := os.RemoveAll(dir); err != nil {
 		return cleanError("failed to delete %s: %w", dir, err)
 	}
-	fmt.Fprintln(cmd.OutOrStdout(), "Successfully deleted "+dir)
+	if _, err := fmt.Fprintln(cmd.OutOrStdout(), "Successfully deleted "+dir); err != nil {
+		return cleanError("failed to write success message: %w", err)
+	}
 	return nil
 }
 
@@ -173,7 +175,9 @@ func cleanCustomTargetDir(cmd *cobra.Command, targetDir string) error {
 	if err := os.RemoveAll(absPath); err != nil {
 		return cleanError("failed to delete %s: %w", absPath, err)
 	}
-	fmt.Fprintln(cmd.OutOrStdout(), "Successfully deleted '"+absPath+"'")
+	if _, err := fmt.Fprintln(cmd.OutOrStdout(), "Successfully deleted '"+absPath+"'"); err != nil {
+		return cleanError("failed to write success message: %w", err)
+	}
 	return nil
 }
 
