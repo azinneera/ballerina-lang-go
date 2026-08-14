@@ -609,17 +609,19 @@ func TestBalAddCorpus(t *testing.T) {
 	outputsRoot := filepath.Join(repoRoot, "corpus", "cli", "output", "add")
 
 	// runInFixtureCopy copies src into a fresh temp dir and runs `bal add`
-	// with that copy as the working directory.
-	runInFixtureCopy := func(t *testing.T, src string, addArgs ...string) (stdout, stderr string, exitCode int) {
+	// with that copy as the working directory. It also returns workDir so
+	// callers can inspect generated files, not just stdout/stderr.
+	runInFixtureCopy := func(t *testing.T, src string, addArgs ...string) (stdout, stderr string, exitCode int, workDir string) {
 		t.Helper()
-		workDir := t.TempDir()
+		workDir = t.TempDir()
 		copyDir(t, src, workDir)
 		env := os.Environ()
 		if coverDir != "" {
 			env = append(env, "GOCOVERDIR="+coverDir)
 		}
 		args := append([]string{"add"}, addArgs...)
-		return runNativeCLICommandWithEnv(t, balBin, workDir, args, env)
+		stdout, stderr, exitCode = runNativeCLICommandWithEnv(t, balBin, workDir, args, env)
+		return stdout, stderr, exitCode, workDir
 	}
 
 	assertMatches := func(t *testing.T, stdout, stderr string, exitCode int, txtar string) {
@@ -654,14 +656,30 @@ func TestBalAddCorpus(t *testing.T) {
 
 	t.Run("basic-lib", func(t *testing.T) {
 		t.Parallel()
-		stdout, stderr, code := runInFixtureCopy(t, basicFixture, "util")
+		stdout, stderr, code, workDir := runInFixtureCopy(t, basicFixture, "util")
 		assertMatches(t, stdout, stderr, code, "basic-lib.txtar")
+
+		content, err := os.ReadFile(filepath.Join(workDir, "modules", "util", "util.bal"))
+		if err != nil {
+			t.Fatalf("expected modules/util/util.bal to exist: %v", err)
+		}
+		if !strings.Contains(string(content), "public function hello") {
+			t.Errorf("modules/util/util.bal missing expected lib template content:\n%s", content)
+		}
 	})
 
 	t.Run("basic-service", func(t *testing.T) {
 		t.Parallel()
-		stdout, stderr, code := runInFixtureCopy(t, basicFixture, "svc", "-t", "service")
+		stdout, stderr, code, workDir := runInFixtureCopy(t, basicFixture, "svc", "-t", "service")
 		assertMatches(t, stdout, stderr, code, "basic-service.txtar")
+
+		content, err := os.ReadFile(filepath.Join(workDir, "modules", "svc", "svc.bal"))
+		if err != nil {
+			t.Fatalf("expected modules/svc/svc.bal to exist: %v", err)
+		}
+		if !strings.Contains(string(content), "service / on new http:Listener") {
+			t.Errorf("modules/svc/svc.bal missing expected service template content:\n%s", content)
+		}
 	})
 
 	t.Run("duplicate-module", func(t *testing.T) {
@@ -685,13 +703,13 @@ func TestBalAddCorpus(t *testing.T) {
 
 	t.Run("invalid-name", func(t *testing.T) {
 		t.Parallel()
-		stdout, stderr, code := runInFixtureCopy(t, basicFixture, "bad-name!")
+		stdout, stderr, code, _ := runInFixtureCopy(t, basicFixture, "bad-name!")
 		assertMatches(t, stdout, stderr, code, "invalid-name.txtar")
 	})
 
 	t.Run("invalid-template", func(t *testing.T) {
 		t.Parallel()
-		stdout, stderr, code := runInFixtureCopy(t, basicFixture, "util", "-t", "bogus")
+		stdout, stderr, code, _ := runInFixtureCopy(t, basicFixture, "util", "-t", "bogus")
 		assertMatches(t, stdout, stderr, code, "invalid-template.txtar")
 	})
 
@@ -708,19 +726,19 @@ func TestBalAddCorpus(t *testing.T) {
 
 	t.Run("no-args", func(t *testing.T) {
 		t.Parallel()
-		stdout, stderr, code := runInFixtureCopy(t, basicFixture)
+		stdout, stderr, code, _ := runInFixtureCopy(t, basicFixture)
 		assertMatches(t, stdout, stderr, code, "no-args.txtar")
 	})
 
 	t.Run("too-many-args", func(t *testing.T) {
 		t.Parallel()
-		stdout, stderr, code := runInFixtureCopy(t, basicFixture, "a", "b")
+		stdout, stderr, code, _ := runInFixtureCopy(t, basicFixture, "a", "b")
 		assertMatches(t, stdout, stderr, code, "too-many-args.txtar")
 	})
 
 	t.Run("help", func(t *testing.T) {
 		t.Parallel()
-		stdout, stderr, code := runInFixtureCopy(t, basicFixture, "--help")
+		stdout, stderr, code, _ := runInFixtureCopy(t, basicFixture, "--help")
 		assertMatches(t, stdout, stderr, code, "help.txtar")
 	})
 }
