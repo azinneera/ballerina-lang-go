@@ -364,3 +364,63 @@ func TestPack_NoReadmeSkipsDocs(t *testing.T) {
 		}
 	}
 }
+
+// TestPack_WorkspaceMemberReadme packs a workspace *member* (not a
+// standalone package, so its manifestBuilder.projectPath is "pkg-a", not
+// ".") that has both a package README and a module README. Regression test
+// for defaultReadme/defaultModuleReadme storing paths pre-joined with
+// projectPath: every later read re-joins manifest.Readme() with the
+// package's own root, so a non-"." projectPath doubled up and packing
+// failed outright with "could not locate the readme file 'pkg-a/README.md'".
+func TestPack_WorkspaceMemberReadme(t *testing.T) {
+	t.Parallel()
+	source, err := filepath.Abs(filepath.Join("testdata", "workspace-member-readme"))
+	if err != nil {
+		t.Fatalf("abs source: %v", err)
+	}
+	result, err := loadProject(source)
+	if err != nil {
+		t.Fatalf("load source project: %v", err)
+	}
+
+	ws, ok := result.Project().(*projects.WorkspaceProject)
+	if !ok {
+		t.Fatalf("expected *projects.WorkspaceProject, got %T", result.Project())
+	}
+	if len(ws.Projects()) != 1 {
+		t.Fatalf("expected 1 workspace member, got %d", len(ws.Projects()))
+	}
+	member := ws.Projects()[0]
+
+	manifest := member.CurrentPackage().Manifest()
+	if got, want := manifest.Readme(), "README.md"; got != want {
+		t.Fatalf("Readme() = %q, want %q (must not be pre-joined with the member's own projectPath)", got, want)
+	}
+
+	outDir := t.TempDir()
+	balaPath, err := projects.NewBallerinaBackend(member.CurrentPackage().Compilation()).EmitBala(outDir)
+	if err != nil {
+		t.Fatalf("EmitBala: %v", err)
+	}
+
+	zr, err := zip.OpenReader(balaPath)
+	if err != nil {
+		t.Fatalf("open bala: %v", err)
+	}
+	defer func() { _ = zr.Close() }()
+
+	wantEntries := map[string]bool{
+		"docs/README.md":                    false,
+		"docs/modules/pkga.extra/README.md": false,
+	}
+	for _, f := range zr.File {
+		if _, ok := wantEntries[f.Name]; ok {
+			wantEntries[f.Name] = true
+		}
+	}
+	for name, found := range wantEntries {
+		if !found {
+			t.Errorf("bala missing expected entry %q", name)
+		}
+	}
+}

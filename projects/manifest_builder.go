@@ -140,7 +140,7 @@ func (b *manifestBuilder) parseFromTOML() {
 		b.readme = explicitReadme
 		b.validateReadme(explicitReadme)
 	} else {
-		b.readme = b.defaultReadme(b.projectPath)
+		b.readme = b.defaultReadme(b.projectPath, ".")
 	}
 	b.include = b.parseStringArray(keyPackage + "." + keyInclude)
 	b.modules = b.parseModules()
@@ -194,18 +194,24 @@ func (b *manifestBuilder) validateReadme(readme string) {
 	}
 }
 
-// defaultReadme returns ReadmeMdFile if it exists directly under dir,
-// or "" if fsys is unset or the file isn't there. Mirrors the non-legacy
-// half of Java's readme default (the deprecated Package.md fallback is not
-// ported).
+// defaultReadme returns storeRelDir/ReadmeMdFile if ReadmeMdFile exists
+// directly under checkDir, or "" if fsys is unset or the file isn't there.
+// checkDir and storeRelDir are deliberately separate: checkDir is resolved
+// against the fs.FS root (so it needs the full b.projectPath prefix to find
+// the file), while storeRelDir is resolved against the *package's own* root
+// at every later read (addBalaDoc, etc. all join manifest.Readme() with the
+// package root again) — so the stored value must never itself carry
+// b.projectPath, or non-"." projects (workspace members) end up with it
+// doubled. Mirrors the non-legacy half of Java's readme default (the
+// deprecated Package.md fallback is not ported).
 // Java source: io.ballerina.projects.internal.ManifestBuilder#validateAndGetReadmePath
-func (b *manifestBuilder) defaultReadme(dir string) string {
+func (b *manifestBuilder) defaultReadme(checkDir, storeRelDir string) string {
 	if b.fsys == nil {
 		return ""
 	}
-	candidate := path.Join(dir, ReadmeMdFile)
+	candidate := path.Join(checkDir, ReadmeMdFile)
 	if info, err := fs.Stat(b.fsys, candidate); err == nil && !info.IsDir() {
-		return candidate
+		return path.Join(storeRelDir, ReadmeMdFile)
 	}
 	return ""
 }
@@ -270,10 +276,12 @@ func (b *manifestBuilder) validateModuleName(name, packageName string) {
 
 // defaultModuleReadme returns the default README.md path for a
 // fully-qualified module name (e.g. "pkg.util" -> modules/util/README.md),
-// or "" if it doesn't exist / fsys is unset.
+// stored relative to the package's own root, or "" if it doesn't exist /
+// fsys is unset.
 func (b *manifestBuilder) defaultModuleReadme(packageName, qualifiedName string) string {
 	shortName := strings.TrimPrefix(qualifiedName, packageName+".")
-	return b.defaultReadme(path.Join(b.projectPath, ModulesDir, shortName))
+	moduleRelDir := path.Join(ModulesDir, shortName)
+	return b.defaultReadme(path.Join(b.projectPath, moduleRelDir), moduleRelDir)
 }
 
 // discoverUndeclaredModules scans modules/ for sub-module directories not
