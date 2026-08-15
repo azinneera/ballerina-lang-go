@@ -34,7 +34,7 @@
 
 ## Architecture
 
-![Ballerina Nutcracker architecture: the bal CLI (new, run, pack, build, push, version) feeds the compilation pipeline to BIR; the runtime interprets BIR or bal build embeds it in a standalone binary; the library resolves at compile time and via extern calls; the Platform Adaptation Layer reaches Host OS (palnative) or browser (pal_wasm.go). Ballerina Central is fetched over the network; bal push installs to the local repository.](doc/img/architecture.jpg)
+![Ballerina Nutcracker architecture: the bal CLI (new, run, pack, build, push, version) is the primary entry point for working with Ballerina — its commands cover package creation, versioning, and resolving dependencies from Ballerina Central. The CLI feeds source into the compilation pipeline, which lowers it to Ballerina Intermediate Representation (BIR); the runtime interprets BIR directly, while bal build embeds the BIR into a self-contained standalone binary. The standard library resolves at compile time; native implementations are invoked at runtime via extern calls, while pure-Ballerina modules run directly as BIR. The Platform Abstraction Layer (PAL) isolates environment-specific concerns with two backends: palnative for the host OS and pal_wasm.go for the browser (WebAssembly). Ballerina Central is accessed over the network for package resolution; bal push installs the packaged artifact into the local repository.](doc/img/architecture.jpg)
 
 Almost everything inside the binary is a Go package; Ballerina Central, the local repository, the host OS, and the browser sit outside it. See [ARCHITECTURE.md](doc/guides/ARCHITECTURE.md) for how the diagram maps onto source directories.
 

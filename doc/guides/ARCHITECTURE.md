@@ -2,7 +2,7 @@
 
 Ballerina Nutcracker compiles a `.bal` program to **Ballerina Intermediate Representation (BIR)** and then interprets that BIR (`bal run`), or embeds the BIR with the runtime into a standalone binary (`bal build`). Almost everything below is a Go package inside the single static `bal` binary; Ballerina Central, the local repository, the host OS, and the browser sit outside it.
 
-![Ballerina Nutcracker architecture: the bal CLI (new, run, pack, build, push, version) feeds the compilation pipeline to BIR; the runtime interprets BIR or bal build embeds it in a standalone binary; the library resolves at compile time and via extern calls; the Platform Adaptation Layer reaches Host OS (palnative) or browser (pal_wasm.go). Ballerina Central is fetched over the network; bal push installs to the local repository.](../img/architecture.jpg)
+![Ballerina Nutcracker architecture: the bal CLI (new, run, pack, build, push, version) is the primary entry point for working with Ballerina — its commands cover package creation, versioning, and resolving dependencies from Ballerina Central. The CLI feeds source into the compilation pipeline, which lowers it to Ballerina Intermediate Representation (BIR); the runtime interprets BIR directly, while bal build embeds the BIR into a self-contained standalone binary. The standard library resolves at compile time; native implementations are invoked at runtime via extern calls, while pure-Ballerina modules run directly as BIR. The Platform Abstraction Layer (PAL) isolates environment-specific concerns with two backends: palnative for the host OS and pal_wasm.go for the browser (WebAssembly). Ballerina Central is accessed over the network for package resolution; bal push installs the packaged artifact into the local repository.](../img/architecture.jpg)
 
 ## Compilation pipeline
 
@@ -52,7 +52,7 @@ Both libraries are declared in Ballerina, and they are not only a runtime depend
 
 Where a module needs native code, its Go implementation is registered by [`lib/rt`](../../lib/rt/). Some modules (`lang.object`, `math.vector`) are pure Ballerina with no `external` functions at all.
 
-## Platform Adaptation Layer
+## Platform Abstraction Layer
 
 [`platform/pal/`](../../platform/pal/) defines the interface — `pal.Platform` has exactly six fields: `IO`, `FS`, `OS`, `Time`, `HTTP` and `Signals`. [`platform/palnative/`](../../platform/palnative/) implements them for a native host.
 
@@ -86,7 +86,7 @@ Compiler and runtime modules such as `ast`, `projects`, `runtime`, and `semtypes
 
 Solid arrows in the diagram are function calls inside one process (or local filesystem writes). The dashed arrow is the network call to Central. Things that sit outside the binary:
 
-- **Ballerina Central** — the remote `.bala` registry, reached over the network by `projects/centralclient` when resolving dependencies (`fetch deps`). This is the only remote the toolchain itself talks to; a running Ballerina program makes its own calls through `pal.HTTP`.
+- **Ballerina Central** — the remote `.bala` registry, reached over the network by `projects/centralclient` when resolving dependencies (`fetch deps`). Ballerina Central is the remote used for Ballerina package resolution.
 - **Local repository** — on-disk under `repositories/local/bala`, written by `bal push --repository=local` so other packages can depend on `repository = "local"`. Not a network call.
 - **The host OS** — filesystem, network, environment and signals, reached by the runtime through `platform/palnative`.
 - **The browser** — the [Ballerina Playground](https://github.com/ballerina-nutcracker/playground) implements the same `pal.Platform` for WebAssembly (`pal_wasm.go`), so the same program can run in a tab without changing Ballerina source.
