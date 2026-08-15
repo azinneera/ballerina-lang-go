@@ -34,9 +34,9 @@
 
 ## Architecture
 
-![Ballerina Nutcracker architecture, left to right: the bal CLI feeds the compilation pipeline (parse, AST, symbols and types, desugar, emit BIR), whose BIR is executed by the runtime (dispatch loop, strands and frames, values, extern bridge), which reaches the host only through the Platform Adaptation Layer. The library of language and standard modules is resolved both at compile time and at run time. Ballerina Central and the host OS are the only boundaries outside the binary.](doc/img/architecture.svg)
+![Ballerina Nutcracker architecture: the bal CLI (new, run, pack, build, push, version) feeds the compilation pipeline to BIR; the runtime interprets BIR or bal build embeds it in a standalone binary; the library resolves at compile time and via extern calls; the Platform Adaptation Layer reaches Host OS (palnative) or browser (pal_wasm.go). Ballerina Central is fetched over the network; bal push installs to the local repository.](doc/img/architecture.jpg)
 
-Almost everything inside the binary is a Go package; only Ballerina Central and the host OS sit outside it. See [ARCHITECTURE.md](doc/guides/ARCHITECTURE.md) for how the diagram maps onto source directories.
+Almost everything inside the binary is a Go package; Ballerina Central, the local repository, the host OS, and the browser sit outside it. See [ARCHITECTURE.md](doc/guides/ARCHITECTURE.md) for how the diagram maps onto source directories.
 
 ## Getting started
 
@@ -69,6 +69,7 @@ public function main() {
 | `bal run <file.bal> \| <package-dir> \| .` | Compile and execute a source file or package |
 | `bal pack [<package-dir>]` | Build the `.bala` distribution archive of a package |
 | `bal build [<package-dir>]` | Build a standalone executable that bundles the Ballerina runtime |
+| `bal push [<bala-path>] --repository=local` | Push a `.bala` of the current package (or a given archive) to the local repository |
 | `bal version` | Print the version |
 
 `bal build` needs a `balrt` stripped-down runtime alongside `bal` (`go build -o balrt ./cli/internal/balrt`), or pointed at via the `main.RuntimeStubPath` link-time override.

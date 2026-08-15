@@ -1,8 +1,8 @@
 # Architecture
 
-Ballerina Nutcracker compiles a `.bal` program to **Ballerina Intermediate Representation (BIR)** and then interprets that BIR. Almost everything below is a Go package inside the single static `bal` binary; only Ballerina Central and the host OS sit outside it.
+Ballerina Nutcracker compiles a `.bal` program to **Ballerina Intermediate Representation (BIR)** and then interprets that BIR (`bal run`), or embeds the BIR with the runtime into a standalone binary (`bal build`). Almost everything below is a Go package inside the single static `bal` binary; Ballerina Central, the local repository, the host OS, and the browser sit outside it.
 
-![Ballerina Nutcracker architecture, left to right: the bal CLI feeds the compilation pipeline (parse, AST, symbols and types, desugar, emit BIR), whose BIR is executed by the runtime (dispatch loop, strands and frames, values, extern bridge), which reaches the host only through the Platform Adaptation Layer. The library of language and standard modules is resolved both at compile time and at run time. Ballerina Central and the host OS are the only boundaries outside the binary.](../img/architecture.svg)
+![Ballerina Nutcracker architecture: the bal CLI (new, run, pack, build, push, version) feeds the compilation pipeline to BIR; the runtime interprets BIR or bal build embeds it in a standalone binary; the library resolves at compile time and via extern calls; the Platform Adaptation Layer reaches Host OS (palnative) or browser (pal_wasm.go). Ballerina Central is fetched over the network; bal push installs to the local repository.](../img/architecture.jpg)
 
 ## Compilation pipeline
 
@@ -84,7 +84,9 @@ Compiler and runtime modules such as `ast`, `projects`, `runtime`, and `semtypes
 
 ## Boundaries
 
-Solid arrows in the diagram are function calls inside one process. Two things sit outside the binary:
+Solid arrows in the diagram are function calls inside one process (or local filesystem writes). The dashed arrow is the network call to Central. Things that sit outside the binary:
 
-- **Ballerina Central** — the remote `.bala` registry, reached over the network by `projects/centralclient` when resolving dependencies. This is the only remote the toolchain itself talks to; a running Ballerina program makes its own calls through `pal.HTTP`.
-- **The host OS** — filesystem, network, environment and signals, reached by the runtime only through the Platform Adaptation Layer.
+- **Ballerina Central** — the remote `.bala` registry, reached over the network by `projects/centralclient` when resolving dependencies (`fetch deps`). This is the only remote the toolchain itself talks to; a running Ballerina program makes its own calls through `pal.HTTP`.
+- **Local repository** — on-disk under `repositories/local/bala`, written by `bal push --repository=local` so other packages can depend on `repository = "local"`. Not a network call.
+- **The host OS** — filesystem, network, environment and signals, reached by the runtime through `platform/palnative`.
+- **The browser** — the [Ballerina Playground](https://github.com/ballerina-nutcracker/playground) implements the same `pal.Platform` for WebAssembly (`pal_wasm.go`), so the same program can run in a tab without changing Ballerina source.
