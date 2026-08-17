@@ -27,14 +27,14 @@
 
 [Ballerina](https://ballerina.io) is an open-source, cloud-native programming language optimized for integration, with built-in support for JSON and XML, first-class constructs for services and concurrency, and structural typing. It is developed and supported by [WSO2](https://wso2.com) and the wider Ballerina community. Try the language in your browser on the [Ballerina Playground](https://play.ballerina.io/).
 
-**Ballerina Nutcracker** compiles Ballerina source to **Ballerina Intermediate Representation (BIR)** and interprets the BIR directly. Written in Go, it ships as one self-contained binary — no separate runtime, nothing to warm up — which keeps startup fast and the footprint small for short-lived cloud-native workloads such as CLIs, functions, and sidecars.
+**Ballerina Nutcracker** compiles Ballerina source to **Ballerina Intermediate Representation (BIR)** and interprets the BIR directly. Written in Go, it ships as one `bal` binary — no separate runtime, nothing to warm up — which keeps startup fast and the footprint small for short-lived cloud-native workloads such as CLIs, functions, and sidecars.
 
 > [!IMPORTANT]
 > Nutcracker is under active development and does not yet support the whole language. For production use today, reach for [Ballerina Swan Lake](https://ballerina.io/downloads/) — the official distribution, which supports the full language.
 
 ## Architecture
 
-![Ballerina Nutcracker architecture: the bal CLI (new, run, pack, build, push, version) is the primary entry point. Source is parsed by parser/ into st/, then nodebuilder/ lowers that to ast/ (which stores type fields but does not resolve types). semantics/ performs type resolution; desugar/ and birgen/ lower using those types plus context/, semtypes/, and values/. The runtime interprets BIR; native stdlib implementations use extern calls, while pure-Ballerina modules run as BIR. PAL (platform/pal) is the interface only; palnative sits with the host OS and pal_wasm.go with the browser. Ballerina Central is for package resolution; bal push installs into the local repository.](doc/img/architecture.jpg)
+![Ballerina Nutcracker architecture: the bal CLI (new, run, pack, build, push, version) is the entry point. parser/ produces st/; nodebuilder/ produces ast/. semantics/ resolves types; desugar/ and birgen/ lower to BIR. The runtime interprets BIR. Native stdlib uses extern calls; pure-Ballerina modules run as BIR. PAL is platform/pal; palnative is on the host OS and pal_wasm.go on the browser. Central is for package fetch; bal push writes the local repository.](doc/img/architecture.png)
 
 Almost everything that ships in the `bal` binary is a Go package. Ballerina Central, the local repository, the host OS, and the browser sit outside it. See [ARCHITECTURE.md](doc/guides/ARCHITECTURE.md) for how the diagram maps onto source directories.
 
