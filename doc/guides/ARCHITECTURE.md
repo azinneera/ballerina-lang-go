@@ -1,20 +1,20 @@
 # Architecture
 
-Ballerina Nutcracker compiles a `.bal` program to **Ballerina Intermediate Representation (BIR)** and then interprets that BIR (`bal run`), or embeds the BIR with the runtime into a standalone binary (`bal build`). Almost everything below is a Go package inside the single static `bal` binary; Ballerina Central, the local repository, the host OS, and the browser sit outside it.
+Ballerina Nutcracker compiles a `.bal` program to **Ballerina Intermediate Representation (BIR)** and then interprets that BIR (`bal run`), or embeds the BIR with the runtime into a standalone binary (`bal build`). Almost everything below is a Go package that ships in the `bal` binary; Ballerina Central, the local repository, the host OS, and the browser sit outside it.
 
-![Ballerina Nutcracker architecture: the bal CLI (new, run, pack, build, push, version) is the primary entry point for working with Ballerina — its commands cover package creation, versioning, and resolving dependencies from Ballerina Central. The CLI feeds source into the compilation pipeline, which lowers it to Ballerina Intermediate Representation (BIR); the runtime interprets BIR directly, while bal build embeds the BIR into a self-contained standalone binary. The standard library resolves at compile time; native implementations are invoked at runtime via extern calls, while pure-Ballerina modules run directly as BIR. The Platform Abstraction Layer (PAL) isolates environment-specific concerns with two backends: palnative for the host OS and pal_wasm.go for the browser (WebAssembly). Ballerina Central is accessed over the network for package resolution; bal push installs the packaged artifact into the local repository.](../img/architecture.jpg)
+![Ballerina Nutcracker architecture: the bal CLI (new, run, pack, build, push, version) is the primary entry point. Source is parsed by parser/ into st/, then nodebuilder/ lowers that to ast/ (which stores type fields but does not resolve types). semantics/ performs type resolution; desugar/ and birgen/ lower using those types plus context/, semtypes/, and values/. The runtime interprets BIR; native stdlib implementations use extern calls, while pure-Ballerina modules run as BIR. PAL (platform/pal) is the interface only; palnative sits with the host OS and pal_wasm.go with the browser. Ballerina Central is for package resolution; bal push installs into the local repository.](../img/architecture.jpg)
 
 ## Compilation pipeline
 
-Source becomes BIR in five phases, which map directly onto source directories:
+Source becomes BIR in five phases:
 
 | Phase | Directory | What happens |
 | --- | --- | --- |
-| Parse | [`parser/`](../../parser/) | Lexing and parsing into a syntax tree, with error recovery |
-| AST | [`ast/`](../../ast/) | Syntax tree lowered to an abstract syntax tree |
-| Symbols, types & analysis | [`semantics/`](../../semantics/) | Symbol resolution, type resolution, semantic analysis, CFG construction and analysis — drawing on the `semtypes/` type system |
-| Desugar | [`desugar/`](../../desugar/) | Syntactic sugar lowered to core constructs |
-| Generate BIR | [`bir/`](../../bir/) | BIR model, generation, and codec |
+| Parse | [`parser/`](../../parser/), [`st/`](../../st/) | `parser/` lexes and parses, with error recovery; `st/` is the syntax-tree node types. No `semtypes`. |
+| AST | [`nodebuilder/`](../../nodebuilder/), [`ast/`](../../ast/) | `nodebuilder/` lowers the syntax tree to `ast/` nodes. `ast/` stores `SemType` fields; it does not resolve types. |
+| Symbols, types & analysis | [`semantics/`](../../semantics/) | Symbol resolution, type resolution, semantic analysis, CFG construction and analysis — this is where type resolution happens, drawing on `semtypes/` and `values/` |
+| Desugar | [`desugar/`](../../desugar/) | Syntactic sugar lowered to core constructs; uses `values/` for compile-time constants |
+| Generate BIR | [`birgen/`](../../birgen/), [`bir/`](../../bir/) | `birgen/` generates BIR; `bir/` is the model and codec. Uses `values/` when building type descriptors |
 
 Expanded into the stages that actually run — 1–10 produce BIR, and 11 is the runtime executing it:
 
@@ -32,7 +32,7 @@ Expanded into the stages that actually run — 1–10 produce BIR, and 11 is the
 
 Stage 1 parses every file in a module concurrently. Stage 2 then builds a compilation unit per file, sequentially. Modules are processed one at a time, in topological order, since stages 3–4 need a module's dependencies to already have their symbols and types resolved. Stage 3 resolves imports, merges the per-file compilation units into the module's single AST, and resolves symbols. If any module reports an error in stages 1–4, the pipeline stops before stage 5. Stages 5–9 then run concurrently across modules; a module checks for diagnostics after every one of stages 5–9 and stops as soon as one of them errors, without running the rest. Stage 10 (generate BIR) only starts, for the whole package, once every module has cleared stages 1–9 with no errors; stage 11 then interprets the BIR that was produced.
 
-The sequential/concurrent orchestration and the stop-before-stage-5 rule live in `projects/package_compilation.go`; the per-module stage bodies, including the per-stage error checks for stages 5–9, are in `projects/module_context.go`. The package-wide gate before stage 10 and the stage 11 call live in `cli/cmd/run.go`, with `projects/ballerina_backend.go` generating BIR per module. `test_util/testphases/phases.go` drives stages 1–10 for corpus tests. See [AGENTS.md](../../AGENTS.md) for the precise error-handling rules.
+The sequential/concurrent orchestration and the stop-before-stage-5 rule live in `projects/package_compilation.go`; the per-module stage bodies, including the per-stage error checks for stages 5–9 and the `birgen.GenBir` call, are in `projects/module_context.go`. The package-wide gate before stage 10 and the stage 11 call live in `cli/cmd/run.go`. `test_util/testphases/phases.go` drives stages 1–10 for corpus tests. See [AGENTS.md](../../AGENTS.md) for the precise error-handling rules.
 
 ## Runtime
 
@@ -40,9 +40,9 @@ The sequential/concurrent orchestration and the stop-before-stage-5 rule live in
 
 ## Values and the Type System
 
-[`values/`](../../values/) holds the representation of Ballerina values (lists, maps, XML, objects, errors, streams), and it is not only a runtime concern: `semantics/` and `desugar/` use it for compile-time constant evaluation, and `bir/` uses it when building type descriptors during BIR generation, in addition to its use at runtime by `runtime/` and `runtime/extern`.
+[`values/`](../../values/) holds the representation of Ballerina values (lists, maps, XML, objects, errors, streams), and it is not only a runtime concern: `semantics/` and `desugar/` use it for compile-time constant evaluation, and `birgen/` uses it when building type descriptors, in addition to its use at runtime by `runtime/` and `runtime/extern`.
 
-`semtypes/`, the structural type system, cuts across both pipeline and runtime rather than sitting at one stage — it is used by `ast/` and `semantics/` for type resolution, and again by `desugar/`, `bir/`, `runtime/`, and `values/`. It does not reach `parser/`, which is purely syntactic.
+`semtypes/`, the structural type system, is used for **type resolution** only by `semantics/`. Later packages still *use* `semtypes/` — `desugar/` and `birgen/` for subtype checks and attaching types to generated nodes or BIR, then `runtime/` and `values/` at runtime. [`ast/`](../../ast/) only *stores* `SemType` fields on nodes; it does not resolve types. [`parser/`](../../parser/) and [`st/`](../../st/) are purely syntactic. Compiler stages share [`context/`](../../context/) for environment and diagnostics.
 
 ## Library
 
@@ -54,13 +54,13 @@ Where a module needs native code, its Go implementation is registered by [`lib/r
 
 ## Platform Abstraction Layer
 
-[`platform/pal/`](../../platform/pal/) defines the interface — `pal.Platform` has exactly six fields: `IO`, `FS`, `OS`, `Time`, `HTTP` and `Signals`. [`platform/palnative/`](../../platform/palnative/) implements them for a native host.
+[`platform/pal/`](../../platform/pal/) defines the interface — `pal.Platform` has exactly six fields: `IO`, `FS`, `OS`, `Time`, `HTTP` and `Signals`. The native implementation lives with the host, not inside the interface box: [`platform/palnative/`](../../platform/palnative/) on the host OS, and `pal_wasm.go` in the [Playground](https://github.com/ballerina-nutcracker/playground) for the browser.
 
 Everything the **runtime and the library** do to the outside world goes through this layer rather than calling the OS or the Go standard library directly.
 
 That rule stops at the runtime and the library — it doesn't bind the toolchain. The toolchain reaches Ballerina Central through `projects/centralclient`, which talks to it over `net/http`; `cli/` reaches Central only indirectly, through `projects/`, and `compiler-tools/` has no relationship to Central at all. Filesystem access has its own indirection: `projects/` reads project and dependency sources through an `fs.FS` it's handed rather than calling `os` itself. `cli/` supplies the concrete system filesystem (`os.DirFS`); the same indirection lets [`lib/langlibs/`](../../lib/langlibs/) and [`lib/stdlibs/`](../../lib/stdlibs/) inject their bundled `embed.FS` sources, which have no on-disk representation. `projects/` still calls `os` directly for a few side paths outside that indirection — writing `.bala` output artifacts and debug dumps.
 
-This layer also exists so that a non-native host could be swapped in: `palnative` is the only implementation in this repo, but the [Ballerina Playground](https://github.com/ballerina-nutcracker/playground) implements one for the browser (`pal_wasm.go`, via `syscall/js` and the Fetch API). CI here runs most of the test suite under `GOOS=js GOARCH=wasm` to keep this repo portable for that consumer; see [DEVELOPING.md](DEVELOPING.md#wasm) for specifics.
+This layer exists so that a non-native host can be swapped in: `palnative` is the only implementation in this repo; the Playground one is `pal_wasm.go` (via `syscall/js` and the Fetch API). CI here runs most of the test suite under `GOOS=js GOARCH=wasm` to keep this repo portable for that consumer; see [DEVELOPING.md](DEVELOPING.md#wasm) for specifics.
 
 ## Supporting packages
 
@@ -69,7 +69,10 @@ This layer also exists so that a non-native host could be swapped in: `palnative
 | [`cli/`](../../cli/) | The `bal` command-line entry point |
 | [`projects/`](../../projects/) | Manifest parsing, package and dependency resolution, `.bala` archives |
 | [`model/`](../../model/) | Symbols, package and flag metadata |
-| [`context/`](../../context/) | Compiler context and environment shared across stages |
+| [`context/`](../../context/) | Compiler context and environment shared across stages (shown under the pipeline in the diagram) |
+| [`st/`](../../st/) | Syntax-tree node types produced by `parser/` |
+| [`nodebuilder/`](../../nodebuilder/) | Lowers `st/` to `ast/` |
+| [`birgen/`](../../birgen/) | BIR generation from the desugared AST |
 | [`tools/diagnostics/`](../../tools/diagnostics/) | Errors and warnings surfaced by every stage |
 | [`corpus/`](../../corpus/) | Ballerina test sources and per-stage golden files |
 | [`compiler-tools/`](../../compiler-tools/) | Standalone tools: the `tree-gen` generator, `cfgviz`, and the benchmark harness |

@@ -34,9 +34,9 @@
 
 ## Architecture
 
-![Ballerina Nutcracker architecture: the bal CLI (new, run, pack, build, push, version) is the primary entry point for working with Ballerina — its commands cover package creation, versioning, and resolving dependencies from Ballerina Central. The CLI feeds source into the compilation pipeline, which lowers it to Ballerina Intermediate Representation (BIR); the runtime interprets BIR directly, while bal build embeds the BIR into a self-contained standalone binary. The standard library resolves at compile time; native implementations are invoked at runtime via extern calls, while pure-Ballerina modules run directly as BIR. The Platform Abstraction Layer (PAL) isolates environment-specific concerns with two backends: palnative for the host OS and pal_wasm.go for the browser (WebAssembly). Ballerina Central is accessed over the network for package resolution; bal push installs the packaged artifact into the local repository.](doc/img/architecture.jpg)
+![Ballerina Nutcracker architecture: the bal CLI (new, run, pack, build, push, version) is the primary entry point. Source is parsed by parser/ into st/, then nodebuilder/ lowers that to ast/ (which stores type fields but does not resolve types). semantics/ performs type resolution; desugar/ and birgen/ lower using those types plus context/, semtypes/, and values/. The runtime interprets BIR; native stdlib implementations use extern calls, while pure-Ballerina modules run as BIR. PAL (platform/pal) is the interface only; palnative sits with the host OS and pal_wasm.go with the browser. Ballerina Central is for package resolution; bal push installs into the local repository.](doc/img/architecture.jpg)
 
-Almost everything inside the binary is a Go package; Ballerina Central, the local repository, the host OS, and the browser sit outside it. See [ARCHITECTURE.md](doc/guides/ARCHITECTURE.md) for how the diagram maps onto source directories.
+Almost everything that ships in the `bal` binary is a Go package. Ballerina Central, the local repository, the host OS, and the browser sit outside it. See [ARCHITECTURE.md](doc/guides/ARCHITECTURE.md) for how the diagram maps onto source directories.
 
 ## Getting started
 
