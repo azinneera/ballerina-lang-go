@@ -266,21 +266,22 @@ func resolveTypesAndSymbols(moduleCtx *moduleContext) {
 	}
 	compilerCtx.EndStage()
 
-	// Resolve symbols (imports) before type resolution
-	compilerCtx.StartStage(context.StageImportResolution)
+	// Resolve symbols and imports before type resolution.
 	publicSymbols := moduleCtx.getProject().Environment().publicSymbols
 	moduleVisibility := moduleCtx.getProject().Environment().moduleVisibility
 	// PR-TODO: remove this after migration all lang libraries
-	implicitImports := semantics.GetImplicitImports(compilerCtx)
+	implicitImports := make(map[string]model.ExportedSymbolSpace)
 	seedMigratedLangLibs(implicitImports, publicSymbols)
-	importedSymbolsByCU := semantics.ResolveCompilationUnitImports(
-		compilerCtx, compilationUnits, implicitImports, publicSymbols, moduleVisibility,
-		moduleCtx.moduleDescriptor.Org().value, moduleCtx.moduleDescriptor.PackageName().Value())
-	moduleCtx.importedSymbols = mergeCompilationUnitImports(importedSymbolsByCU)
-	compilerCtx.EndStage()
-
 	compilerCtx.StartStage(context.StageSymbolResolution)
-	pkgScope, exported := semantics.ResolveSymbols(compilerCtx, *pkgID, importedSymbolsByCU)
+	pkgScope, exported, importedSymbols := semantics.ResolveSymbols(
+		compilerCtx,
+		*pkgID,
+		compilationUnits,
+		implicitImports,
+		publicSymbols,
+		moduleCtx.moduleDescriptor.Org().value,
+	)
+	moduleCtx.importedSymbols = importedSymbols
 	pkgNode := nodebuilder.ToPackageFromCompilationUnits(compilationUnits)
 	pkgNode.Imports = nil
 	pkgNode.PackageID = pkgID
@@ -461,20 +462,12 @@ func buildCompilationUnits(cx *context.CompilerContext, syntaxTrees []*st.Syntax
 	return compilationUnits
 }
 
-func mergeCompilationUnitImports(imports []semantics.CompilationUnitImports) map[string]model.ExportedSymbolSpace {
-	result := make(map[string]model.ExportedSymbolSpace)
-	for _, cuImports := range imports {
-		maps.Copy(result, cuImports.Imports)
-	}
-	return result
-}
-
 // seedMigratedLangLibs adds the migrated lang libraries (compiled as real
 // packages and published to publicSymbols) to the implicit-imports map under
 // their langlib key, so they are usable without an import statement. No-op
 // until the lib has been compiled (e.g. while compiling the lib itself).
 func seedMigratedLangLibs(implicitImports map[string]model.ExportedSymbolSpace, publicSymbols map[semantics.PackageIdentifier]model.ExportedSymbolSpace) {
-	for _, name := range []string{"lang.int", "lang.boolean", "lang.decimal", "lang.error", "lang.string", "lang.value", "lang.xml", "lang.float", "lang.array", "lang.map", "lang.object"} {
+	for _, name := range []string{"lang.__internal", "lang.int", "lang.boolean", "lang.decimal", "lang.error", "lang.string", "lang.value", "lang.xml", "lang.float", "lang.array", "lang.map", "lang.object"} {
 		if space, ok := publicSymbols[semantics.PackageIdentifier{OrgName: "ballerina", ModuleName: name}]; ok {
 			implicitImports[name] = space
 		}

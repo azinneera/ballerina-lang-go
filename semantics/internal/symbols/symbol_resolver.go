@@ -28,8 +28,6 @@ import (
 	"github.com/ballerina-nutcracker/ballerina/semantics/internal/common"
 	"github.com/ballerina-nutcracker/ballerina/semtypes"
 	"github.com/ballerina-nutcracker/ballerina/tools/diagnostics"
-
-	langinternal "github.com/ballerina-nutcracker/ballerina/lib/langinternal/compile"
 )
 
 type scopeKind int
@@ -73,9 +71,9 @@ type symbolResolver interface {
 }
 
 type (
-	CompilationUnitImports struct {
-		CompilationUnit *ast.BLangCompilationUnit
-		Imports         map[string]model.ExportedSymbolSpace
+	compilationUnitImportsWithSymbols struct {
+		compilationUnit *ast.BLangCompilationUnit
+		imports         map[string]model.ExportedSymbolSpace
 	}
 
 	defaultSymbolAllocator interface {
@@ -584,27 +582,37 @@ func symbolLocationForNode(node namedDeclaration) diagnostics.Location {
 	return node.GetName().GetPosition()
 }
 
-func Resolve(cx *context.CompilerContext, pkgID model.PackageID, cuImportsList []CompilationUnitImports) (model.Scope, model.ExportedSymbolSpace) {
+func Resolve(
+	cx *context.CompilerContext,
+	pkgID model.PackageID,
+	compilationUnits []*ast.BLangCompilationUnit,
+	implicitImports map[string]model.ExportedSymbolSpace,
+	publicSymbols map[PackageIdentifier]model.ExportedSymbolSpace,
+	defaultOrg string,
+) (model.Scope, model.ExportedSymbolSpace, map[string]model.ExportedSymbolSpace) {
+	cuImportsList := bindImports(cx, compilationUnits, implicitImports, publicSymbols, defaultOrg)
 	moduleResolver := newModuleSymbolResolver(cx, pkgID)
 	injectOpaqueSymbols(pkgID, moduleResolver)
 	cuResolvers := make([]*compilationUnitSymbolResolver, len(cuImportsList))
 	for i, cuImports := range cuImportsList {
-		scope := cx.NewModuleScope(pkgID, cuImports.Imports)
-		cuImports.CompilationUnit.Scope = scope
+		scope := cx.NewModuleScope(pkgID, cuImports.imports)
+		cuImports.compilationUnit.Scope = scope
 		cuResolvers[i] = newCompilationUnitSymbolResolver(moduleResolver, scope)
-		moduleResolver.moduleNodes.add(cuImports.CompilationUnit, cuResolvers[i])
+		moduleResolver.moduleNodes.add(cuImports.compilationUnit, cuResolvers[i])
 	}
 	for i, resolver := range cuResolvers {
-		resolver.allocateTopLevelSymbols(cuImportsList[i].CompilationUnit)
+		resolver.allocateTopLevelSymbols(cuImportsList[i].compilationUnit)
 	}
 
+	importedSymbols := make(map[string]model.ExportedSymbolSpace)
 	for i, cuImports := range cuImportsList {
-		cu := cuImports.CompilationUnit
+		cu := cuImports.compilationUnit
 		resolver := cuResolvers[i]
 		processCompilationUnitXMLNS(resolver, cu)
 		ast.Walk(resolver, cu)
 		reportUnusedImports(resolver, compilationUnitImports(cu))
 		reportUnusedVariables(cx, resolver.getUnused())
+		maps.Copy(importedSymbols, cuImports.imports)
 	}
 
 	mainSpaces := make([]*model.SymbolSpace, 0, len(cuResolvers)+1)
@@ -616,7 +624,7 @@ func Resolve(cx *context.CompilerContext, pkgID model.PackageID, cuImportsList [
 	mainSpaces = append(mainSpaces, moduleResolver.packageScope.Main)
 	annotationSpaces = append(annotationSpaces, moduleResolver.packageScope.Annotation)
 	pkgScope := &model.PackageScope{Virtual: moduleResolver.packageScope, MainSpaces: mainSpaces}
-	return pkgScope, model.NewExportedSymbolSpaces(mainSpaces, annotationSpaces)
+	return pkgScope, model.NewExportedSymbolSpaces(mainSpaces, annotationSpaces), importedSymbols
 }
 
 func (ms *compilationUnitSymbolResolver) allocateTopLevelSymbols(cu *ast.BLangCompilationUnit) {
@@ -1112,20 +1120,19 @@ func resolveLambdaFunction(functionResolver *blockSymbolResolver, parent *blockS
 	reportUnusedVariables(functionResolver.GetCtx(), functionResolver.getUnused())
 }
 
-// ResolveCompilationUnitImports Used to seed hardcoded import symbols
-// Deprecated: should be removed with https://github.com/ballerina-nutcracker/ballerina/issues/688
-func ResolveCompilationUnitImports(ctx *context.CompilerContext, compilationUnits []*ast.BLangCompilationUnit,
+func bindImports(
+	ctx *context.CompilerContext, compilationUnits []*ast.BLangCompilationUnit,
 	implicitImports map[string]model.ExportedSymbolSpace, publicSymbols map[PackageIdentifier]model.ExportedSymbolSpace,
 	moduleVisibility map[PackageIdentifier]ModuleVisibility, defaultOrg, currentPackageName string,
-) []CompilationUnitImports {
-	result := make([]CompilationUnitImports, len(compilationUnits))
+) []compilationUnitImportsWithSymbols {
+	result := make([]compilationUnitImportsWithSymbols, len(compilationUnits))
 	for i, cu := range compilationUnits {
 		imports := make(map[string]model.ExportedSymbolSpace)
 		for _, imp := range compilationUnitImports(cu) {
 			resolveExternalImport(ctx, &imp, defaultOrg, currentPackageName, publicSymbols, moduleVisibility, imports)
 		}
 		maps.Copy(imports, implicitImports)
-		result[i] = CompilationUnitImports{CompilationUnit: cu, Imports: imports}
+		result[i] = compilationUnitImportsWithSymbols{compilationUnit: cu, imports: imports}
 	}
 	return result
 }
@@ -1202,14 +1209,6 @@ func resolveImportPackageIdentifier(imp *ast.BLangImportPackage, defaultOrg stri
 		orgName = imp.OrgName.GetValue()
 	}
 	return PackageIdentifier{orgName, moduleName}
-}
-
-// GetImplicitImports returns symbols for hardcoded lang libraries
-// Deprecated: should be removed with https://github.com/ballerina-nutcracker/ballerina/issues/688
-func GetImplicitImports(ctx *context.CompilerContext) map[string]model.ExportedSymbolSpace {
-	result := make(map[string]model.ExportedSymbolSpace)
-	result[langinternal.PackageName] = langinternal.GetInternalSymbols(ctx)
-	return result
 }
 
 func (bs *blockSymbolResolver) Visit(node ast.BLangNode) ast.Visitor {

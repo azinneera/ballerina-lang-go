@@ -51,6 +51,14 @@ type bundledLib struct {
 var migratedLangLibs = []bundledLib{
 	{
 		org:        "ballerina",
+		nameComps:  []string{"lang", "__internal"},
+		implicitID: "lang.__internal",
+		srcFS:      langlibs.FS,
+		balPath:    "ballerina/lang.__internal/0.0.1/any/lang.__internal.bal",
+		version:    "0.0.1",
+	},
+	{
+		org:        "ballerina",
 		nameComps:  []string{"lang", "int"},
 		implicitID: "lang.int",
 		srcFS:      langlibs.FS,
@@ -170,7 +178,7 @@ type Symbols struct {
 }
 
 func Build(cx *context.CompilerContext, publicSymbols map[semantics.PackageIdentifier]model.ExportedSymbolSpace) (*Symbols, error) {
-	implicitImports := semantics.GetImplicitImports(cx)
+	implicitImports := make(map[string]model.ExportedSymbolSpace)
 	if publicSymbols == nil {
 		publicSymbols = make(map[semantics.PackageIdentifier]model.ExportedSymbolSpace)
 	}
@@ -257,16 +265,21 @@ func compileBundledLib(cx *context.CompilerContext, cache map[string]model.Expor
 	cu.SetPackageID(pkgID)
 	compilationUnits := []*ast.BLangCompilationUnit{cu}
 
-	// lang libraries do not themselves import migrated libs, so the
-	// still-intrinsic implicit imports are sufficient here.
-	importedByCU := semantics.ResolveCompilationUnitImports(cx, compilationUnits, semantics.GetImplicitImports(cx),
-		make(map[semantics.PackageIdentifier]model.ExportedSymbolSpace), nil, lib.org, "")
-	pkgScope, exported := semantics.ResolveSymbols(cx, *pkgID, importedByCU)
+	// Bundled libraries do not import other modules.
+	pkgScope, exported, imported := semantics.ResolveSymbols(
+		cx,
+		*pkgID,
+		compilationUnits,
+		make(map[string]model.ExportedSymbolSpace),
+		make(map[semantics.PackageIdentifier]model.ExportedSymbolSpace),
+		nil,
+		lib.org,
+		""
+	)
 	pkg := nodebuilder.ToPackageFromCompilationUnits(compilationUnits)
 	pkg.PackageID = pkgID
 	pkg.Scope = pkgScope
 	pkg.Imports = nil
-	imported := importedByCU[0].Imports
 	semantics.ResolvePublicNodeTypes(cx, pkg, imported)
 	cache[lib.balPath] = exported
 	return exported, nil

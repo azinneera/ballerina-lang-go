@@ -17,7 +17,7 @@
 package rt
 
 import (
-	_ "github.com/ballerina-nutcracker/ballerina/lib/langinternal/runtime"
+	_ "github.com/ballerina-nutcracker/ballerina/lib/langlibs/go/lang.__internal"
 	_ "github.com/ballerina-nutcracker/ballerina/lib/langlibs/go/lang.array"
 	_ "github.com/ballerina-nutcracker/ballerina/lib/langlibs/go/lang.boolean"
 	_ "github.com/ballerina-nutcracker/ballerina/lib/langlibs/go/lang.decimal"

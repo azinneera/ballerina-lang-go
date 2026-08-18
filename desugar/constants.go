@@ -25,6 +25,8 @@ import (
 	"github.com/ballerina-nutcracker/ballerina/values"
 )
 
+const langInternalPackageName = "lang.__internal"
+
 // materializeConstantRef replaces a reference to a folded constant with a
 // literal carrying the folded value.
 func materializeConstantRef(cx *functionContext, ref *ast.BLangVarRef) ast.BLangExpression {

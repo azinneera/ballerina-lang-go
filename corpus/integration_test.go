@@ -20,7 +20,6 @@ import (
 	"bytes"
 	"flag"
 	"fmt"
-	"maps"
 	"os"
 	"path/filepath"
 	"regexp"
@@ -643,8 +642,16 @@ func compileModuleFromSource(env *context.CompilerEnvironment, project projects.
 	if err != nil {
 		return nil, fmt.Errorf("loading lang libraries failed: %w", err)
 	}
-	importedSymbolsByCU := semantics.ResolveCompilationUnitImports(cx, syntaxTrees, langlibs.ImplicitImports, langlibs.PublicSymbols, nil, defaultOrg, "")
-	pkgScope, _ := semantics.ResolveSymbols(cx, *pkgID, importedSymbolsByCU)
+	pkgScope, _, importedSymbols := semantics.ResolveSymbols(
+		cx,
+		*pkgID,
+		syntaxTrees,
+		langlibs.ImplicitImports,
+		langlibs.PublicSymbols,
+		nil,
+		defaultOrg,
+		""
+	)
 	if cx.HasDiagnostics() {
 		return nil, fmt.Errorf("symbol resolution failed")
 	}
@@ -652,11 +659,6 @@ func compileModuleFromSource(env *context.CompilerEnvironment, project projects.
 	pkg.Imports = nil
 	pkg.PackageID = pkgID
 	pkg.Scope = pkgScope
-	importedSymbols := make(map[string]model.ExportedSymbolSpace)
-	for _, cuImports := range importedSymbolsByCU {
-		maps.Copy(importedSymbols, cuImports.Imports)
-	}
-
 	semantics.ResolvePublicNodeTypes(cx, pkg, importedSymbols)
 	if cx.HasDiagnostics() {
 		return nil, fmt.Errorf("top-level type resolution failed")

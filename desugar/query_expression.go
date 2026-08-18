@@ -21,7 +21,6 @@ import (
 	"fmt"
 
 	"github.com/ballerina-nutcracker/ballerina/ast"
-	langinternal "github.com/ballerina-nutcracker/ballerina/lib/langinternal/compile"
 	"github.com/ballerina-nutcracker/ballerina/model"
 	"github.com/ballerina-nutcracker/ballerina/semtypes"
 	"github.com/ballerina-nutcracker/ballerina/tools/diagnostics"
@@ -1992,7 +1991,7 @@ func createQuerySortInvocation(
 	indicesExpr ast.BLangExpression,
 	payloadExpr ast.BLangExpression,
 ) *ast.BLangInvocation {
-	pkgName := langinternal.PackageName
+	pkgName := langInternalPackageName
 	space, ok := cx.getImportedSymbolSpace(pkgName)
 	if !ok {
 		cx.internalError(pkgName + " symbol space not found")
@@ -2044,7 +2043,7 @@ func createLangInternalInvocation(
 	args []ast.BLangExpression,
 	pos diagnostics.Location,
 ) *ast.BLangInvocation {
-	pkgName := langinternal.PackageName
+	pkgName := langInternalPackageName
 	space, _ := cx.getImportedSymbolSpace(pkgName)
 	symbolRef, _ := space.GetSymbol(name)
 	cx.addImplicitImport(pkgName, ast.BLangImportPackage{

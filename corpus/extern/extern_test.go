@@ -634,14 +634,20 @@ func compileSingleFileModule(
 	if err != nil {
 		t.Fatalf("loading lang libraries failed: %v", err)
 	}
-	importedByCU := semantics.ResolveCompilationUnitImports(cx, compilationUnits, langlibs.ImplicitImports, langlibs.PublicSymbols, nil, defaultOrg, "")
-	pkgScope, exported := semantics.ResolveSymbols(cx, *pkgID, importedByCU)
+	pkgScope, exported, importedSymbols := semantics.ResolveSymbols(
+		cx,
+		*pkgID,
+		compilationUnits,
+		langlibs.ImplicitImports,
+		langlibs.PublicSymbols,
+		defaultOrg,
+		""
+	)
 	assertNoDiagnostics(t, cx, "ResolveSymbols")
 	pkg := nodebuilder.ToPackageFromCompilationUnits(compilationUnits)
 	pkg.PackageID = pkgID
 	pkg.Scope = pkgScope
 	pkg.Imports = nil
-	importedSymbols := importedByCU[0].Imports
 	semantics.ResolvePublicNodeTypes(cx, pkg, importedSymbols)
 	assertNoDiagnostics(t, cx, "ResolvePublicNodeTypes")
 	semantics.ResolvePrivateNodesTypes(cx, pkg, importedSymbols)
