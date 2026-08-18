@@ -55,6 +55,13 @@ func (l *loopTypeResolver) typeEnv() semtypes.Env { return l.parentResolver.type
 func (l *loopTypeResolver) opaqueContext() *opaque.Context {
 	return l.parentResolver.opaqueContext()
 }
+func (l *loopTypeResolver) nodeType(node ast.BLangNode) semtypes.SemType {
+	return l.parentResolver.nodeType(node)
+}
+func (l *loopTypeResolver) setNodeType(node ast.BLangNode, ty semtypes.SemType) {
+	l.parentResolver.setNodeType(node, ty)
+}
+func (l *loopTypeResolver) isEphemeral() bool { return l.parentResolver.isEphemeral() }
 
 func (l *loopTypeResolver) semanticError(msg string, loc diagnostics.Location) {
 	l.parentResolver.semanticError(msg, loc)
