@@ -230,7 +230,10 @@ func runBuild(cmd *cobra.Command, args []string, opts *buildOptions) error {
 	if diagResult := result.Diagnostics(); diagResult.HasErrors() || diagResult.HasWarnings() {
 		printDiagnostics(fsys, stderr, diagResult, !isTerminal(), diagnostics.NewDiagnosticEnv())
 		if diagResult.HasErrors() {
-			return buildError("package loading reported errors")
+			// Diagnostics carry the full failure detail, and this isn't a
+			// build-usage mistake, so no USAGE block — but cobra should still
+			// print "ballerina: project loading contains errors" as a summary.
+			return fmt.Errorf("project loading contains errors")
 		}
 	}
 
@@ -317,7 +320,10 @@ func buildOneProject(cmd *cobra.Command, opts *buildOptions, stderr io.Writer, f
 	if cd := compilation.DiagnosticResult(); cd.HasErrors() || cd.HasWarnings() {
 		printDiagnostics(fsys, stderr, cd, !isTerminal(), compilation.DiagnosticEnv())
 		if cd.HasErrors() {
-			return buildError("compilation failed; executable not produced")
+			// Not a build-usage mistake, so no USAGE block, but cobra should
+			// still print "ballerina: compilation contains errors" as a
+			// summary.
+			return fmt.Errorf("compilation contains errors")
 		}
 	}
 

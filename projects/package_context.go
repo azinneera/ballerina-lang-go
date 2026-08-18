@@ -320,6 +320,6 @@ func (p *packageContext) duplicate(project Project) *packageContext {
 		p.compilationOptions,
 		moduleContextMap,
 		p.ballerinaTomlContext, // Ballerina.toml is immutable, can share reference
-		p.readmeMdContext,     // readme is immutable, can share reference
+		p.readmeMdContext,      // readme is immutable, can share reference
 	)
 }
