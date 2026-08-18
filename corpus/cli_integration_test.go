@@ -2303,7 +2303,7 @@ func TestBalBuildWorkspacePartialFailure(t *testing.T) {
 	if exitCode == 0 {
 		t.Fatalf("expected a non-zero exit code when one workspace member fails to compile, got 0\nstdout:\n%s\nstderr:\n%s", stdout, stderr)
 	}
-	if !strings.Contains(stderr, "compilation failed; executable not produced") {
+	if !strings.Contains(stderr, "compilation contains errors") {
 		t.Errorf("expected pkga's compile failure to be reported, got stderr:\n%s", stderr)
 	}
 	if strings.Contains(stdout, "Created ") {
@@ -2334,7 +2334,7 @@ func TestBalBuildWorkspaceMemberManifestError(t *testing.T) {
 	if !strings.Contains(stderr, "invalid version") {
 		t.Errorf("expected pkga's manifest error to be reported, got stderr:\n%s", stderr)
 	}
-	if !strings.Contains(stderr, "package loading reported errors") {
+	if !strings.Contains(stderr, "project loading contains errors") {
 		t.Errorf("expected the load-phase error message, got stderr:\n%s", stderr)
 	}
 	if strings.Contains(stdout, "Created ") {
