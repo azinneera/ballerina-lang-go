@@ -208,7 +208,10 @@ func runPack(cmd *cobra.Command, args []string, opts *packOptions) error {
 
 	if diagResult := result.Diagnostics(); diagResult.HasErrors() {
 		printDiagnostics(fsys, stderr, diagResult, !isTerminal(), diagnostics.NewDiagnosticEnv())
-		return packError("package loading reported errors")
+		// Diagnostics carry the full failure detail, and this isn't a
+		// pack-usage mistake, so no USAGE block — but cobra should still
+		// print "ballerina: project loading contains errors" as a summary.
+		return fmt.Errorf("project loading contains errors")
 	}
 
 	project := result.Project()
@@ -230,7 +233,9 @@ func runPack(cmd *cobra.Command, args []string, opts *packOptions) error {
 	compilation := pkg.Compilation()
 	if cd := compilation.DiagnosticResult(); cd.HasErrors() {
 		printDiagnostics(fsys, stderr, cd, !isTerminal(), compilation.DiagnosticEnv())
-		return packError("compilation failed; .bala not produced")
+		// Not a pack-usage mistake, so no USAGE block, but cobra should still
+		// print "ballerina: compilation contains errors" as a summary.
+		return fmt.Errorf("compilation contains errors")
 	}
 
 	targetDir := targetDirOverride
