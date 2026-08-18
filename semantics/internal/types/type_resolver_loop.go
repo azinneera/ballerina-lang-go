@@ -55,12 +55,6 @@ func (l *loopTypeResolver) typeEnv() semtypes.Env { return l.parentResolver.type
 func (l *loopTypeResolver) opaqueContext() *opaque.Context {
 	return l.parentResolver.opaqueContext()
 }
-func (l *loopTypeResolver) nodeType(node ast.BLangNode) semtypes.SemType {
-	return l.parentResolver.nodeType(node)
-}
-func (l *loopTypeResolver) setNodeType(node ast.BLangNode, ty semtypes.SemType) {
-	l.parentResolver.setNodeType(node, ty)
-}
 func (l *loopTypeResolver) isEphemeral() bool { return l.parentResolver.isEphemeral() }
 
 func (l *loopTypeResolver) semanticError(msg string, loc diagnostics.Location) {
@@ -181,14 +175,6 @@ func (l *loopTypeResolver) setObjectMethodTable(atom *semtypes.MappingAtomicType
 
 func (l *loopTypeResolver) objectMethodTable(atom *semtypes.MappingAtomicType) (model.MethodTable, bool) {
 	return l.parentResolver.objectMethodTable(atom)
-}
-
-func (l *loopTypeResolver) setClassAtomSymbol(mat *semtypes.MappingAtomicType, symbol model.SymbolRef) {
-	l.parentResolver.setClassAtomSymbol(mat, symbol)
-}
-
-func (l *loopTypeResolver) getClassAtomSymbol(mat *semtypes.MappingAtomicType) (model.SymbolRef, bool) {
-	return l.parentResolver.getClassAtomSymbol(mat)
 }
 
 func (l *loopTypeResolver) currentScope() model.Scope     { return l.parentResolver.currentScope() }
