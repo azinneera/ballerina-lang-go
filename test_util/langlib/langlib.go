@@ -274,7 +274,7 @@ func compileBundledLib(cx *context.CompilerContext, cache map[string]model.Expor
 		make(map[semantics.PackageIdentifier]model.ExportedSymbolSpace),
 		nil,
 		lib.org,
-		""
+		"",
 	)
 	pkg := nodebuilder.ToPackageFromCompilationUnits(compilationUnits)
 	pkg.PackageID = pkgID

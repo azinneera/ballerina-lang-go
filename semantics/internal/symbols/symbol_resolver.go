@@ -588,9 +588,10 @@ func Resolve(
 	compilationUnits []*ast.BLangCompilationUnit,
 	implicitImports map[string]model.ExportedSymbolSpace,
 	publicSymbols map[PackageIdentifier]model.ExportedSymbolSpace,
-	defaultOrg string,
+	moduleVisibility map[PackageIdentifier]ModuleVisibility,
+	defaultOrg, currentPackageName string,
 ) (model.Scope, model.ExportedSymbolSpace, map[string]model.ExportedSymbolSpace) {
-	cuImportsList := bindImports(cx, compilationUnits, implicitImports, publicSymbols, defaultOrg)
+	cuImportsList := bindImports(cx, compilationUnits, implicitImports, publicSymbols, moduleVisibility, defaultOrg, currentPackageName)
 	moduleResolver := newModuleSymbolResolver(cx, pkgID)
 	injectOpaqueSymbols(pkgID, moduleResolver)
 	cuResolvers := make([]*compilationUnitSymbolResolver, len(cuImportsList))

@@ -635,7 +635,12 @@ func TestBalAddCorpus(t *testing.T) {
 		if strconv.Itoa(exitCode) != expectedExitCode {
 			t.Fatalf("unexpected exit code, want %s got %d\nstdout:\n%s\nstderr:\n%s", expectedExitCode, exitCode, stdout, stderr)
 		}
-		combined := stdout + "\n" + stderr
+		// bal add prints module paths with the OS-native separator
+		// (backslash on Windows), but the checked-in fixtures use the
+		// portable forward-slash form; normalize before comparing so the
+		// fixtures don't need a platform-specific copy.
+		combined := filepath.ToSlash(stdout + "\n" + stderr)
+		normalizedStderr := filepath.ToSlash(stderr)
 		for _, fragment := range strings.Split(expectedStdout, "\n") {
 			if strings.TrimSpace(fragment) == "" {
 				continue
@@ -648,7 +653,7 @@ func TestBalAddCorpus(t *testing.T) {
 			if strings.TrimSpace(fragment) == "" {
 				continue
 			}
-			if !strings.Contains(stderr, fragment) {
+			if !strings.Contains(normalizedStderr, fragment) {
 				t.Errorf("stderr missing expected fragment %q\nstderr:\n%s", fragment, stderr)
 			}
 		}

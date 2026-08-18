@@ -279,7 +279,9 @@ func resolveTypesAndSymbols(moduleCtx *moduleContext) {
 		compilationUnits,
 		implicitImports,
 		publicSymbols,
+		moduleVisibility,
 		moduleCtx.moduleDescriptor.Org().value,
+		moduleCtx.moduleDescriptor.PackageName().Value(),
 	)
 	moduleCtx.importedSymbols = importedSymbols
 	pkgNode := nodebuilder.ToPackageFromCompilationUnits(compilationUnits)

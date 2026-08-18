@@ -57,13 +57,13 @@ func ResolveSymbols(
 	implicitImports map[string]model.ExportedSymbolSpace,
 	publicSymbols map[PackageIdentifier]model.ExportedSymbolSpace,
 	moduleVisibility map[PackageIdentifier]ModuleVisibility,
-    defaultOrg string,
+	defaultOrg, currentPackageName string,
 ) (model.Scope, model.ExportedSymbolSpace, map[string]model.ExportedSymbolSpace) {
 	internalPublicSymbols := make(map[symbols.PackageIdentifier]model.ExportedSymbolSpace, len(publicSymbols))
 	for id, symbolSpace := range publicSymbols {
 		internalPublicSymbols[symbols.PackageIdentifier{OrgName: id.OrgName, ModuleName: id.ModuleName}] = symbolSpace
 	}
-    internalModuleVisibility := make(map[symbols.PackageIdentifier]symbols.ModuleVisibility, len(moduleVisibility))
+	internalModuleVisibility := make(map[symbols.PackageIdentifier]symbols.ModuleVisibility, len(moduleVisibility))
 	for id, visibility := range moduleVisibility {
 		internalModuleVisibility[symbols.PackageIdentifier{OrgName: id.OrgName, ModuleName: id.ModuleName}] = symbols.ModuleVisibility{
 			PackageOrg:  visibility.PackageOrg,
@@ -71,12 +71,7 @@ func ResolveSymbols(
 			Exported:    visibility.Exported,
 		}
 	}
-	resolved := symbols.ResolveCompilationUnitImports(ctx, compilationUnits, implicitImports, internalPublicSymbols, internalModuleVisibility, defaultOrg, currentPackageName)
-    	result := make([]CompilationUnitImports, len(resolved))
-    	for i, imports := range resolved {
-    		result[i] = CompilationUnitImports{CompilationUnit: imports.CompilationUnit, Imports: imports.Imports}
-    	}
-    	return resultreturn symbols.Resolve(ctx, pkgID, compilationUnits, implicitImports, internalPublicSymbols, defaultOrg)
+	return symbols.Resolve(ctx, pkgID, compilationUnits, implicitImports, internalPublicSymbols, internalModuleVisibility, defaultOrg, currentPackageName)
 }
 
 // ResolvePublicNodeTypes resolves the types exposed by a package.

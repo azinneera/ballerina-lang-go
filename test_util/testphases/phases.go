@@ -140,7 +140,7 @@ func loadBuiltinPublicSymbols(env *context.CompilerEnvironment) map[semantics.Pa
 			result,
 			nil,
 			entry.org,
-			""
+			"",
 		)
 		if cx.HasErrors() {
 			continue
@@ -226,7 +226,7 @@ func RunPipelineWithContent(env *context.CompilerEnvironment, cx *context.Compil
 		langlibs.PublicSymbols,
 		nil,
 		"",
-		""
+		"",
 	)
 	result.Package = nodebuilder.ToPackageFromCompilationUnits(compilationUnits)
 	result.Package.PackageID = pkgID
