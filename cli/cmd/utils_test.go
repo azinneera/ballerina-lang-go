@@ -28,7 +28,9 @@ import (
 // integration test runs through a non-TTY subprocess (noColors always true),
 // so the colors-enabled branch has no other test coverage.
 func TestOutputStyleFor(t *testing.T) {
+	t.Parallel()
 	t.Run("no colors", func(t *testing.T) {
+		t.Parallel()
 		s := outputStyleFor(true)
 		if s.reset != "" || s.red != "" || s.yellow != "" || s.cyan != "" || s.bold != "" {
 			t.Errorf("outputStyleFor(true) = %+v, want all-empty fields", s)
@@ -36,6 +38,7 @@ func TestOutputStyleFor(t *testing.T) {
 	})
 
 	t.Run("colors", func(t *testing.T) {
+		t.Parallel()
 		s := outputStyleFor(false)
 		if s.reset == "" || s.red == "" || s.yellow == "" || s.cyan == "" || s.bold == "" {
 			t.Errorf("outputStyleFor(false) = %+v, want all fields populated with ANSI codes", s)
@@ -45,6 +48,7 @@ func TestOutputStyleFor(t *testing.T) {
 
 // TestSeverityColor covers both branches of outputStyle.severityColor.
 func TestSeverityColor(t *testing.T) {
+	t.Parallel()
 	s := outputStyleFor(false)
 
 	if got := s.severityColor(diagnostics.Warning); got != s.yellow {
