@@ -28,6 +28,7 @@ import (
 	"bytes"
 	"debug/macho"
 	"encoding/binary"
+	"fmt"
 	"os"
 	"path/filepath"
 	"strings"
@@ -83,12 +84,16 @@ func TestEmbedMachO_FailsClearlyWhenHeaderSlackInsufficient(t *testing.T) {
 	if err := os.WriteFile(stubPath, minimalZeroSlackMachO64(t), 0o755); err != nil {
 		t.Fatalf("writing synthetic stub: %v", err)
 	}
-	if _, err := macho.Open(stubPath); err != nil {
+	f, err := macho.Open(stubPath)
+	if err != nil {
 		t.Fatalf("synthetic zero-slack fixture doesn't parse as Mach-O: %v", err)
+	}
+	if err := f.Close(); err != nil {
+		t.Fatalf("closing synthetic fixture: %v", err)
 	}
 
 	outPath := filepath.Join(t.TempDir(), "packed")
-	err := EmbedMachO(stubPath, []byte("payload"), outPath)
+	err = EmbedMachO(stubPath, []byte("payload"), outPath)
 	if err == nil {
 		t.Fatal("expected an error packing a stub with zero header slack")
 	}
@@ -104,7 +109,12 @@ func TestEmbedMachO_RejectsAlreadyPackedInput(t *testing.T) {
 	}
 
 	outPath := filepath.Join(t.TempDir(), "packed-twice")
-	if err := EmbedMachO(packedOnce, []byte("payload"), outPath); err == nil {
+	err := EmbedMachO(packedOnce, []byte("payload"), outPath)
+	if err == nil {
 		t.Fatal("expected an error packing an already-packed stub")
+	}
+	wantSubstr := fmt.Sprintf("stub already has a %s,%s section", MachOSegmentName, MachOSectionName)
+	if !strings.Contains(err.Error(), wantSubstr) {
+		t.Fatalf("expected error to contain %q, got: %v", wantSubstr, err)
 	}
 }

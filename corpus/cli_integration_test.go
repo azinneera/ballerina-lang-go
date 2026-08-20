@@ -2588,6 +2588,12 @@ func buildCrossBalrtStub(t *testing.T, repoRoot, rtDir, goos, goarch string) str
 		name += ".exe"
 	}
 	outputPath := filepath.Join(rtDir, goos+"-"+goarch, name)
+	if goos == runtime.GOOS && goarch == runtime.GOARCH {
+		// ensureCLIIntegrationBalBinaries already built this exact path as
+		// the shared, coverage-instrumented host stub — rebuilding here
+		// (without -cover) would silently clobber it and lose coverage.
+		return outputPath
+	}
 	if err := os.MkdirAll(filepath.Dir(outputPath), 0o755); err != nil {
 		t.Fatalf("creating rt dir for %s/%s: %v", goos, goarch, err)
 	}

@@ -115,12 +115,16 @@ func TestEmbedPE_FailsClearlyWhenHeaderSlackInsufficient(t *testing.T) {
 	if err := os.WriteFile(stubPath, minimalZeroSlackPE64(t), 0o755); err != nil {
 		t.Fatalf("writing synthetic stub: %v", err)
 	}
-	if _, err := pe.Open(stubPath); err != nil {
+	f, err := pe.Open(stubPath)
+	if err != nil {
 		t.Fatalf("synthetic zero-slack fixture doesn't parse as PE: %v", err)
+	}
+	if err := f.Close(); err != nil {
+		t.Fatalf("closing synthetic fixture: %v", err)
 	}
 
 	outPath := filepath.Join(t.TempDir(), "packed.exe")
-	err := EmbedPE(stubPath, []byte("payload"), outPath)
+	err = EmbedPE(stubPath, []byte("payload"), outPath)
 	if err == nil {
 		t.Fatal("expected an error packing a stub with zero header slack")
 	}

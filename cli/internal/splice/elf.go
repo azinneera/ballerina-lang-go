@@ -67,6 +67,12 @@ func spliceELFSection(stub []byte, sectionName string, payload []byte) ([]byte, 
 	if hdr.Shnum == 0 {
 		return nil, fmt.Errorf("unsupported ELF binary using extended section numbering")
 	}
+	if hdr.Shnum >= 0xff00-1 {
+		return nil, fmt.Errorf("unsupported ELF section count %d: adding a section requires extended numbering", hdr.Shnum)
+	}
+	if hdr.Shstrndx == 0 {
+		return nil, fmt.Errorf("ELF has no section name string table")
+	}
 	if int(hdr.Shstrndx) >= int(hdr.Shnum) || int(hdr.Shstrndx) >= len(f.Sections) {
 		return nil, fmt.Errorf("invalid ELF string table index %d (Shnum=%d)", hdr.Shstrndx, hdr.Shnum)
 	}
@@ -74,7 +80,9 @@ func spliceELFSection(stub []byte, sectionName string, payload []byte) ([]byte, 
 	oldShoff := int64(hdr.Shoff)
 	oldShnum := int64(hdr.Shnum)
 	tableSize := oldShnum * elfSection64Size
-	if oldShoff < 0 || tableSize < 0 || oldShoff+tableSize > int64(len(stub)) {
+	// Subtraction, not oldShoff+tableSize, so a malformed huge Shoff can't
+	// wrap the sum past int64 and slip through the bounds check.
+	if oldShoff < 0 || tableSize < 0 || oldShoff > int64(len(stub)) || tableSize > int64(len(stub))-oldShoff {
 		return nil, fmt.Errorf("ELF section header table out of range")
 	}
 	// Copy: the original bytes at oldShoff are left untouched in the

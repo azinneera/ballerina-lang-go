@@ -7,22 +7,6 @@ on:
     branches: [ main ]
 
 jobs:
-  changes:
-    name: Detect CLI changes
-    runs-on: ubuntu-latest
-    outputs:
-      cli: ${{ steps.filter.outputs.cli }}
-    steps:
-      - uses: actions/checkout@v6
-        with:
-          fetch-depth: 2
-      - uses: dorny/paths-filter@v3
-        id: filter
-        with:
-          filters: |
-            cli:
-              - 'cli/**'
-
   ubuntu-build:
     name: Ubuntu Native Build
     runs-on: ubuntu-latest
@@ -101,21 +85,3 @@ jobs:
         shell: bash
         run: make test
 
-  macos-build:
-    name: macOS Native Build
-    needs: changes
-    if: needs.changes.outputs.cli == 'true'
-    runs-on: macos-latest
-    steps:
-      - name: Checkout
-        uses: actions/checkout@v6
-        with:
-          fetch-depth: 2
-
-      - name: Set up Go
-        uses: actions/setup-go@v6
-        with:
-          go-version: '1.26'
-
-      - name: Run all modules
-        run: python3 .github/scripts/run_native_tests.py

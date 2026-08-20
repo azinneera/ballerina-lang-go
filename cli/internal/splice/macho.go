@@ -21,6 +21,7 @@ import (
 	"debug/macho"
 	"encoding/binary"
 	"fmt"
+	"math"
 )
 
 // MachOSegmentName and MachOSectionName identify the segment/section the
@@ -181,6 +182,9 @@ func spliceMachOSection(stub []byte, payload []byte) ([]byte, error) {
 	// failure under Rosetta.
 	sigOff := int64(oldLinkeditOff) + int64(delta) + int64(len(linkeditContent))
 	sigSize := codesignSize(sigOff, machoSignID)
+	if sigOff > math.MaxUint32 || sigSize > math.MaxUint32-sigOff {
+		return nil, fmt.Errorf("output too large for LC_CODE_SIGNATURE's 32-bit dataoff/datasize: offset %d, size %d", sigOff, sigSize)
+	}
 	projectedLinkeditEnd := linkeditSeg.Addr + (uint64(sigOff) + uint64(sigSize) - newLinkeditOff)
 	if projectedLinkeditEnd > maxVMEnd {
 		maxVMEnd = projectedLinkeditEnd

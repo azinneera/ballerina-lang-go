@@ -21,6 +21,7 @@ import (
 	"debug/pe"
 	"encoding/binary"
 	"fmt"
+	"math"
 )
 
 // PESectionName is the PE section the payload is stored under.
@@ -68,6 +69,13 @@ func splicePESection(stub []byte, sectionName string, payload []byte) ([]byte, e
 	if opt.FileAlignment == 0 || opt.SectionAlignment == 0 {
 		return nil, fmt.Errorf("invalid PE alignment: FileAlignment=%d SectionAlignment=%d", opt.FileAlignment, opt.SectionAlignment)
 	}
+	if opt.SectionAlignment < opt.FileAlignment {
+		return nil, fmt.Errorf("invalid PE alignment: SectionAlignment %d is less than FileAlignment %d",
+			opt.SectionAlignment, opt.FileAlignment)
+	}
+	if len(payload) > math.MaxUint32 {
+		return nil, fmt.Errorf("payload too large for a PE section: %d bytes", len(payload))
+	}
 
 	if len(stub) < peDosELfanewOffset+4 {
 		return nil, fmt.Errorf("stub too small to contain a DOS header")
@@ -82,33 +90,55 @@ func splicePESection(stub []byte, sectionName string, payload []byte) ([]byte, e
 		return nil, fmt.Errorf("PE section header table out of range")
 	}
 
+	if oldNumSections >= math.MaxUint16 {
+		return nil, fmt.Errorf("PE section count %d is already at the 16-bit maximum", oldNumSections)
+	}
 	newTableEnd := sectionTableOff + (oldNumSections+1)*peSectionHeaderSize
-	if newTableEnd > int64(opt.SizeOfHeaders) {
+	if newTableEnd > int64(opt.SizeOfHeaders) || newTableEnd > int64(len(stub)) {
 		return nil, fmt.Errorf("insufficient PE header slack to add a new section header: need %d bytes, have %d",
 			newTableEnd-sectionTableOff, int64(opt.SizeOfHeaders)-sectionTableOff)
 	}
 
-	// New-section geometry is the max over every existing section, not
-	// just the table's last entry — section order isn't guaranteed to
-	// match address/offset order.
-	var maxVAEnd, maxFileEnd uint32
+	// maxVAEnd starts at SizeOfImage, which can exceed every section's
+	// own VA end (linker slack), then takes the max over all sections.
+	// 64-bit so a malformed section can't wrap a uint32 addition.
+	maxVAEnd := uint64(opt.SizeOfImage)
+	var maxFileEnd uint64
 	for _, s := range f.Sections {
-		if vaEnd := s.VirtualAddress + s.VirtualSize; vaEnd > maxVAEnd {
+		if vaEnd := uint64(s.VirtualAddress) + uint64(s.VirtualSize); vaEnd > maxVAEnd {
 			maxVAEnd = vaEnd
 		}
-		if fileEnd := s.Offset + s.Size; fileEnd > maxFileEnd {
+		if fileEnd := uint64(s.Offset) + uint64(s.Size); fileEnd > maxFileEnd {
 			maxFileEnd = fileEnd
 		}
 	}
-	if uint64(maxFileEnd) != uint64(len(stub)) {
+	if maxFileEnd > math.MaxUint32 || maxVAEnd > math.MaxUint32 {
+		return nil, fmt.Errorf("PE section geometry exceeds 32-bit bounds")
+	}
+	if maxFileEnd != uint64(len(stub)) {
 		return nil, fmt.Errorf("stub has %d unexpected trailing bytes past its last section (expected exactly %d bytes)",
 			int64(len(stub))-int64(maxFileEnd), maxFileEnd)
 	}
 
-	rawDataOff := alignUp32(maxFileEnd, opt.FileAlignment)
-	rawDataSize := alignUp32(uint32(len(payload)), opt.FileAlignment)
-	newVA := alignUp32(maxVAEnd, opt.SectionAlignment)
-	newVASize := alignUp32(uint32(len(payload)), opt.SectionAlignment)
+	rawDataOff, err := alignUp32(uint32(maxFileEnd), opt.FileAlignment)
+	if err != nil {
+		return nil, fmt.Errorf("computing payload file offset: %w", err)
+	}
+	rawDataSize, err := alignUp32(uint32(len(payload)), opt.FileAlignment)
+	if err != nil {
+		return nil, fmt.Errorf("computing payload raw size: %w", err)
+	}
+	newVA, err := alignUp32(uint32(maxVAEnd), opt.SectionAlignment)
+	if err != nil {
+		return nil, fmt.Errorf("computing payload virtual address: %w", err)
+	}
+	newVASize, err := alignUp32(uint32(len(payload)), opt.SectionAlignment)
+	if err != nil {
+		return nil, fmt.Errorf("computing payload virtual size: %w", err)
+	}
+	if uint64(newVA)+uint64(newVASize) > math.MaxUint32 {
+		return nil, fmt.Errorf("resulting SizeOfImage overflows a 32-bit PE field")
+	}
 
 	out := append([]byte(nil), stub...)
 	if pad := int64(rawDataOff) - int64(len(out)); pad > 0 {
@@ -163,9 +193,16 @@ func splicePESection(stub []byte, sectionName string, payload []byte) ([]byte, e
 	return out, nil
 }
 
-func alignUp32(v, align uint32) uint32 {
+// alignUp32 rounds v up to the next multiple of align, computed in
+// 64-bit space so neither the rounding step nor the result can wrap a
+// 32-bit PE field; it errors instead of silently returning a wrapped value.
+func alignUp32(v, align uint32) (uint32, error) {
 	if align == 0 {
-		return v
+		return v, nil
 	}
-	return (v + align - 1) / align * align
+	aligned := (uint64(v) + uint64(align) - 1) / uint64(align) * uint64(align)
+	if aligned > math.MaxUint32 {
+		return 0, fmt.Errorf("aligned value %d overflows a 32-bit PE field", aligned)
+	}
+	return uint32(aligned), nil
 }

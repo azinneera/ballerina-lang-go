@@ -238,5 +238,5 @@ func codesignSign(out []byte, data io.Reader, id string, codeSize, textOff, text
 		outp = puts(outp, h[:])
 	}
 
-	outp = puts(outp, emptyRequirementsBlob)
+	puts(outp, emptyRequirementsBlob)
 }
