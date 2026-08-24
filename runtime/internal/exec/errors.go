@@ -153,8 +153,7 @@ func isDesugaredFunction(functionKey string) bool {
 		name = name[idx+1:]
 	}
 	return strings.HasPrefix(name, "$default$") ||
-		strings.HasPrefix(name, "$anonFunc$") ||
-		strings.Contains(name, "$thunk$")
+		strings.HasPrefix(name, "$anonFunc$")
 }
 
 func prettyFunctionName(functionKey string) string {

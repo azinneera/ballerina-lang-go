@@ -1048,18 +1048,10 @@ func handleExprFunctionBody(ctx context, body *ast.BLangExprFunctionBody) bool {
 }
 
 func lambdaFunction(ctx context, curBB *bir.BIRBasicBlock, expr *ast.BLangLambdaFunction) (expressionEffect, bool) {
-	effect, birFunc := loadLambdaFunction(ctx, curBB, expr)
-	if birFunc == nil {
-		return expressionEffect{}, false
-	}
-	return effect, true
-}
-
-func loadLambdaFunction(ctx context, curBB *bir.BIRBasicBlock, expr *ast.BLangLambdaFunction) (expressionEffect, *bir.BIRFunction) {
 	root := newFunctionRoot(ctx.function().pkgCtx, ctx)
 	birFunc := transformFunctionInner(root, expr.Function, nil)
 	if birFunc == nil {
-		return expressionEffect{}, nil
+		return expressionEffect{}, false
 	}
 	ctx.function().pkgCtx.birPkg.Functions = append(ctx.function().pkgCtx.birPkg.Functions, *birFunc)
 	funcType := expr.GetDeterminedType()
@@ -1072,24 +1064,22 @@ func loadLambdaFunction(ctx context, curBB *bir.BIRBasicBlock, expr *ast.BLangLa
 	if root.fn.isClosure {
 		ctx.function().isClosure = true
 	}
-	return expressionEffect{result: resultOperand, block: curBB}, birFunc
+	return expressionEffect{result: resultOperand, block: curBB}, true
 }
 
 func expressionThunk(ctx context, curBB *bir.BIRBasicBlock, expr *desugar.BLangExpressionThunk) (expressionEffect, bool) {
-	fpEffect, birFunc := loadLambdaFunction(ctx, curBB, expr.Lambda)
-	if birFunc == nil {
-		return expressionEffect{}, false
+	for _, stmt := range expr.InitStmts {
+		effect, ok := handleStatement(ctx, curBB, stmt)
+		if !ok {
+			return expressionEffect{}, false
+		}
+		curBB = effect.block
+		if curBB == nil {
+			ctx.internalError("expression thunk setup cannot complete abruptly", stmt.GetPosition())
+			return expressionEffect{}, false
+		}
 	}
-	thenBB := ctx.function().addBB()
-	resultOperand := ctx.addTempVar(expr.GetDeterminedType())
-	callSite := bir.CallSite{
-		Kind:      bir.CallKindFunctionPointer,
-		Name:      birFunc.Name,
-		FpOperand: fpEffect.result,
-	}
-	call := bir.NewCall(callSite, thenBB, resultOperand, ctx.function().loc(expr.GetPosition()))
-	fpEffect.block.Terminator = call
-	return expressionEffect{result: resultOperand, block: thenBB}, true
+	return handleActionOrExpression(ctx, curBB, expr.Expr)
 }
 
 type expressionEffect struct {

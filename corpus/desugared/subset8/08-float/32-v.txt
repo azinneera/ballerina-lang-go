@@ -57,18 +57,14 @@
         (invocation io println (
           (binary-expr ==
             (expression-thunk
-            (lambda
-              (function main$582$0$thunk$0 () ()
-                (block-function-body
-                  (var-def
-                    (variable $desugar$0 (expr
-                      (simple-var-ref x))))
-                  (var-def
-                    (variable $desugar$1 (expr
-                      (invocation $default$0 (
-                        (simple-var-ref $desugar$0))))))
-                  (return
-                    (invocation lang.float round (
-                      (simple-var-ref $desugar$0)
-                      (simple-var-ref $desugar$1))))))))
+            (var-def
+              (variable $desugar$0 (expr
+                (simple-var-ref x))))
+            (var-def
+              (variable $desugar$1 (expr
+                (invocation $default$0 (
+                  (simple-var-ref $desugar$0))))))
+            (invocation lang.float round (
+              (simple-var-ref $desugar$0)
+              (simple-var-ref $desugar$1))))
             (simple-var-ref x))))))))

@@ -42,7 +42,7 @@ func walkExpression(cx *functionContext, node ast.BLangActionOrExpression) ast.B
 	}
 	// Enclose setup statements at the expression boundary so they retain the
 	// expression's lazy evaluation, loop, and trap semantics.
-	return createExpressionThunk(cx, lowered)
+	return createExpressionThunk(lowered)
 }
 
 func walkExpressionInner(cx *functionContext, node ast.BLangActionOrExpression) desugaredNode[ast.BLangActionOrExpression] {
@@ -166,64 +166,10 @@ func walkExpressionInner(cx *functionContext, node ast.BLangActionOrExpression) 
 	}
 }
 
-// FIXME: Remove this guard when check lowering can preserve the enclosing
-// function's return semantics across generated thunk boundaries.
-type checkedExpressionVisitor struct {
-	cx *functionContext
-}
-
-func (v *checkedExpressionVisitor) Visit(node ast.BLangNode) ast.Visitor {
-	switch node.(type) {
-	case *ast.BLangCheckedExpr:
-		v.cx.internalError("check expression cannot be lowered inside a generated expression thunk", node.GetPosition())
-		return nil
-	case *ast.BLangFunction, *ast.BLangLambdaFunction, *ast.BLangArrowFunction, *BLangExpressionThunk:
-		return nil
-	default:
-		return v
-	}
-}
-
-func (v *checkedExpressionVisitor) VisitTypeData(_ *ast.TypeData) ast.Visitor {
-	return v
-}
-
-func createExpressionThunk(cx *functionContext, lowered desugaredNode[ast.BLangActionOrExpression]) *BLangExpressionThunk {
+func createExpressionThunk(lowered desugaredNode[ast.BLangActionOrExpression]) *BLangExpressionThunk {
 	pos := lowered.replacementNode.GetPosition()
-	visitor := &checkedExpressionVisitor{cx: cx}
-	for _, stmt := range lowered.initStmts {
-		ast.Walk(visitor, stmt.(ast.BLangNode))
-	}
-	ast.Walk(visitor, lowered.replacementNode)
-
-	ownerName := cx.getSymbol(cx.owner).Name()
-	name := fmt.Sprintf("%s$%d$%d$thunk$%d", ownerName, cx.owner.SpaceIndex, cx.owner.Index, cx.thunkCounter)
-	cx.thunkCounter++
-
-	returnTy := lowered.replacementNode.GetDeterminedType()
-	fnTy := cx.thunkFunctionType(returnTy)
-	fnSymbol := model.NewFunctionSymbol(name, model.TypedFunctionSignature{ReturnType: returnTy}, false, pos)
-	fnSymbol.SetType(fnTy)
-	fnRef := cx.addSymbolToSameSpace(cx.owner, name, fnSymbol)
-
-	returnStmt := &ast.BLangReturn{Expr: lowered.replacementNode}
-	returnStmt.SetDeterminedType(semtypes.Never)
-	returnStmt.SetPosition(pos)
-	body := &ast.BLangBlockFunctionBody{Stmts: append(lowered.initStmts, returnStmt)}
-	body.SetDeterminedType(semtypes.Never)
-	body.SetPosition(pos)
-	fnName := newIdentifier(name)
-	fnName.SetPosition(pos)
-	fn := ast.NewBLangFunction(ast.InvokableData{Position: pos, Name: fnName, Body: body})
-	fn.SetDeterminedType(semtypes.Never)
-	fn.SetSymbol(fnRef)
-	fn.SetScope(cx.newFunctionScope(cx.currentScope()))
-
-	lambda := &ast.BLangLambdaFunction{Function: fn}
-	lambda.SetDeterminedType(fnTy)
-	lambda.SetPosition(pos)
-	thunk := &BLangExpressionThunk{Lambda: lambda}
-	thunk.SetDeterminedType(returnTy)
+	thunk := &BLangExpressionThunk{InitStmts: lowered.initStmts, Expr: lowered.replacementNode}
+	thunk.SetDeterminedType(lowered.replacementNode.GetDeterminedType())
 	thunk.SetPosition(pos)
 	return thunk
 }
