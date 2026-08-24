@@ -1,0 +1,7 @@
+-- stdout --
+-- stderr --
+fatal[INTERNAL_ERROR]: check expression cannot be lowered inside a generated expression thunk
+  --> expression-thunk-check-fv.bal:26:47
+   |
+26 |     (int|error)[] values = [fallibleDefaulted(check checkedInt())]; // @error future: preserve check return semantics across expression thunks
+   |                                               ^^^^^^^^^^^^^^^^^^
