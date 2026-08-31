@@ -14,6 +14,8 @@
 // specific language governing permissions and limitations
 // under the License.
 
-public function inferred(int val, typedesc retTy = <>) returns retTy = external;
+function nonTypedescParam(int n, string s) returns n = external; // @error invalid parameter reference: expected 'typedesc', found 'int'
 
-public function inferredNestedFixedArray(typedesc retTy = <>) returns retTy[2][] = external;
+public function main() {
+    int _ = nonTypedescParam(1, "a");
+}
