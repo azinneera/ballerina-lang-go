@@ -17,6 +17,7 @@
 package projects
 
 import (
+	"errors"
 	"fmt"
 	"io/fs"
 	"regexp"
@@ -122,13 +123,24 @@ func isCorrectIncludeMatch(rel string, isDir bool, pattern string) bool {
 // globToRegexp translates an include pattern into an anchored regexp
 // equivalent to java.nio.file.FileSystem's "glob:**/<pattern>" matcher,
 // applied to a "/"-separated relative path: "**" matches any number of path
-// segments, "*" matches within a single segment, "?" matches one character.
+// segments, "*" matches within a single segment, "?" matches one character,
+// "[abc]"/"[a-z]"/"[!abc]" match a character class (optionally negated), and
+// "{alt1,alt2}" matches any one of the comma-separated alternatives.
 func globToRegexp(pattern string) (*regexp.Regexp, error) {
 	trimmed := strings.TrimPrefix(strings.TrimRight(pattern, "/"), "/")
 
 	var sb strings.Builder
 	sb.WriteString("^(?:.*/)?")
-	runes := []rune(trimmed)
+	if err := writeGlobBody(&sb, []rune(trimmed)); err != nil {
+		return nil, fmt.Errorf("%w in pattern %q", err, pattern)
+	}
+	sb.WriteString("$")
+	return regexp.Compile(sb.String())
+}
+
+// writeGlobBody translates one glob segment (either the whole pattern, or
+// one "{...}" alternative) into regexp syntax, appending it to sb.
+func writeGlobBody(sb *strings.Builder, runes []rune) error {
 	for i := 0; i < len(runes); i++ {
 		switch c := runes[i]; c {
 		case '*':
@@ -143,10 +155,50 @@ func globToRegexp(pattern string) (*regexp.Regexp, error) {
 			}
 		case '?':
 			sb.WriteString("[^/]")
+		case '[':
+			end := indexRune(runes, i+1, ']')
+			if end == -1 {
+				return errors.New("unterminated character class")
+			}
+			body := string(runes[i+1 : end])
+			sb.WriteString("[")
+			if after, ok := strings.CutPrefix(body, "!"); ok {
+				sb.WriteString("^")
+				body = after
+			}
+			sb.WriteString(body)
+			sb.WriteString("]")
+			i = end
+		case '{':
+			end := indexRune(runes, i+1, '}')
+			if end == -1 {
+				return errors.New("unterminated brace alternation")
+			}
+			sb.WriteString("(?:")
+			for j, alt := range strings.Split(string(runes[i+1:end]), ",") {
+				if j > 0 {
+					sb.WriteString("|")
+				}
+				if err := writeGlobBody(sb, []rune(alt)); err != nil {
+					return err
+				}
+			}
+			sb.WriteString(")")
+			i = end
 		default:
 			sb.WriteString(regexp.QuoteMeta(string(c)))
 		}
 	}
-	sb.WriteString("$")
-	return regexp.Compile(sb.String())
+	return nil
+}
+
+// indexRune returns the index of the first occurrence of target in
+// runes[from:], or -1 if not found.
+func indexRune(runes []rune, from int, target rune) int {
+	for i := from; i < len(runes); i++ {
+		if runes[i] == target {
+			return i
+		}
+	}
+	return -1
 }
