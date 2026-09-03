@@ -75,16 +75,16 @@ var testCmd = createTestCmd()
 func createTestCmd() *cobra.Command {
 	opts := &testCmdOptions{}
 	cmd := &cobra.Command{
-		Use:   "test [<package-dir>]",
+		Use:   "test [<source-file.bal> | <package-dir>]",
 		Short: "Run package tests",
-		Long: `	Run the tests of the current package.
+		Long: `	Run the tests of the current package or a standalone '.bal' file.
 
-	Discovers '@test:*'-annotated functions in the package's test sources,
-	registers them with ballerina/test, and executes them in-process,
-	printing a pass/fail/skip summary.
+	Discovers '@test:*'-annotated functions in the package's test sources
+	(or, for a standalone file, in the file itself), registers them with
+	ballerina/test, and executes them in-process, printing a pass/fail/skip
+	summary.
 
-	Note: Running tests for a standalone '.bal' file or a workspace is not
-	yet supported.`,
+	Note: Running tests for a workspace is not yet supported.`,
 		Args: cobra.MaximumNArgs(1),
 		RunE: func(cmd *cobra.Command, args []string) error {
 			return runTest(cmd, args, opts)
@@ -118,7 +118,7 @@ func createTestCmd() *cobra.Command {
 }
 
 func testError(format string, args ...any) error {
-	return usageError("test [<package-dir>]", format, args...)
+	return usageError("test [<source-file.bal> | <package-dir>]", format, args...)
 }
 
 func runTest(cmd *cobra.Command, args []string, opts *testCmdOptions) error {
@@ -187,21 +187,32 @@ func runTest(cmd *cobra.Command, args []string, opts *testCmdOptions) error {
 	if err != nil {
 		return testError("invalid project path %q: %w", path, err)
 	}
+
+	// A single .bal file loads like bal run/bal build load one: fsys rooted
+	// at the parent dir, loadPath is the filename within it. A standalone
+	// file can't be a workspace member, so workspace detection only applies
+	// to directories (matches build.go).
+	baseDir := path
+	loadPath := "."
 	if !info.IsDir() {
-		// P8.10, not yet implemented: standalone-file test execution needs the
-		// in-memory-AST-append injection path instead of AddTestDocument.
-		return testError("running tests for a standalone .bal file is not yet supported")
+		if filepath.Ext(path) != ".bal" {
+			return testError("%q is not a package directory or a .bal file", path)
+		}
+		baseDir = filepath.Dir(path)
+		loadPath = filepath.Base(path)
 	}
 
-	absBaseDir, err := filepath.Abs(path)
+	absBaseDir, err := filepath.Abs(baseDir)
 	if err != nil {
 		return testError("resolve absolute path: %w", err)
 	}
 
-	if workspaceRoot := findWorkspaceRoot(absBaseDir); workspaceRoot != "" {
-		// P8.11, not yet implemented: workspace test execution needs to
-		// iterate members and aggregate ReportData across them.
-		return testError("running tests for a workspace is not yet supported")
+	if info.IsDir() {
+		if workspaceRoot := findWorkspaceRoot(absBaseDir); workspaceRoot != "" {
+			// P8.11, not yet implemented: workspace test execution needs to
+			// iterate members and aggregate ReportData across them.
+			return testError("running tests for a workspace is not yet supported")
+		}
 	}
 
 	ballerinaEnvPath, err := getBallerinaEnvPath()
@@ -210,7 +221,7 @@ func runTest(cmd *cobra.Command, args []string, opts *testCmdOptions) error {
 	}
 
 	fsys := os.DirFS(absBaseDir)
-	result, err := projects.Load(fsys, ".", projects.ProjectLoadConfig{
+	result, err := projects.Load(fsys, loadPath, projects.ProjectLoadConfig{
 		BallerinaEnvFs: os.DirFS(ballerinaEnvPath),
 		BuildOptions:   &buildOpts,
 	})

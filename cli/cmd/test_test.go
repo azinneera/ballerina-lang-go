@@ -239,14 +239,75 @@ func TestTestCommand_RejectsUnsupportedFlags(t *testing.T) {
 	}
 }
 
-func TestTestCommand_StandaloneFileNotYetSupported(t *testing.T) {
-	dir := t.TempDir()
-	balFile := filepath.Join(dir, "standalone.bal")
-	if err := os.WriteFile(balFile, []byte("public function main() {\n}\n"), 0o644); err != nil {
-		t.Fatalf("write standalone.bal: %v", err)
+// writeStandaloneFixture creates a single standalone .bal file (no
+// Ballerina.toml) at dir/name containing source, returning its full path.
+func writeStandaloneFixture(t *testing.T, dir, name, source string) string {
+	t.Helper()
+	balFile := filepath.Join(dir, name)
+	if err := os.WriteFile(balFile, []byte(source), 0o644); err != nil {
+		t.Fatalf("write %s: %v", name, err)
 	}
-	_, _, _, err := executeTestCommand(t, balFile)
+	return balFile
+}
+
+func TestTestCommand_StandaloneFile_AllPassing(t *testing.T) {
+	dir := t.TempDir()
+	balFile := writeStandaloneFixture(t, dir, "standalone.bal", `import ballerina/io;
+import ballerina/test;
+
+public function main() {
+    io:println("MAIN_RAN_UNEXPECTEDLY");
+}
+
+@test:Config {}
+function testOne() {
+    test:assertTrue(true);
+}
+`)
+	stdout, _, stderr, err := executeTestCommand(t, balFile)
+	if err != nil {
+		t.Fatalf("expected success, got error: %v\nstderr: %s", err, stderr)
+	}
+	if !strings.Contains(stdout, "1 passing") {
+		t.Errorf("expected '1 passing' in output, got: %s", stdout)
+	}
+	if strings.Contains(stdout, "MAIN_RAN") {
+		t.Errorf("standalone file's main() ran unexpectedly during bal test: %s", stdout)
+	}
+}
+
+func TestTestCommand_StandaloneFile_FailureExitsNonZero(t *testing.T) {
+	dir := t.TempDir()
+	balFile := writeStandaloneFixture(t, dir, "standalone_fail.bal", `import ballerina/test;
+
+@test:Config {}
+function testBad() {
+    test:assertTrue(false, "boom");
+}
+`)
+	stdout, _, stderr, err := executeTestCommand(t, balFile)
 	if err == nil {
-		t.Error("expected an error for a standalone .bal file (P8.10 not yet implemented)")
+		t.Fatalf("expected a non-nil error for a failing suite, got success. stdout: %s", stdout)
+	}
+	if !strings.Contains(stdout, "1 failing") {
+		t.Errorf("expected one failure in output, got: %s\nstderr: %s", stdout, stderr)
+	}
+
+	// target/ lands next to the standalone file, not inside a package dir.
+	rerunPath := filepath.Join(dir, "target", "rerun_test.json")
+	if _, statErr := os.Stat(rerunPath); statErr != nil {
+		t.Errorf("expected rerun_test.json at %s: %v", rerunPath, statErr)
+	}
+}
+
+func TestTestCommand_StandaloneFile_RejectsNonBalFile(t *testing.T) {
+	dir := t.TempDir()
+	notBal := filepath.Join(dir, "notes.txt")
+	if err := os.WriteFile(notBal, []byte("hello"), 0o644); err != nil {
+		t.Fatalf("write notes.txt: %v", err)
+	}
+	_, _, _, err := executeTestCommand(t, notBal)
+	if err == nil {
+		t.Error("expected an error for a non-.bal, non-directory path")
 	}
 }
