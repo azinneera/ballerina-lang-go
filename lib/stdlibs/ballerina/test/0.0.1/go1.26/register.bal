@@ -24,6 +24,30 @@ final GroupRegistry beforeGroupsRegistry = new;
 final GroupRegistry afterGroupsRegistry = new;
 final GroupStatusRegistry groupStatusRegistry = new;
 
+// jballerina declares this in execute.bal (not yet ported, see TODO.md); moved
+// here since the ExecutionManager class itself lives in this file.
+final ExecutionManager executionManager = new;
+
+// Workaround for a confirmed interpreter bug (see TODO.md): this compiler's
+// unused-variable check is scoped per-file, not per-module — a real reference
+// to one of the module-level vars above from a *different* file (filter.bal,
+// execute.bal, annotation_processor.bal, all separate files per jballerina's
+// own layout) never clears its "unused variable" error, even when that file's
+// reference is itself reachable and used. This function is never called; its
+// only job is to give each var a same-file reference so the (buggy) check
+// passes. Remove once the compiler bug is fixed.
+function retainModuleLevelRegistries() {
+    _ = testRegistry;
+    _ = beforeSuiteRegistry;
+    _ = afterSuiteRegistry;
+    _ = beforeEachRegistry;
+    _ = afterEachRegistry;
+    _ = beforeGroupsRegistry;
+    _ = afterGroupsRegistry;
+    _ = groupStatusRegistry;
+    _ = executionManager;
+}
+
 // jballerina uses isolated/lock/readonly here for multi-strand safety; dropped
 // since v1 never runs tests concurrently (see TODO.md).
 type TestFunction record {|
@@ -395,7 +419,97 @@ class GroupStatusRegistry {
     }
 }
 
-// Local stand-ins for missing lang.array/lang.map methods (see TODO.md).
+// Local stand-ins for missing lang.array/lang.map/lang.string methods (see
+// TODO.md) — shared across filter.bal/execute.bal/report.bal as well as this
+// file, hence living here rather than next to any one specific caller.
+
+// Replaces `string:'join(sep, ...arr)` call sites — see TODO.md's rest-
+// argument-spread entry (`...arr` at a call site is unimplemented).
+function joinStrings(string sep, string[] arr) returns string {
+    string result = "";
+    foreach int i in 0 ..< arr.length() {
+        if i > 0 {
+            result += sep;
+        }
+        result += arr[i];
+    }
+    return result;
+}
+
+// Byte-level stand-ins for missing string:indexOf/includes/startsWith/endsWith
+// (see TODO.md). Operate on bytes, not Unicode codepoints — fine for this
+// module's own identifiers/messages (ASCII), not a general substitute.
+
+function indexOfStr(string s, string target) returns int? {
+    byte[] sBytes = s.toBytes();
+    byte[] tBytes = target.toBytes();
+    int tLen = tBytes.length();
+    if tLen == 0 {
+        return 0;
+    }
+    int sLen = sBytes.length();
+    if tLen > sLen {
+        return ();
+    }
+    foreach int i in 0 ... sLen - tLen {
+        boolean matched = true;
+        foreach int j in 0 ..< tLen {
+            if sBytes[i + j] != tBytes[j] {
+                matched = false;
+                break;
+            }
+        }
+        if matched {
+            return i;
+        }
+    }
+    return ();
+}
+
+function includesStr(string s, string target) returns boolean {
+    return indexOfStr(s, target) is int;
+}
+
+function startsWithStr(string s, string prefix) returns boolean {
+    byte[] sBytes = s.toBytes();
+    byte[] pBytes = prefix.toBytes();
+    if pBytes.length() > sBytes.length() {
+        return false;
+    }
+    foreach int i in 0 ..< pBytes.length() {
+        if sBytes[i] != pBytes[i] {
+            return false;
+        }
+    }
+    return true;
+}
+
+function endsWithStr(string s, string suffix) returns boolean {
+    byte[] sBytes = s.toBytes();
+    byte[] suffixBytes = suffix.toBytes();
+    int offset = sBytes.length() - suffixBytes.length();
+    if offset < 0 {
+        return false;
+    }
+    foreach int i in 0 ..< suffixBytes.length() {
+        if sBytes[offset + i] != suffixBytes[i] {
+            return false;
+        }
+    }
+    return true;
+}
+
+// Replaces `boolean:fromString(input)` (see TODO.md) — matches its actual
+// semantics (only the exact literals "true"/"false" are accepted).
+function parseBoolFromString(string input) returns boolean|error {
+    if input == "true" {
+        return true;
+    }
+    if input == "false" {
+        return false;
+    }
+    return error("'" + input + "' is not a valid boolean value");
+}
 
 function intOrZero(int? n) returns int {
     if n is int {
@@ -436,6 +550,26 @@ function stringArrayIndexOf(string[] arr, string target) returns int? {
         }
     }
     return ();
+}
+
+// Replaces `arr.slice(startIndex)` (see TODO.md — array slicing isn't
+// parseable/implemented).
+function sliceFrom(string[] arr, int startIndex) returns string[] {
+    string[] result = [];
+    foreach int i in startIndex ..< arr.length() {
+        result.push(arr[i]);
+    }
+    return result;
+}
+
+// Same as sliceFrom, for AnyOrError[][] — replaces `.remove(0)` (also missing)
+// at serialExecuter.bal's data-driven-test queue-draining call sites.
+function sliceFromAnyOrErrorArrays(AnyOrError[][] arr, int startIndex) returns AnyOrError[][] {
+    AnyOrError[][] result = [];
+    foreach int i in startIndex ..< arr.length() {
+        result.push(arr[i]);
+    }
+    return result;
 }
 
 function sortTestFunctionsByName(TestFunction[] arr) returns TestFunction[] {
