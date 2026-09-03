@@ -35,6 +35,15 @@ const (
 
 	// Gitignore is the .gitignore template file name.
 	Gitignore = "gitignore"
+
+	// MainTestBal is the tests/main_test.bal template file name for the default/main template.
+	MainTestBal = "main_test.bal"
+
+	// LibTestBal is the tests/lib_test.bal template file name for library packages.
+	LibTestBal = "lib_test.bal"
+
+	// ServiceTestBal is the tests/service_test.bal template file name for service packages.
+	ServiceTestBal = "service_test.bal"
 )
 
 // Template placeholder constants for string replacement.
@@ -47,6 +56,7 @@ const (
 )
 
 //go:embed main.bal lib.bal service.bal manifest-app.toml gitignore
+//go:embed main_test.bal lib_test.bal service_test.bal
 var FS embed.FS
 
 // ReadTemplate reads a template file and returns its content as a string.
