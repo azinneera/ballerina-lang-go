@@ -311,3 +311,101 @@ func TestTestCommand_StandaloneFile_RejectsNonBalFile(t *testing.T) {
 		t.Error("expected an error for a non-.bal, non-directory path")
 	}
 }
+
+// writeWorkspaceFixture creates a workspace at a fresh temp dir containing
+// two member packages ("passing", which has one passing test, and "failing",
+// which has one failing test) and returns the workspace root plus each
+// member's own directory.
+func writeWorkspaceFixture(t *testing.T) (workspaceRoot, passingDir, failingDir string) {
+	t.Helper()
+	root := t.TempDir()
+
+	writeMember := func(name, testSource string) string {
+		dir := filepath.Join(root, name)
+		if err := os.MkdirAll(filepath.Join(dir, "tests"), 0o755); err != nil {
+			t.Fatalf("mkdir %s/tests: %v", name, err)
+		}
+		toml := "[package]\norg = \"testorg\"\nname = \"" + name + "\"\nversion = \"0.1.0\"\n"
+		if err := os.WriteFile(filepath.Join(dir, "Ballerina.toml"), []byte(toml), 0o644); err != nil {
+			t.Fatalf("write %s/Ballerina.toml: %v", name, err)
+		}
+		if err := os.WriteFile(filepath.Join(dir, "main.bal"), []byte("public function main() {\n}\n"), 0o644); err != nil {
+			t.Fatalf("write %s/main.bal: %v", name, err)
+		}
+		if err := os.WriteFile(filepath.Join(dir, "tests", "main_test.bal"), []byte(testSource), 0o644); err != nil {
+			t.Fatalf("write %s/tests/main_test.bal: %v", name, err)
+		}
+		return dir
+	}
+
+	passingDir = writeMember("passing", `import ballerina/test;
+
+@test:Config {}
+function testGood() {
+    test:assertTrue(true);
+}
+`)
+	failingDir = writeMember("failing", `import ballerina/test;
+
+@test:Config {}
+function testBad() {
+    test:assertTrue(false, "boom");
+}
+`)
+
+	wsToml := "[workspace]\npackages = [\"passing\", \"failing\"]\n"
+	if err := os.WriteFile(filepath.Join(root, "Ballerina.toml"), []byte(wsToml), 0o644); err != nil {
+		t.Fatalf("write workspace Ballerina.toml: %v", err)
+	}
+	return root, passingDir, failingDir
+}
+
+func TestTestCommand_Workspace_RunsAllMembersAndAggregatesFailure(t *testing.T) {
+	root, _, _ := writeWorkspaceFixture(t)
+
+	// Package-name headers go through cobra's own OutOrStdout (cobraStdout);
+	// each member's actual pass/fail report goes through ballerina/test's
+	// println, which writes straight to the real process stdout (see
+	// executeTestCommand's doc comment) — both land on the same real stdout
+	// fd outside of tests, but the pipe swap here only captures one of them.
+	stdout, cobraStdout, _, err := executeTestCommand(t, root)
+	if err == nil {
+		t.Fatalf("expected an error since one member fails. stdout: %s", stdout)
+	}
+	if !strings.Contains(cobraStdout, "'passing'") || !strings.Contains(cobraStdout, "'failing'") {
+		t.Errorf("expected both member headers, got: %s", cobraStdout)
+	}
+	// Both members must run — a failing member must not stop the rest.
+	if strings.Count(cobraStdout, "Running tests for package") != 2 {
+		t.Errorf("expected both members to run, got: %s", cobraStdout)
+	}
+	if !strings.Contains(stdout, "1 passing") {
+		t.Errorf("expected the 'passing' member's result in output, got: %s", stdout)
+	}
+	if !strings.Contains(stdout, "1 failing") {
+		t.Errorf("expected the 'failing' member's failure in output, got: %s", stdout)
+	}
+}
+
+func TestTestCommand_Workspace_SingleMemberOnly(t *testing.T) {
+	_, passingDir, failingDir := writeWorkspaceFixture(t)
+
+	stdout, _, stderr, err := executeTestCommand(t, passingDir)
+	if err != nil {
+		t.Fatalf("expected the passing member alone to succeed: %v\nstdout: %s\nstderr: %s", err, stdout, stderr)
+	}
+	if !strings.Contains(stdout, "1 passing") {
+		t.Errorf("expected 1 passing, got: %s", stdout)
+	}
+	if strings.Contains(stdout, "failing") && strings.Contains(stdout, "boom") {
+		t.Errorf("the 'failing' member's test must not have run: %s", stdout)
+	}
+
+	stdout, _, _, err = executeTestCommand(t, failingDir)
+	if err == nil {
+		t.Fatalf("expected the failing member alone to fail. stdout: %s", stdout)
+	}
+	if !strings.Contains(stdout, "1 failing") {
+		t.Errorf("expected 1 failing, got: %s", stdout)
+	}
+}

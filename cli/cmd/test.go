@@ -77,14 +77,15 @@ func createTestCmd() *cobra.Command {
 	cmd := &cobra.Command{
 		Use:   "test [<source-file.bal> | <package-dir>]",
 		Short: "Run package tests",
-		Long: `	Run the tests of the current package or a standalone '.bal' file.
+		Long: `	Run the tests of the current package, a standalone '.bal' file, or every
+	member package of a workspace.
 
 	Discovers '@test:*'-annotated functions in the package's test sources
 	(or, for a standalone file, in the file itself), registers them with
 	ballerina/test, and executes them in-process, printing a pass/fail/skip
-	summary.
-
-	Note: Running tests for a workspace is not yet supported.`,
+	summary. When run at a workspace root, every member package's tests run
+	in turn; when run inside one member's own directory, only that member's
+	tests run.`,
 		Args: cobra.MaximumNArgs(1),
 		RunE: func(cmd *cobra.Command, args []string) error {
 			return runTest(cmd, args, opts)
@@ -207,12 +208,19 @@ func runTest(cmd *cobra.Command, args []string, opts *testCmdOptions) error {
 		return testError("resolve absolute path: %w", err)
 	}
 
+	// Detect whether absBaseDir sits inside a workspace without being its
+	// root — e.g. cwd is a workspace member's own directory. If so, load
+	// from the workspace root instead so sibling member-to-member
+	// dependencies resolve, matching bal build's findWorkspaceRoot handling.
+	// Only applies to directories; a standalone .bal file can't be a
+	// workspace member.
+	workspaceRoot := ""
 	if info.IsDir() {
-		if workspaceRoot := findWorkspaceRoot(absBaseDir); workspaceRoot != "" {
-			// P8.11, not yet implemented: workspace test execution needs to
-			// iterate members and aggregate ReportData across them.
-			return testError("running tests for a workspace is not yet supported")
-		}
+		workspaceRoot = findWorkspaceRoot(absBaseDir)
+	}
+	effectiveBaseDir, effectiveLoadPath := absBaseDir, loadPath
+	if workspaceRoot != "" && workspaceRoot != absBaseDir {
+		effectiveBaseDir, effectiveLoadPath = workspaceRoot, "."
 	}
 
 	ballerinaEnvPath, err := getBallerinaEnvPath()
@@ -220,8 +228,8 @@ func runTest(cmd *cobra.Command, args []string, opts *testCmdOptions) error {
 		return testError("resolve ballerina env path: %w", err)
 	}
 
-	fsys := os.DirFS(absBaseDir)
-	result, err := projects.Load(fsys, loadPath, projects.ProjectLoadConfig{
+	fsys := os.DirFS(effectiveBaseDir)
+	result, err := projects.Load(fsys, effectiveLoadPath, projects.ProjectLoadConfig{
 		BallerinaEnvFs: os.DirFS(ballerinaEnvPath),
 		BuildOptions:   &buildOpts,
 	})
@@ -237,7 +245,28 @@ func runTest(cmd *cobra.Command, args []string, opts *testCmdOptions) error {
 
 	project := result.Project()
 	if project.Kind() == projects.ProjectKindWorkspace {
-		return testError("running tests for a workspace is not yet supported")
+		workspace := project.(*projects.WorkspaceProject)
+
+		if workspaceRoot != "" && workspaceRoot != absBaseDir {
+			// absBaseDir names one specific member (we walked up to
+			// workspaceRoot to load it) — test just that member, matching
+			// bal run's disambiguation.
+			memberProject := findBuildProjectByPath(workspace, workspaceRoot, absBaseDir)
+			if memberProject == nil {
+				return testError("no package found at path %s within workspace %s", absBaseDir, workspaceRoot)
+			}
+			exitCode, err := runTestsForProject(cmd, opts, stderr, fsys, memberProject, absBaseDir)
+			if err != nil {
+				return err
+			}
+			if exitCode != 0 {
+				cmd.SilenceUsage = true
+				return fmt.Errorf("there are test failures")
+			}
+			return nil
+		}
+
+		return runTestsForWorkspace(cmd, opts, stderr, fsys, effectiveLoadPath, workspace, absBaseDir, ballerinaEnvPath, &buildOpts)
 	}
 
 	exitCode, err := runTestsForProject(cmd, opts, stderr, fsys, project, absBaseDir)
@@ -246,6 +275,59 @@ func runTest(cmd *cobra.Command, args []string, opts *testCmdOptions) error {
 	}
 	if exitCode != 0 {
 		// The test suite's own failure, not a test-usage mistake — no USAGE block.
+		cmd.SilenceUsage = true
+		return fmt.Errorf("there are test failures")
+	}
+	return nil
+}
+
+// runTestsForWorkspace runs every member package's tests in turn, matching
+// jballerina's behavior: unlike a genuine load/compile error (which aborts
+// immediately, since something is actually broken), one member's test
+// failures don't stop the rest from running — every member gets a chance to
+// report its own results, and the workspace's overall exit status reflects
+// whether *any* member failed.
+//
+// Each member is tested via a freshly-reloaded workspace (like build.go's
+// buildNativeStub/buildOneProject loop) so each gets its own independent
+// CompilerEnvironment rather than sharing one across members.
+func runTestsForWorkspace(cmd *cobra.Command, opts *testCmdOptions, stderr io.Writer, fsys fs.FS,
+	loadPath string, workspace *projects.WorkspaceProject, workspaceAbsRoot, ballerinaEnvPath string,
+	buildOpts *projects.BuildOptions) error {
+	anyFailed := false
+	for _, bp := range workspace.Projects() {
+		memberDir := filepath.Join(workspaceAbsRoot, bp.SourceRoot())
+
+		memberResult, err := projects.Load(fsys, loadPath, projects.ProjectLoadConfig{
+			BallerinaEnvFs: os.DirFS(ballerinaEnvPath),
+			BuildOptions:   buildOpts,
+		})
+		if err != nil {
+			return testError("failed to load package: %w", err)
+		}
+
+		memberWorkspace := memberResult.Project().(*projects.WorkspaceProject)
+		memberProject := findBuildProjectByPath(memberWorkspace, workspaceAbsRoot, memberDir)
+		if memberProject == nil {
+			return testError("no package found at path %s within workspace %s", memberDir, workspaceAbsRoot)
+		}
+
+		pkgName := memberProject.CurrentPackage().PackageName().Value()
+		_, _ = fmt.Fprintf(cmd.OutOrStdout(), "\nRunning tests for package '%s'\n", pkgName)
+
+		exitCode, err := runTestsForProject(cmd, opts, stderr, fsys, memberProject, memberDir)
+		if err != nil {
+			// A genuine load/compile/internal error, not just "some tests
+			// failed" — matches jballerina's re-throw for non-test-failure
+			// exceptions instead of continuing to the next member.
+			return err
+		}
+		if exitCode != 0 {
+			anyFailed = true
+		}
+	}
+
+	if anyFailed {
 		cmd.SilenceUsage = true
 		return fmt.Errorf("there are test failures")
 	}
