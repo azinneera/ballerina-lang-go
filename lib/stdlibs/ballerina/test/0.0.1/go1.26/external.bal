@@ -30,12 +30,6 @@ isolated function isSystemConsole() returns boolean = external;
 
 isolated function currentTimeInMillis() returns decimal = external;
 
-isolated function fileExists(string filePath) returns boolean = external;
-
-isolated function readContent(string filePath) returns string = external;
-
-isolated function writeContent(string filePath, string content) returns error? = external;
-
 // jballerina's println (external.bal) writes each arg via a Java print(handle,
 // obj) native under a lock. This port has no `handle`/System.out indirection —
 // printValue writes straight to stdout — and no lock is needed since there's

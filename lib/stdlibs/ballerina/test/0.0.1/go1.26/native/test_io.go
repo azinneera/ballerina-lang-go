@@ -129,54 +129,24 @@ func currentTimeInMillis(_ *extern.Context, args []values.BalValue) (values.BalV
 	return decimal.FromInt64(time.Now().UnixMilli()), nil
 }
 
-// fileExists mirrors jballerina's FileUtils#fileExists.
-func fileExists(_ *extern.Context, args []values.BalValue) (values.BalValue, error) {
-	path, _ := args[0].(string)
-	_, err := os.Stat(path)
-	return err == nil, nil
-}
-
-// readContent mirrors jballerina's FileUtils#readContent: no `|error` in the
-// Ballerina signature, so a failure here becomes a Ballerina panic (matching
-// Java throwing a runtime exception), caught by `trap` at call sites.
-func readContent(_ *extern.Context, args []values.BalValue) (values.BalValue, error) {
-	path, _ := args[0].(string)
-	data, err := os.ReadFile(path)
-	if err != nil {
-		return nil, fmt.Errorf("operation not supported: %w", err)
-	}
-	return string(data), nil
-}
-
-// writeContent mirrors jballerina's FileUtils#writeContent, including its
-// escaping of literal newline/tab characters in the content before writing.
-func writeContent(_ *extern.Context, args []values.BalValue) (values.BalValue, error) {
-	path, _ := args[0].(string)
-	content, _ := args[1].(string)
-	content = strings.ReplaceAll(content, "\n", `\n`)
-	content = strings.ReplaceAll(content, "\t", `\t`)
-
-	if dir := filepath.Dir(path); dir != "" {
-		if err := os.MkdirAll(dir, 0o755); err != nil {
-			return values.NewErrorWithMessage(err.Error()), nil
-		}
-	}
-	if err := os.WriteFile(path, []byte(content), 0o644); err != nil {
-		return values.NewErrorWithMessage(err.Error()), nil
-	}
-	return nil, nil
-}
-
 // printValue writes a value's informal string representation directly to
 // stdout with no trailing separator — the leaf `print` jballerina's own
-// println (a thin pure-Ballerina wrapper, see ioutil.bal) calls in a loop.
-func printValue(_ *extern.Context, args []values.BalValue) (values.BalValue, error) {
+// println (a thin pure-Ballerina wrapper, see external.bal) calls in a loop.
+//
+// Routed through ctx.Env.Platform.IO.Stdout (the same platform-abstraction
+// path ballerina/io's own println uses — see io.go's Write) rather than
+// fmt.Print directly to os.Stdout: writing straight to os.Stdout bypassed
+// that abstraction entirely, which corpus's test harness (via a swapped-in
+// test pal.Platform) and any other stdout-virtualizing host rely on to
+// capture output — confirmed as a real gap while adding ballerina/test's
+// first corpus test coverage, not a hypothetical concern.
+func printValue(ctx *extern.Context, args []values.BalValue) (values.BalValue, error) {
 	if args[0] == nil {
 		return nil, nil
 	}
 	visited := make(map[uintptr]bool)
-	fmt.Print(values.String(args[0], visited))
-	return nil, nil
+	_, err := ctx.Env.Platform.IO.Stdout([]byte(values.String(args[0], visited)))
+	return nil, err
 }
 
 // splitString mirrors jballerina's own (pure-Ballerina-wrapped) `split`,

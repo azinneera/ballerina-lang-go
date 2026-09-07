@@ -1,0 +1,14 @@
+-- stdout --
+		[pass] testUnitOne
+		[pass] testUnitTwo
+
+
+		2 passing
+		0 failing
+		0 skipped
+
+		Test execution time : <DURATION>s
+exitCode: 0
+beforeUnitGroupCount: 1
+afterUnitGroupCount: 1
+-- stderr --

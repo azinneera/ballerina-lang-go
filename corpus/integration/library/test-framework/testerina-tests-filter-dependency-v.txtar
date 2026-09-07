@@ -1,0 +1,14 @@
+-- stdout --
+		[pass] testFunc
+		[pass] testFunc2
+
+
+		2 passing
+		0 failing
+		0 skipped
+
+		Test execution time : <DURATION>s
+exitCode: 0
+testFuncRan: 1
+testFunc2Ran: 1
+-- stderr --

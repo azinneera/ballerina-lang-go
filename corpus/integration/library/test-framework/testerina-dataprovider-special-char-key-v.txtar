@@ -1,0 +1,13 @@
+-- stdout --
+		[pass] testFunction3#a,b"c
+
+
+		1 passing
+		0 failing
+		0 skipped
+
+		Test execution time : <DURATION>s
+exitCode: 0
+matchRan: 1
+otherRan: 0
+-- stderr --

@@ -255,23 +255,31 @@ func runTest(cmd *cobra.Command, args []string, opts *testCmdOptions) error {
 			if memberProject == nil {
 				return testError("no package found at path %s within workspace %s", absBaseDir, workspaceRoot)
 			}
-			exitCode, err := runTestsForProject(cmd, opts, stderr, fsys, memberProject, absBaseDir)
-			if err != nil {
-				return err
-			}
-			if exitCode != 0 {
-				cmd.SilenceUsage = true
-				return fmt.Errorf("there are test failures")
-			}
-			return nil
+			exitCode, pkgResult, err := runTestsForProject(cmd, opts, stderr, fsys, memberProject, absBaseDir)
+			return finishStandaloneTestRun(cmd, absBaseDir, exitCode, pkgResult, err)
 		}
 
 		return runTestsForWorkspace(cmd, opts, stderr, fsys, effectiveLoadPath, workspace, absBaseDir, ballerinaEnvPath, &buildOpts)
 	}
 
-	exitCode, err := runTestsForProject(cmd, opts, stderr, fsys, project, absBaseDir)
+	exitCode, pkgResult, err := runTestsForProject(cmd, opts, stderr, fsys, project, absBaseDir)
+	return finishStandaloneTestRun(cmd, absBaseDir, exitCode, pkgResult, err)
+}
+
+// finishStandaloneTestRun applies runTestsForProject's result the same way
+// for both call sites that treat a run as one self-contained package (a
+// plain non-workspace invocation, and "bal test" invoked from inside one
+// workspace member's own directory): write that package's own
+// test_results.json if requested, then translate a non-zero suite exit
+// code into the usual "there are test failures" command error.
+func finishStandaloneTestRun(cmd *cobra.Command, projectDir string, exitCode int, pkgResult *packageTestResult, err error) error {
 	if err != nil {
 		return err
+	}
+	if pkgResult != nil {
+		if reportErr := writeTestResultsReport(cmd, projectDir, *pkgResult); reportErr != nil {
+			return reportErr
+		}
 	}
 	if exitCode != 0 {
 		// The test suite's own failure, not a test-usage mistake — no USAGE block.
@@ -295,6 +303,7 @@ func runTestsForWorkspace(cmd *cobra.Command, opts *testCmdOptions, stderr io.Wr
 	loadPath string, workspace *projects.WorkspaceProject, workspaceAbsRoot, ballerinaEnvPath string,
 	buildOpts *projects.BuildOptions) error {
 	anyFailed := false
+	var pkgResults []packageTestResult
 	for _, bp := range workspace.Projects() {
 		memberDir := filepath.Join(workspaceAbsRoot, bp.SourceRoot())
 
@@ -315,7 +324,7 @@ func runTestsForWorkspace(cmd *cobra.Command, opts *testCmdOptions, stderr io.Wr
 		pkgName := memberProject.CurrentPackage().PackageName().Value()
 		_, _ = fmt.Fprintf(cmd.OutOrStdout(), "\nRunning tests for package '%s'\n", pkgName)
 
-		exitCode, err := runTestsForProject(cmd, opts, stderr, fsys, memberProject, memberDir)
+		exitCode, pkgResult, err := runTestsForProject(cmd, opts, stderr, fsys, memberProject, memberDir)
 		if err != nil {
 			// A genuine load/compile/internal error, not just "some tests
 			// failed" — matches jballerina's re-throw for non-test-failure
@@ -324,6 +333,22 @@ func runTestsForWorkspace(cmd *cobra.Command, opts *testCmdOptions, stderr io.Wr
 		}
 		if exitCode != 0 {
 			anyFailed = true
+		}
+		if pkgResult != nil {
+			pkgResults = append(pkgResults, *pkgResult)
+		}
+	}
+
+	if len(pkgResults) > 0 {
+		report := workspaceTestReport{WorkspaceName: filepath.Base(workspaceAbsRoot), Packages: pkgResults}
+		for _, pkg := range pkgResults {
+			report.TotalTests += pkg.TotalTests
+			report.Passed += pkg.Passed
+			report.Failed += pkg.Failed
+			report.Skipped += pkg.Skipped
+		}
+		if err := writeTestResultsReport(cmd, workspaceAbsRoot, report); err != nil {
+			return err
 		}
 	}
 
@@ -334,18 +359,37 @@ func runTestsForWorkspace(cmd *cobra.Command, opts *testCmdOptions, stderr io.Wr
 	return nil
 }
 
-// runTestsForProject compiles project's default module with test sources
-// included, discovers @test:* functions, injects generated registration glue
-// as a new test document, recompiles, and runs the suite in-process. Returns
-// the suite's own exit code (0 = all passed) separately from any error.
+// runTestsForProject compiles project's package once (test sources
+// included), then runs each of its modules' tests in turn — almost always
+// just the default module, but a package can have named submodules under
+// modules/ too. Each module gets its own independent glue-injection +
+// recompile + fresh runtime + setTestOptions/register/startSuite sequence
+// (mirroring runTestsForWorkspace's per-member isolation): ballerina/test's
+// registries are shared module-level state within its own module, so
+// running two user-modules' tests through one shared runtime would
+// accumulate both modules' registrations into a single combined report
+// instead of jballerina's actual per-module reports (and per-module
+// `--tests mod:name` filtering couldn't work at all). Returns the combined
+// exit code (0 only if every module with tests passed) separately from any
+// error.
+//
+// Confirmed via a real multi-module package fixture (2026-09-09, see
+// CHECKPOINT.md) that before this, only the default module's tests ever ran
+// — a submodule's tests were silently never discovered at all, reporting
+// "No tests found" / exit 0 instead of actually running them.
+// runTestsForProject's third return value is the package's aggregated test
+// report data (nil unless opts.testReport is set and at least one module
+// actually ran tests) — the caller decides whether to write it standalone
+// (a single package) or fold it into a workspace-wide report (see
+// writeTestResultsReport's callers in runTest/runTestsForWorkspace).
 func runTestsForProject(cmd *cobra.Command, opts *testCmdOptions, stderr io.Writer, fsys fs.FS,
-	project projects.Project, projectDir string) (int, error) {
+	project projects.Project, projectDir string) (int, *packageTestResult, error) {
 	pkg := project.CurrentPackage()
 	compilation := pkg.Compilation()
 	if cd := compilation.DiagnosticResult(); cd.HasErrors() || cd.HasWarnings() {
 		printDiagnostics(fsys, stderr, cd, !isTerminal(), compilation.DiagnosticEnv())
 		if cd.HasErrors() {
-			return 1, testError("compilation contains errors")
+			return 1, nil, testError("compilation contains errors")
 		}
 	}
 
@@ -355,7 +399,74 @@ func runTestsForProject(cmd *cobra.Command, opts *testCmdOptions, stderr io.Writ
 		_, _ = fmt.Fprint(stderr, compilation.StatsReport())
 	}
 
-	module := pkg.DefaultModule()
+	modules := pkg.Modules()
+	var exitCode int
+	var err error
+	if len(modules) == 1 {
+		// Fast path, and identical behavior to before multi-module support:
+		// always run the (only) module, even with zero discovered tests —
+		// startSuite() itself reports "No tests found" in that case.
+		exitCode, err = runTestsForModule(cmd, opts, stderr, fsys, project, compilation, modules[0], projectDir)
+	} else {
+		exitCode, err = runTestsForModules(cmd, opts, stderr, fsys, project, compilation, modules, projectDir)
+	}
+	if err != nil {
+		return 1, nil, err
+	}
+
+	if !opts.testReport {
+		return exitCode, nil, nil
+	}
+	result, hadAny := buildPackageTestResult(pkg, modules, projectDir)
+	if !hadAny {
+		return exitCode, nil, nil
+	}
+	return exitCode, &result, nil
+}
+
+// runTestsForModules runs every module that has discovered tests, matching
+// jballerina's own per-module report semantics (see runTestsForProject's
+// doc comment for why each module needs its own runTestsForModule call
+// rather than sharing one runtime). A module with zero discovered tests is
+// skipped entirely — no header, no report — rather than running it through
+// startSuite() just to print "No tests found" for each empty module.
+func runTestsForModules(cmd *cobra.Command, opts *testCmdOptions, stderr io.Writer, fsys fs.FS,
+	project projects.Project, compilation *projects.PackageCompilation,
+	modules []*projects.Module, projectDir string) (int, error) {
+	anyHadTests := false
+	anyFailed := false
+	for _, module := range modules {
+		astPkg := compilation.ModuleAST(module.ModuleID())
+		if !testdiscovery.Discover(astPkg).HasAny() {
+			continue
+		}
+		anyHadTests = true
+		_, _ = fmt.Fprintf(cmd.OutOrStdout(), "\nRunning tests for module '%s'\n", module.ModuleName().String())
+		exitCode, err := runTestsForModule(cmd, opts, stderr, fsys, project, compilation, module, projectDir)
+		if err != nil {
+			return 1, err
+		}
+		if exitCode != 0 {
+			anyFailed = true
+		}
+	}
+	if !anyHadTests {
+		_, _ = fmt.Fprintln(cmd.OutOrStdout(), "\tNo tests found")
+		return 0, nil
+	}
+	if anyFailed {
+		return 1, nil
+	}
+	return 0, nil
+}
+
+// runTestsForModule discovers @test:* functions in one module, injects
+// generated registration glue as a new test document, recompiles, and runs
+// that module's suite in-process via its own fresh runtime. Returns the
+// suite's own exit code (0 = all passed) separately from any error.
+func runTestsForModule(cmd *cobra.Command, opts *testCmdOptions, stderr io.Writer, fsys fs.FS,
+	project projects.Project, compilation *projects.PackageCompilation,
+	module *projects.Module, projectDir string) (int, error) {
 	astPkg := compilation.ModuleAST(module.ModuleID())
 	discovered := testdiscovery.Discover(astPkg)
 	glueSource := testglue.GenerateSource(discovered)
@@ -404,6 +515,7 @@ func runTestsForProject(cmd *cobra.Command, opts *testCmdOptions, stderr io.Writ
 	rt.Listen()
 
 	targetPath := filepath.Join(projectDir, projects.TargetDir)
+	moduleName := module.ModuleName().String()
 	pkgName := newPkg.PackageName().Value()
 
 	setTestOptionsFn, ok := runtime.LookupFunction(rt, "ballerina", "test", "setTestOptions")
@@ -411,7 +523,7 @@ func runTestsForProject(cmd *cobra.Command, opts *testCmdOptions, stderr io.Writ
 		return 1, testError("internal error: ballerina/test:setTestOptions not found")
 	}
 	if _, err := runtime.InvokeFunction(rt, setTestOptionsFn, []values.BalValue{
-		targetPath, pkgName, pkgName,
+		targetPath, pkgName, moduleName,
 		strconv.FormatBool(opts.testReport), strconv.FormatBool(false),
 		opts.groups, opts.disableGroups, opts.tests,
 		strconv.FormatBool(opts.rerunFailed), strconv.FormatBool(opts.listGroups),
@@ -419,7 +531,7 @@ func runTestsForProject(cmd *cobra.Command, opts *testCmdOptions, stderr io.Writ
 		return 1, err
 	}
 
-	registerFn, ok := runtime.LookupFunction(rt, rootOrg, rootName, testglue.EntryFunctionName)
+	registerFn, ok := runtime.LookupFunction(rt, rootOrg, moduleName, testglue.EntryFunctionName)
 	if !ok {
 		return 1, testError("internal error: %s not found", testglue.EntryFunctionName)
 	}

@@ -23,6 +23,7 @@ import (
 	"encoding/json"
 	"io"
 	"os"
+	"os/exec"
 	"path/filepath"
 	"strings"
 	"testing"
@@ -407,5 +408,398 @@ func TestTestCommand_Workspace_SingleMemberOnly(t *testing.T) {
 	}
 	if !strings.Contains(stdout, "1 failing") {
 		t.Errorf("expected 1 failing, got: %s", stdout)
+	}
+}
+
+// writeMultiModuleFixture creates a package (distinct from a workspace) with
+// tests in both its default module and a named submodule under modules/ —
+// the setup that exposed a bug where only the default module's tests ever
+// ran (see TODO.md / CHECKPOINT.md, 2026-09-09).
+func writeMultiModuleFixture(t *testing.T) string {
+	t.Helper()
+	dir := t.TempDir()
+
+	toml := "[package]\norg = \"testorg\"\nname = \"multimodpkg\"\nversion = \"0.1.0\"\n"
+	if err := os.WriteFile(filepath.Join(dir, "Ballerina.toml"), []byte(toml), 0o644); err != nil {
+		t.Fatalf("write Ballerina.toml: %v", err)
+	}
+	if err := os.WriteFile(filepath.Join(dir, "main.bal"), []byte("public function main() {\n}\n"), 0o644); err != nil {
+		t.Fatalf("write main.bal: %v", err)
+	}
+
+	defaultTestsDir := filepath.Join(dir, "tests")
+	if err := os.MkdirAll(defaultTestsDir, 0o755); err != nil {
+		t.Fatalf("mkdir tests: %v", err)
+	}
+	defaultTestSource := `import ballerina/test;
+
+@test:Config {}
+function testDefaultModule() {
+    test:assertTrue(true);
+}
+`
+	if err := os.WriteFile(filepath.Join(defaultTestsDir, "main_test.bal"), []byte(defaultTestSource), 0o644); err != nil {
+		t.Fatalf("write default module test file: %v", err)
+	}
+
+	submodDir := filepath.Join(dir, "modules", "submod")
+	submodTestsDir := filepath.Join(submodDir, "tests")
+	if err := os.MkdirAll(submodTestsDir, 0o755); err != nil {
+		t.Fatalf("mkdir modules/submod/tests: %v", err)
+	}
+	if err := os.WriteFile(filepath.Join(submodDir, "lib.bal"),
+		[]byte("public function double(int x) returns int {\n    return x * 2;\n}\n"), 0o644); err != nil {
+		t.Fatalf("write modules/submod/lib.bal: %v", err)
+	}
+	submodTestSource := `import ballerina/test;
+
+@test:Config {}
+function testSubmodule() {
+    test:assertEquals(double(2), 4);
+}
+`
+	if err := os.WriteFile(filepath.Join(submodTestsDir, "lib_test.bal"), []byte(submodTestSource), 0o644); err != nil {
+		t.Fatalf("write modules/submod/tests/lib_test.bal: %v", err)
+	}
+
+	return dir
+}
+
+func TestTestCommand_MultiModulePackage_RunsAllModules(t *testing.T) {
+	dir := writeMultiModuleFixture(t)
+
+	stdout, cobraStdout, stderr, err := executeTestCommand(t, dir)
+	if err != nil {
+		t.Fatalf("expected success, got error: %v\nstdout: %s\nstderr: %s", err, stdout, stderr)
+	}
+	if !strings.Contains(cobraStdout, "multimodpkg.submod") {
+		t.Errorf("expected a header naming the submodule, got: %s", cobraStdout)
+	}
+	if !strings.Contains(stdout, "[pass] testDefaultModule") {
+		t.Errorf("expected the default module's test to run, got: %s", stdout)
+	}
+	if !strings.Contains(stdout, "[pass] testSubmodule") {
+		t.Errorf("expected the submodule's test to run — this is the bug this test guards against, got: %s", stdout)
+	}
+}
+
+// The tests below cover skip-cascading, data-provider edge cases, and
+// rerun-failed edge cases — all scenarios that genuinely require a test/hook
+// failure to appear in the report. corpus/bal/library/test-framework can't
+// verify these: ballerina/test's own formatFailedError unconditionally
+// appends a trailing tabs-only line to any failure message, which the
+// corpus harness's @output annotations can never represent (they strip
+// trailing whitespace when parsing) — confirmed via a standalone repro, not
+// just for diff-formatted assertEquals failures. See TODO.md's "Corpus
+// `@output` annotations can't represent trailing-whitespace-only lines"
+// entry. Plain Go string/count comparisons here have no such limitation.
+
+// The 4 skip-cascade scenarios (dependsOn, beforeEach, beforeSuite,
+// beforeGroups failures) previously lived here as substring/count
+// assertions. They now live in test_golden_test.go
+// (TestTestCommand_Golden_Skip*), verified against full-fidelity golden
+// output files instead — see that file's runGoldenScenario doc comment for
+// why a golden-file harness can assert on the exact failure text
+// (including report.bal's trailing-tabs-only lines) where corpus's
+// @output annotations structurally cannot.
+
+// TestTestCommand_DataProvider_ArgMismatchDoesNotCrash documents a confirmed,
+// real bug (see TODO.md's "invokeFunction/InvokeFunctionValue don't validate
+// argument types before binding" entry): a data provider whose values don't
+// match its test function's actual parameter types crashes the *process*
+// with a raw Go panic (`interface conversion: values.BalValue is int64, not
+// string`) that escapes even `trap` — confirmed via
+// runtime/internal/exec/executor.go#panicValueToErrorValue, which by design
+// only converts `*values.Error` panics and deliberately re-panics anything
+// else as "an unrecoverable interpreter issue". This is a real crash a user
+// could hit with an ordinary data-provider authoring mistake, not just a
+// missing nice-to-have error message.
+//
+// Run via subprocess (like testglue's TestGenerateSource_CompilesAndRuns)
+// rather than executeTestCommand's in-process call: the panic is real and
+// unrecovered, and letting it propagate in-process would crash this whole
+// test binary and take every other test in the package down with it.
+func TestTestCommand_DataProvider_ArgMismatchDoesNotCrash(t *testing.T) {
+	dir := writeTestFixture(t, "ddmismatchmod", `import ballerina/test;
+
+// Returns string tuples, but the test function expects ints — a genuine
+// type mismatch between the data provider and its test, only detectable at
+// runtime (both sides compile fine on their own).
+function mismatchedDataSet() returns map<[string, string]> {
+    return {"one": ["not", "numbers"]};
+}
+
+@test:Config {
+    dataProvider: mismatchedDataSet
+}
+function testMismatched(int a, int b) {
+    int sum = a + b;
+    test:assertTrue(sum >= 0);
+}
+`)
+
+	cmd := exec.Command("go", "run", ".", "test", dir)
+	out, err := cmd.CombinedOutput()
+
+	// TODO.md tracks this as a confirmed bug to fix upstream (runtime/exec,
+	// out of this team's scope) — once InvokeFunctionValue validates
+	// argument types and raises a proper *values.Error instead of a raw Go
+	// panic, this process will exit normally (non-zero, a reported test
+	// failure) instead of crashing, and this assertion should be flipped.
+	if err == nil {
+		t.Errorf("expected the process to exit non-zero, got success. output:\n%s", out)
+	}
+	if !strings.Contains(string(out), "panic:") {
+		t.Logf("bug may already be fixed — process exited non-zero without the known panic signature. output:\n%s", out)
+	}
+}
+
+// The data-provider single-failure and rerun-failed edge-case scenarios
+// (single sub-case failure, rerun-failed with a data provider, no prior
+// run, invalid JSON, wrong module key) previously lived here as
+// substring/count assertions. They now live in test_golden_test.go
+// (TestTestCommand_Golden_DataProviderSingleFailureOthersStillRun,
+// _RerunFailed*), verified against full-fidelity golden output files
+// instead — see runGoldenScenario's doc comment for why.
+
+func TestTestCommand_TestReport_NotGeneratedWithoutFlag(t *testing.T) {
+	dir := writeTestFixture(t, "noreportmod", `import ballerina/test;
+
+@test:Config {}
+function testOne() {
+    test:assertTrue(true);
+}
+`)
+	if _, _, _, err := executeTestCommand(t, dir); err != nil {
+		t.Fatalf("expected success: %v", err)
+	}
+	if _, err := os.Stat(filepath.Join(dir, "target", "report", "test_results.json")); !os.IsNotExist(err) {
+		t.Errorf("expected no test_results.json without --test-report, stat error: %v", err)
+	}
+}
+
+func TestTestCommand_TestReport_SinglePackage(t *testing.T) {
+	dir := writeTestFixture(t, "reportsinglemod", `import ballerina/test;
+
+@test:Config {}
+function testPass() {
+    test:assertTrue(true);
+}
+
+@test:Config {}
+function testFail() {
+    test:assertTrue(false, "boom");
+}
+`)
+	stdout, cobraStdout, _, err := executeTestCommand(t, dir, "--test-report")
+	if err == nil {
+		t.Fatalf("expected failure since one test fails. stdout: %s", stdout)
+	}
+	if !strings.Contains(cobraStdout, "Generating Test Report") {
+		t.Errorf("expected the 'Generating Test Report' message, got: %s", cobraStdout)
+	}
+
+	data, readErr := os.ReadFile(filepath.Join(dir, "target", "report", "test_results.json"))
+	if readErr != nil {
+		t.Fatalf("expected test_results.json to exist: %v", readErr)
+	}
+	var report packageTestResult
+	if err := json.Unmarshal(data, &report); err != nil {
+		t.Fatalf("test_results.json is not valid JSON: %v\ncontent: %s", err, data)
+	}
+	if report.ProjectName != "reportsinglemod" {
+		t.Errorf("expected projectName 'reportsinglemod', got %q", report.ProjectName)
+	}
+	if report.TotalTests != 2 || report.Passed != 1 || report.Failed != 1 || report.Skipped != 0 {
+		t.Errorf("expected 2 total/1 passed/1 failed/0 skipped, got %+v", report)
+	}
+	if len(report.ModuleStatus) != 1 || report.ModuleStatus[0].Name != "reportsinglemod" {
+		t.Errorf("expected exactly one module status entry named 'reportsinglemod', got %+v", report.ModuleStatus)
+	}
+}
+
+func TestTestCommand_TestReport_MultiModulePackage(t *testing.T) {
+	dir := writeMultiModuleFixture(t)
+
+	if _, cobraStdout, stderr, err := executeTestCommand(t, dir, "--test-report"); err != nil {
+		t.Fatalf("expected success: %v\ncobraStdout: %s\nstderr: %s", err, cobraStdout, stderr)
+	}
+
+	data, readErr := os.ReadFile(filepath.Join(dir, "target", "report", "test_results.json"))
+	if readErr != nil {
+		t.Fatalf("expected test_results.json to exist: %v", readErr)
+	}
+	var report packageTestResult
+	if err := json.Unmarshal(data, &report); err != nil {
+		t.Fatalf("test_results.json is not valid JSON: %v\ncontent: %s", err, data)
+	}
+	if report.TotalTests != 2 || report.Passed != 2 {
+		t.Errorf("expected 2 total/2 passed across both modules, got %+v", report)
+	}
+	if len(report.ModuleStatus) != 2 {
+		t.Fatalf("expected one module status entry per module, got %+v", report.ModuleStatus)
+	}
+	if report.ModuleStatus[0].Name != "multimodpkg" || report.ModuleStatus[1].Name != "multimodpkg.submod" {
+		t.Errorf("expected module status entries for both the default module and the submodule, got %+v", report.ModuleStatus)
+	}
+}
+
+func TestTestCommand_TestReport_Workspace(t *testing.T) {
+	root, _, _ := writeWorkspaceFixture(t)
+
+	if _, cobraStdout, _, err := executeTestCommand(t, root, "--test-report"); err == nil {
+		t.Fatalf("expected failure since one member fails. cobraStdout: %s", cobraStdout)
+	}
+
+	data, readErr := os.ReadFile(filepath.Join(root, "target", "report", "test_results.json"))
+	if readErr != nil {
+		t.Fatalf("expected a workspace-level test_results.json to exist: %v", readErr)
+	}
+	var report workspaceTestReport
+	if err := json.Unmarshal(data, &report); err != nil {
+		t.Fatalf("test_results.json is not valid JSON: %v\ncontent: %s", err, data)
+	}
+	if report.WorkspaceName == "" {
+		t.Errorf("expected a non-empty workspaceName, got %+v", report)
+	}
+	if report.TotalTests != 2 || report.Passed != 1 || report.Failed != 1 {
+		t.Errorf("expected 2 total/1 passed/1 failed across both members, got %+v", report)
+	}
+	if len(report.Packages) != 2 {
+		t.Fatalf("expected both members in the aggregated report, got %+v", report.Packages)
+	}
+
+	for _, member := range []string{"passing", "failing"} {
+		if _, err := os.Stat(filepath.Join(root, member, "target", "report", "test_results.json")); !os.IsNotExist(err) {
+			t.Errorf("expected no per-member test_results.json for %q (only the workspace-level one), stat error: %v",
+				member, err)
+		}
+	}
+}
+
+// TestTestCommand_ModuleInitFailure locks in a real behavioral difference
+// from jballerina found during the 2026-09-16 audit (TODO.md item #31):
+// jballerina evaluates a module-level variable's initializer lazily, so
+// `int a = 1/0;` only panics the first time something actually reads `a` —
+// if that's inside a test function, it surfaces as an ordinary per-test
+// failure (`[fail] testFunc:`, with the DivisionByZero error's own stack
+// trace, "0 passing/1 failing"). This Go port evaluates module-level
+// variables eagerly as part of runtime.Init (called once per module before
+// any test runs), so the same source fails the whole run at load time —
+// before any test framework code (registration, startSuite, the console
+// report) ever runs. Confirmed this is a clean, caught error (not a raw Go
+// panic) via runTestsForModule's existing `if err := rt.Init(...); err !=
+// nil` handling — this test exists to prove that stays true, not to make
+// the two ports match (that would require lazy module-variable
+// initialization semantics, a much larger, unrelated change).
+func TestTestCommand_ModuleInitFailure(t *testing.T) {
+	dir := writeTestFixture(t, "initfailmod", `import ballerina/test;
+
+int a = 1 / 0;
+
+@test:Config {}
+function testFunc() {
+    test:assertEquals(a, 0);
+}
+`)
+	stdout, _, cobraStderr, err := executeTestCommand(t, dir)
+	if err == nil {
+		t.Fatalf("expected a module-init failure to fail the command. stdout: %s", stdout)
+	}
+	if !strings.Contains(cobraStderr, "divide by zero") {
+		t.Errorf("expected a clear divide-by-zero error, got stdout: %s\ncobraStderr: %s", stdout, cobraStderr)
+	}
+	if strings.Contains(stdout, "passing") || strings.Contains(stdout, "failing") {
+		t.Errorf("no test report should print at all — init failure aborts before any test runs, got: %s", stdout)
+	}
+}
+
+// TestTestCommand_SourcelessDefaultModule_RunsSubmoduleTests closes TODO.md
+// item #32 (2026-09-16 audit): a package whose default module has NO source
+// file at all — not even main.bal, just Ballerina.toml — and whose only
+// content lives in two submodules that themselves have only test files
+// (mirrors jballerina's SourcelessTestExecutionTests). Confirmed via a real
+// repro before writing this that this already compiles and runs correctly
+// (no load error from the missing main.bal, no spurious "No tests found"
+// for the sourceless default module — it's simply absent from
+// pkg.Modules() entirely, so the multi-module loop never sees it).
+func TestTestCommand_SourcelessDefaultModule_RunsSubmoduleTests(t *testing.T) {
+	dir := t.TempDir()
+	toml := "[package]\norg = \"testorg\"\nname = \"sourcelessmods\"\nversion = \"0.1.0\"\n"
+	if err := os.WriteFile(filepath.Join(dir, "Ballerina.toml"), []byte(toml), 0o644); err != nil {
+		t.Fatalf("write Ballerina.toml: %v", err)
+	}
+
+	for _, mod := range []struct{ name, testFn string }{
+		{"module1", "test1"},
+		{"module2", "test2"},
+	} {
+		testsDir := filepath.Join(dir, "modules", mod.name, "tests")
+		if err := os.MkdirAll(testsDir, 0o755); err != nil {
+			t.Fatalf("mkdir modules/%s/tests: %v", mod.name, err)
+		}
+		source := "import ballerina/test;\n\n@test:Config {}\nfunction " + mod.testFn + "() {\n" +
+			"    test:assertTrue(true);\n}\n"
+		if err := os.WriteFile(filepath.Join(testsDir, mod.name+"_test.bal"), []byte(source), 0o644); err != nil {
+			t.Fatalf("write modules/%s test file: %v", mod.name, err)
+		}
+	}
+
+	stdout, cobraStdout, stderr, err := executeTestCommand(t, dir)
+	if err != nil {
+		t.Fatalf("expected success, got error: %v\nstdout: %s\nstderr: %s", err, stdout, stderr)
+	}
+	if !strings.Contains(cobraStdout, "sourcelessmods.module1") || !strings.Contains(cobraStdout, "sourcelessmods.module2") {
+		t.Errorf("expected headers for both submodules, got: %s", cobraStdout)
+	}
+	if !strings.Contains(stdout, "[pass] test1") || !strings.Contains(stdout, "[pass] test2") {
+		t.Errorf("expected both submodules' tests to run, got: %s", stdout)
+	}
+}
+
+// TestTestCommand_ModuleQualifiedTestsFilter locks in a real bug fix found
+// while closing out the lower-priority items from the 2026-09-16 audit:
+// `--tests <package>.<module>:<name>` (the fully-qualified form) never
+// matched anything, because filter.bal#getFullModuleName re-concatenated
+// the package name onto testOptions.getModuleName() — which is already
+// fully-qualified in this port's design (cli/cmd/test.go always passes
+// module.ModuleName().String(), e.g. "pkg.submod", not a bare module-name
+// part like jballerina's own TestOptions stores) — producing a doubled
+// "pkg.pkg.submod" that never matched the filter the user actually typed.
+// Confirmed via a real repro before fixing; this test covers both the
+// bare-name (unqualified) and fully-qualified forms so a regression in
+// either direction would be caught.
+func TestTestCommand_ModuleQualifiedTestsFilter(t *testing.T) {
+	dir := t.TempDir()
+	toml := "[package]\norg = \"testorg\"\nname = \"modquantestmod\"\nversion = \"0.1.0\"\n"
+	if err := os.WriteFile(filepath.Join(dir, "Ballerina.toml"), []byte(toml), 0o644); err != nil {
+		t.Fatalf("write Ballerina.toml: %v", err)
+	}
+	if err := os.WriteFile(filepath.Join(dir, "main.bal"), []byte("public function main() {\n}\n"), 0o644); err != nil {
+		t.Fatalf("write main.bal: %v", err)
+	}
+	submodTestsDir := filepath.Join(dir, "modules", "submod", "tests")
+	if err := os.MkdirAll(submodTestsDir, 0o755); err != nil {
+		t.Fatalf("mkdir modules/submod/tests: %v", err)
+	}
+	submodSource := `import ballerina/test;
+
+@test:Config {}
+function testInSubmod() {
+    test:assertTrue(true);
+}
+`
+	if err := os.WriteFile(filepath.Join(submodTestsDir, "submod_test.bal"), []byte(submodSource), 0o644); err != nil {
+		t.Fatalf("write modules/submod/tests/submod_test.bal: %v", err)
+	}
+
+	for _, filter := range []string{"testInSubmod", "modquantestmod.submod:testInSubmod"} {
+		stdout, _, stderr, err := executeTestCommand(t, dir, "--tests", filter)
+		if err != nil {
+			t.Fatalf("--tests %q: expected success, got error: %v\nstdout: %s\nstderr: %s", filter, err, stdout, stderr)
+		}
+		if !strings.Contains(stdout, "[pass] testInSubmod") {
+			t.Errorf("--tests %q: expected testInSubmod to run, got: %s", filter, stdout)
+		}
 	}
 }

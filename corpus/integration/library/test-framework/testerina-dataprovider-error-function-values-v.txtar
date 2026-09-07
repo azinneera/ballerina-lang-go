@@ -1,0 +1,13 @@
+-- stdout --
+		[pass] testErrorData#foo
+		[pass] testFunctionData#even
+		[pass] testFunctionData#positive
+
+
+		3 passing
+		0 failing
+		0 skipped
+
+		Test execution time : <DURATION>s
+exitCode: 0
+-- stderr --

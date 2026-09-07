@@ -1,0 +1,4 @@
+-- stdout --
+error: Test [testDependentDisabledFunc] depends on function [testDisabledFunc], but it is either disabled or not included.
+exitCode: 1
+-- stderr --
