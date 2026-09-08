@@ -1234,11 +1234,30 @@ func generateMultipleWaitAction(ctx context, curBB *bir.BIRBasicBlock, action *a
 
 func typedescExpression(ctx context, curBB *bir.BIRBasicBlock, expr *ast.BLangTypedescExpr) (expressionEffect, bool) {
 	resultOperand := ctx.addTempVar(expr.GetDeterminedType())
-	td := values.NewTypeDesc(expr.Constraint, expr.AnnotationValues)
+	td := newTypeDescValue(ctx, expr.Constraint, expr.GetTypeDescriptor())
 	curBB.Instructions = append(curBB.Instructions, bir.NewConstantLoad(resultOperand, td, ctx.function().loc(expr.GetPosition())))
 	return expressionEffect{result: resultOperand,
 		block: curBB,
 	}, true
+}
+
+// newTypeDescValue builds the runtime typedesc for constraint, carrying the
+// annotations the compiler environment holds for the type it denotes. Only a
+// reference to a named type can carry annotations.
+func newTypeDescValue(ctx context, constraint semtypes.SemType, typeDesc ast.TypeDescriptor) *values.TypeDesc {
+	udt, ok := typeDesc.(*ast.BLangUserDefinedType)
+	if !ok || !ast.SymbolIsSet(udt) {
+		return values.NewTypeDesc(constraint, nil)
+	}
+	return newTypeDescValueForSymbol(ctx, constraint, udt.Symbol())
+}
+
+func newTypeDescValueForSymbol(ctx context, constraint semtypes.SemType, symRef model.SymbolRef) *values.TypeDesc {
+	return values.NewTypeDescWithFieldAnnotations(
+		constraint,
+		ctx.compilerContext().SymbolAnnotationValues(symRef),
+		ctx.compilerContext().RecordFieldAnnotationValues(symRef),
+	)
 }
 
 func annotAccessExpression(ctx context, curBB *bir.BIRBasicBlock, expr *ast.BLangAnnotAccessExpr) (expressionEffect, bool) {
@@ -2290,7 +2309,7 @@ func simpleVariableReference(ctx context, curBB *bir.BIRBasicBlock, expr *ast.BL
 	sym := ctx.getSymbol(symRef)
 	if sym.Kind() == model.SymbolKindType {
 		resultOperand := ctx.addTempVar(expr.GetDeterminedType())
-		td := values.NewTypeDesc(ctx.symbolType(symRef), ctx.compilerContext().SymbolAnnotationValues(symRef))
+		td := newTypeDescValueForSymbol(ctx, ctx.symbolType(symRef), symRef)
 		curBB.Instructions = append(curBB.Instructions, bir.NewConstantLoad(resultOperand, td, ctx.function().loc(expr.GetPosition())))
 		return expressionEffect{result: resultOperand,
 			block: curBB,

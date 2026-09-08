@@ -34,21 +34,39 @@ type Function struct {
 	ParentFrame any // *exec.Frame at runtime, nil for non-closures
 }
 
-// TypeDesc is the runtime representation of a typedesc value — a thin wrapper
-// around a semtype.
+// TypeDesc is the runtime representation of a typedesc value: the semtype it
+// denotes together with the runtime-visible annotations of that type.
 type TypeDesc struct {
 	Type        semtypes.SemType
 	Annotations AnnotationValues
+	// FieldAnnotations holds the runtime-visible annotations attached to the
+	// individual fields of a record type, keyed by field name. Fields without
+	// annotations have no entry.
+	FieldAnnotations FieldAnnotationValues
 }
 
 // NewTypeDesc returns a fully initialized TypeDesc.
 func NewTypeDesc(ty semtypes.SemType, annotations AnnotationValues) *TypeDesc {
+	return NewTypeDescWithFieldAnnotations(ty, annotations, nil)
+}
+
+// NewTypeDescWithFieldAnnotations returns a fully initialized TypeDesc carrying
+// per-record-field annotations.
+func NewTypeDescWithFieldAnnotations(
+	ty semtypes.SemType,
+	annotations AnnotationValues,
+	fieldAnnotations FieldAnnotationValues,
+) *TypeDesc {
 	if annotations == nil {
 		annotations = NewAnnotationValues()
 	}
+	if fieldAnnotations == nil {
+		fieldAnnotations = NewFieldAnnotationValues()
+	}
 	return &TypeDesc{
-		Type:        ty,
-		Annotations: annotations,
+		Type:             ty,
+		Annotations:      annotations,
+		FieldAnnotations: fieldAnnotations,
 	}
 }
 
