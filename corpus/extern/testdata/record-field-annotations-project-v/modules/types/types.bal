@@ -30,3 +30,7 @@ public type Audited record {|
     @fieldMeta {name: "imported-createdAt"}
     string createdAt;
 |};
+
+// An alias of a record is a plain type symbol, not a record symbol, so its
+// field annotations travel through the symbol pool on a different path.
+public type PersonAlias Person;

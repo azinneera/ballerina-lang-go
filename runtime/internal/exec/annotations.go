@@ -36,34 +36,39 @@ func dereferenceAnnotationValue(ctx *extern.Context, value values.AnnotationValu
 	return value, ok
 }
 
+// resolveAnnotationValues dereferences the runtime-valued entries of
+// annotations. An entry whose value cannot be loaded is left out and the second
+// return is false; every other entry is still returned.
 func resolveAnnotationValues(ctx *extern.Context, annotations values.AnnotationValues) (values.AnnotationValues, bool) {
 	resolved := values.NewAnnotationValues()
+	complete := true
 	for key, value := range annotations {
 		value, ok := dereferenceAnnotationValue(ctx, value)
 		if !ok {
-			return values.NewAnnotationValues(), false
+			complete = false
+			continue
 		}
 		resolved[key] = value
 	}
-	return resolved, true
+	return resolved, complete
 }
 
 // TypeAnnotations resolves the runtime-visible annotations of the type td
 // denotes: those attached to the type itself and those attached to each of its
 // record fields. The second return is false if a runtime annotation value could
-// not be loaded.
+// not be loaded; that value is left out, and everything that did load is still
+// returned, so one broken field does not hide the others.
 func TypeAnnotations(ctx *extern.Context, td *values.TypeDesc) (extern.TypeAnnotations, bool) {
-	annotations, ok := resolveAnnotationValues(ctx, td.Annotations)
-	if !ok {
-		return extern.TypeAnnotations{}, false
-	}
+	annotations, complete := resolveAnnotationValues(ctx, td.Annotations)
 	fields := make(map[string]values.AnnotationValues, len(td.FieldAnnotations))
 	for field, fieldAnnotations := range td.FieldAnnotations {
 		resolved, ok := resolveAnnotationValues(ctx, fieldAnnotations)
 		if !ok {
-			return extern.TypeAnnotations{}, false
+			complete = false
 		}
-		fields[field] = resolved
+		if len(resolved) > 0 {
+			fields[field] = resolved
+		}
 	}
-	return extern.TypeAnnotations{Annotations: annotations, Fields: fields}, true
+	return extern.TypeAnnotations{Annotations: annotations, Fields: fields}, complete
 }

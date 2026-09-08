@@ -148,7 +148,9 @@ func (c *Context) ObjectAnnotations(obj *values.Object) (values.AnnotationValues
 }
 
 // TypeAnnotations returns the runtime-visible annotations of the type td
-// denotes, including the annotations on each field of a record type.
+// denotes, including the annotations on each field of a record type. The bool
+// is false if some annotation value could not be loaded; the result still holds
+// every value that could.
 func (c *Context) TypeAnnotations(td *values.TypeDesc) (TypeAnnotations, bool) {
 	return c.Env.metadata.TypeAnnotations(c, td)
 }

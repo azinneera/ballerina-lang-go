@@ -1064,7 +1064,8 @@ func TestRecordFieldAnnotationsSymbolPoolRoundtrip(t *testing.T) {
 	rt.Listen()
 	<-rt.ExitStatus
 
-	const expected = "name\nimported-name\n<absent>\ncreatedAt,note\nimported-createdAt\n"
+	const expected = "name\nimported-name\n<absent>\ncreatedAt,note\nimported-createdAt\n" +
+		"imported-name\nname\nimported-name\n"
 	if got := pal.Stdout(); got != expected {
 		t.Errorf("expected %q, got %q", expected, got)
 	}

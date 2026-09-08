@@ -34,8 +34,8 @@ type Function struct {
 	ParentFrame any // *exec.Frame at runtime, nil for non-closures
 }
 
-// TypeDesc is the runtime representation of a typedesc value — a thin wrapper
-// around a semtype.
+// TypeDesc is the runtime representation of a typedesc value: the semtype it
+// denotes together with the runtime-visible annotations of that type.
 type TypeDesc struct {
 	Type        semtypes.SemType
 	Annotations AnnotationValues

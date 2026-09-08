@@ -25,6 +25,14 @@ type LocalAudited record {|
     string note;
 |};
 
+// Including an imported alias of a record inherits the aliased record's field
+// annotations, which the alias carries in its own symbol pool entry.
+type LocalFromAlias record {|
+    *types:PersonAlias;
+|};
+
+type LocalAlias types:PersonAlias;
+
 type Meta record {|
     string name;
 |};
@@ -37,6 +45,9 @@ public function main() {
     io:println(fieldMetaName(types:Person, "age")); //@output <absent>
     io:println(annotatedFields(LocalAudited)); //@output createdAt,note
     io:println(fieldMetaName(LocalAudited, "createdAt")); //@output imported-createdAt
+    io:println(fieldMetaName(types:PersonAlias, "name")); //@output imported-name
+    io:println(annotatedFields(LocalFromAlias)); //@output name
+    io:println(fieldMetaName(LocalAlias, "name")); //@output imported-name
 }
 
 function annotatedFields(typedesc<anydata> td) returns string = external;
