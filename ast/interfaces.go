@@ -158,6 +158,14 @@ type MappingField interface {
 	IsKeyValueField() bool
 }
 
+// Invocable represents a function, method, remote method, or client resource call.
+type Invocable interface {
+	BLangActionOrExpression
+	ResolvedSymbol() model.SymbolRef
+	Receiver() BLangExpression
+	CallArgs() []BLangExpression
+}
+
 type GroupExpressionNode interface {
 	BLangExpression
 	GetExpression() BLangExpression
@@ -221,19 +229,14 @@ type InputClauseNode interface {
 	IsDeclaredWithVar() bool
 }
 
-type FromClauseNode interface {
-	InputClauseNode
-}
+type FromClauseNode = InputClauseNode
 
 type SelectClauseNode interface {
 	Node
 	GetExpression() BLangExpression
 }
 
-type CollectClauseNode interface {
-	Node
-	GetExpression() BLangExpression
-}
+type CollectClauseNode = SelectClauseNode
 
 type DoClauseNode interface {
 	Node

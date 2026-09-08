@@ -59,7 +59,8 @@ func walkStatement(cx *functionContext, node ast.StatementNode) desugaredNode[as
 	case *ast.BLangXMLNS:
 		return desugaredNode[ast.StatementNode]{replacementNode: stmt}
 	default:
-		panic("unexpected statement type")
+		cx.internalError("unexpected statement type", node.GetPosition())
+		return desugaredNode[ast.StatementNode]{replacementNode: node}
 	}
 }
 
@@ -369,7 +370,7 @@ func desugarForEachOnList(cx *functionContext, collection ast.BLangActionOrExpre
 	collExpr := collResult.replacementNode
 
 	collType := collExpr.GetDeterminedType()
-	collName, collVarSymbol := cx.addDesugardSymbol(collType, model.SymbolKindVariable, false, basePos)
+	collName, collVarSymbol := cx.addDesugardSymbol(collType, model.SymbolKindVariable, basePos)
 	collVarName := newIdentifier(collName)
 	collVar := &ast.BLangVariable{Name: collVarName}
 	collVar.Name.SetDeterminedType(semtypes.Never)
@@ -394,7 +395,7 @@ func desugarForEachOnList(cx *functionContext, collection ast.BLangActionOrExpre
 	}
 	zeroLiteral.SetDeterminedType(semtypes.Int)
 
-	idxName, idxVarSymbol := cx.addDesugardSymbol(semtypes.Int, model.SymbolKindVariable, false, basePos)
+	idxName, idxVarSymbol := cx.addDesugardSymbol(semtypes.Int, model.SymbolKindVariable, basePos)
 	idxVarName := newIdentifier(idxName)
 	idxVar := &ast.BLangVariable{Name: idxVarName}
 	idxVar.Name.SetDeterminedType(semtypes.Never)
@@ -413,7 +414,7 @@ func desugarForEachOnList(cx *functionContext, collection ast.BLangActionOrExpre
 	// Step 3: length variable ($desugar$M = length(collVar))
 	lengthInvocation := createLengthInvocation(cx, collVarRef)
 
-	lenName, lenVarSymbol := cx.addDesugardSymbol(semtypes.Int, model.SymbolKindVariable, false, basePos)
+	lenName, lenVarSymbol := cx.addDesugardSymbol(semtypes.Int, model.SymbolKindVariable, basePos)
 	lenVarName := newIdentifier(lenName)
 	lenVar := &ast.BLangVariable{Name: lenVarName}
 	lenVar.Name.SetDeterminedType(semtypes.Never)
@@ -483,17 +484,17 @@ func desugarForEachOnList(cx *functionContext, collection ast.BLangActionOrExpre
 
 func createLengthInvocation(cx *functionContext, collection ast.BLangExpression) *ast.BLangInvocation {
 	pkgName := "lang.array"
+	basePos := collection.GetPosition()
 	space, ok := cx.getImportedSymbolSpace(pkgName)
 	if !ok {
-		cx.internalError(pkgName + " symbol space not found")
+		cx.internalError(pkgName+" symbol space not found", basePos)
 		return nil
 	}
 	symbolRef, ok := space.GetSymbol("length")
 	if !ok {
-		cx.internalError(pkgName + ":length symbol not found")
+		cx.internalError(pkgName+":length symbol not found", basePos)
 		return nil
 	}
-	basePos := collection.GetPosition()
 
 	orgIdent := newIdentifier("ballerina")
 	pkgLangIdent := ast.BLangIdentifier{Value: "lang"}
@@ -532,7 +533,7 @@ func desugarForEachOnMap(cx *functionContext, collection ast.BLangActionOrExpres
 	collExpr := collResult.replacementNode
 
 	collType := collExpr.GetDeterminedType()
-	collName, collVarSymbol := cx.addDesugardSymbol(collType, model.SymbolKindVariable, false, basePos)
+	collName, collVarSymbol := cx.addDesugardSymbol(collType, model.SymbolKindVariable, basePos)
 	collVarName := newIdentifier(collName)
 	collVar := &ast.BLangVariable{Name: collVarName}
 	collVar.Name.SetDeterminedType(semtypes.Never)
@@ -552,7 +553,7 @@ func desugarForEachOnMap(cx *functionContext, collection ast.BLangActionOrExpres
 	keysInvocation := createKeysInvocation(cx, collVarRef)
 	keysType := keysInvocation.GetDeterminedType()
 
-	keysName, keysVarSymbol := cx.addDesugardSymbol(keysType, model.SymbolKindVariable, false, basePos)
+	keysName, keysVarSymbol := cx.addDesugardSymbol(keysType, model.SymbolKindVariable, basePos)
 	keysVarName := newIdentifier(keysName)
 	keysVar := &ast.BLangVariable{Name: keysVarName}
 	keysVar.Name.SetDeterminedType(semtypes.Never)
@@ -577,7 +578,7 @@ func desugarForEachOnMap(cx *functionContext, collection ast.BLangActionOrExpres
 	}
 	zeroLiteral.SetDeterminedType(semtypes.Int)
 
-	idxName, idxVarSymbol := cx.addDesugardSymbol(semtypes.Int, model.SymbolKindVariable, false, basePos)
+	idxName, idxVarSymbol := cx.addDesugardSymbol(semtypes.Int, model.SymbolKindVariable, basePos)
 	idxVarName := newIdentifier(idxName)
 	idxVar := &ast.BLangVariable{Name: idxVarName}
 	idxVar.Name.SetDeterminedType(semtypes.Never)
@@ -596,7 +597,7 @@ func desugarForEachOnMap(cx *functionContext, collection ast.BLangActionOrExpres
 	// Step 4: length variable ($desugar$N = lang.array:length(keysVar))
 	lengthInvocation := createLengthInvocation(cx, keysVarRef)
 
-	lenName, lenVarSymbol := cx.addDesugardSymbol(semtypes.Int, model.SymbolKindVariable, false, basePos)
+	lenName, lenVarSymbol := cx.addDesugardSymbol(semtypes.Int, model.SymbolKindVariable, basePos)
 	lenVarName := newIdentifier(lenName)
 	lenVar := &ast.BLangVariable{Name: lenVarName}
 	lenVar.Name.SetDeterminedType(semtypes.Never)
@@ -674,12 +675,12 @@ func createKeysInvocation(cx *functionContext, collection ast.BLangExpression) *
 	pkgName := "lang.map"
 	space, ok := cx.getImportedSymbolSpace(pkgName)
 	if !ok {
-		cx.internalError(pkgName + " symbol space not found")
+		cx.internalError(pkgName+" symbol space not found", collection.GetPosition())
 		return nil
 	}
 	symbolRef, ok := space.GetSymbol("keys")
 	if !ok {
-		cx.internalError(pkgName + ":keys symbol not found")
+		cx.internalError(pkgName+":keys symbol not found", collection.GetPosition())
 		return nil
 	}
 	fnSymbol := cx.getSymbol(symbolRef).(model.FunctionSymbol)
@@ -711,7 +712,7 @@ func desugarForEachOnRange(cx *functionContext, rangeExpr *ast.BLangBinaryExpr, 
 	endExpr := endResult.replacementNode
 
 	// Keep loop control separate so the source variable can be declared and captured afresh in each iteration.
-	controlName, controlVarSymbol := cx.addDesugardSymbol(semtypes.Int, model.SymbolKindVariable, false, basePos)
+	controlName, controlVarSymbol := cx.addDesugardSymbol(semtypes.Int, model.SymbolKindVariable, basePos)
 	controlVarName := newIdentifier(controlName)
 	controlVar := &ast.BLangVariable{Name: controlVarName}
 	controlVar.Name.SetDeterminedType(semtypes.Never)
@@ -727,7 +728,7 @@ func desugarForEachOnRange(cx *functionContext, rangeExpr *ast.BLangBinaryExpr, 
 	controlVarRef.SetSymbol(controlVarSymbol)
 	controlVarRef.SetDeterminedType(semtypes.Int)
 
-	endName, endVarSymbol := cx.addDesugardSymbol(semtypes.Int, model.SymbolKindVariable, false, basePos)
+	endName, endVarSymbol := cx.addDesugardSymbol(semtypes.Int, model.SymbolKindVariable, basePos)
 	endVarName := newIdentifier(endName)
 	endVar := &ast.BLangVariable{Name: endVarName}
 	endVar.Name.SetDeterminedType(semtypes.Never)
@@ -837,12 +838,12 @@ func createXMLIteratorInvocation(cx *functionContext, receiver ast.BLangExpressi
 	pkgName := "lang.xml"
 	space, ok := cx.pkgCtx.getImportedSymbolSpace(pkgName)
 	if !ok {
-		cx.pkgCtx.internalError(pkgName + " symbol space not found")
+		cx.pkgCtx.internalError(pkgName+" symbol space not found", receiver.GetPosition())
 		return nil
 	}
 	iteratorRef, ok := space.GetSymbol("iterator")
 	if !ok {
-		cx.pkgCtx.internalError(pkgName + ":iterator symbol not found")
+		cx.pkgCtx.internalError(pkgName+":iterator symbol not found", receiver.GetPosition())
 		return nil
 	}
 	cx.pkgCtx.addImplicitImport(pkgName, ast.BLangImportPackage{
@@ -897,7 +898,7 @@ func createMethodInvocation(cx *functionContext, receiver ast.BLangExpression, m
 	paramList := ld.Define(cx.typeEnv(), argTys, semtypes.ListMutability(semtypes.CellMutabilityNone))
 	retTy := semtypes.FunctionReturnType(tyCtx, fnTy, paramList)
 
-	_, fnSymRef := cx.addDesugardSymbol(fnTy, model.SymbolKindFunction, false, pos)
+	_, fnSymRef := cx.addDesugardSymbol(fnTy, model.SymbolKindFunction, pos)
 
 	inv := &ast.BLangInvocation{}
 	inv.Name = newIdentifier(methodName)
@@ -919,7 +920,7 @@ func desugarForEachOnIterable(cx *functionContext, collection ast.BLangActionOrE
 	collExpr := collResult.replacementNode
 
 	collType := collExpr.GetDeterminedType()
-	collName, collSymbol := cx.addDesugardSymbol(collType, model.SymbolKindVariable, false, basePos)
+	collName, collSymbol := cx.addDesugardSymbol(collType, model.SymbolKindVariable, basePos)
 	collVarName := newIdentifier(collName)
 	collVar := &ast.BLangVariable{Name: collVarName}
 	collVar.Name.SetDeterminedType(semtypes.Never)
@@ -939,7 +940,7 @@ func desugarForEachOnIterable(cx *functionContext, collection ast.BLangActionOrE
 	iteratorInv := createIteratorInvocation(cx, collVarRef, collType, basePos)
 	iteratorType := iteratorInv.GetDeterminedType()
 
-	iterName, iterSymbol := cx.addDesugardSymbol(iteratorType, model.SymbolKindVariable, false, basePos)
+	iterName, iterSymbol := cx.addDesugardSymbol(iteratorType, model.SymbolKindVariable, basePos)
 	iterVarName := newIdentifier(iterName)
 	iterVar := &ast.BLangVariable{Name: iterVarName}
 	iterVar.Name.SetDeterminedType(semtypes.Never)
@@ -966,7 +967,7 @@ func desugarForEachOnIterable(cx *functionContext, collection ast.BLangActionOrE
 	nextInv := createMethodInvocation(cx, iterVarRef, "next", iteratorType, []ast.BLangExpression{}, basePos)
 	nextReturnType := nextInv.GetDeterminedType()
 
-	nextName, nextSymbol := cx.addDesugardSymbol(nextReturnType, model.SymbolKindVariable, false, basePos)
+	nextName, nextSymbol := cx.addDesugardSymbol(nextReturnType, model.SymbolKindVariable, basePos)
 	nextVarName := newIdentifier(nextName)
 	nextVar := &ast.BLangVariable{Name: nextVarName}
 	nextVar.Name.SetDeterminedType(semtypes.Never)

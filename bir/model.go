@@ -241,10 +241,13 @@ const (
 	InstructionKindCall
 	InstructionKindBranch
 	InstructionKindReturn
+	InstructionKindAsyncCall
+	InstructionKindWait
 	InstructionKindFPCall
 	InstructionKindLock
 	InstructionKindUnlock
 	InstructionKindResourceCall
+	InstructionKindAlternateWait
 	InstructionKindMove
 	InstructionKindConstLoad
 	InstructionKindNewStructure
@@ -299,6 +302,7 @@ const (
 	InstructionKindBitwiseComplement
 	InstructionKindPushScope
 	InstructionKindPopScope
+	InstructionKindWaitAll
 )
 
 func BB(number int) BIRBasicBlock {

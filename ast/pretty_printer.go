@@ -110,6 +110,14 @@ func (p *PrettyPrinter) PrintInner(node BLangNode) {
 		p.printRemoteMethodCallAction(t)
 	case *BLangClientResourceAccessAction:
 		p.printClientResourceAccessAction(t)
+	case *BLangStartAction:
+		p.printStartAction(t)
+	case *BLangSingleWaitAction:
+		p.printSingleWaitAction(t)
+	case *BLangAlternateWaitAction:
+		p.printAlternateWaitAction(t)
+	case *BLangMultipleWaitAction:
+		p.printMultipleWaitAction(t)
 	case *BLangNamedArgsExpression:
 		p.printNamedArgsExpression(t)
 	case *BLangDefaultArg:
@@ -133,15 +141,15 @@ func (p *PrettyPrinter) PrintInner(node BLangNode) {
 	case *BLangArrayType:
 		p.printArrayType(t)
 	case *BLangBreak:
-		p.printBreak(t)
+		p.printBreak()
 	case *BLangContinue:
-		p.printContinue(t)
+		p.printContinue()
 	case *BLangAssignment:
 		p.printAssignment(t)
 	case *BLangIndexBasedAccess:
 		p.printIndexBasedAccess(t)
 	case *BLangWildCardBindingPattern:
-		p.printWildCardBindingPattern(t)
+		p.printWildCardBindingPattern()
 	case *BLangCompoundAssignment:
 		p.printCompoundAssignment(t)
 	case *BLangUnionTypeNode:
@@ -239,7 +247,7 @@ func (p *PrettyPrinter) PrintInner(node BLangNode) {
 	case *BLangConstPattern:
 		p.printConstPattern(t)
 	case *BLangWildCardMatchPattern:
-		p.printWildCardMatchPattern(t)
+		p.printWildCardMatchPattern()
 	case *BLangMatchClause:
 		p.printMatchClause(t)
 	case *BLangFunctionType:
@@ -830,6 +838,52 @@ func (p *PrettyPrinter) printClientResourceAccessAction(node *BLangClientResourc
 	p.EndNode()
 }
 
+func (p *PrettyPrinter) printStartAction(node *BLangStartAction) {
+	p.StartNode()
+	p.PrintString("start-action")
+	p.indentLevel++
+	if node.IsIsolated {
+		p.PrintString("isolated")
+	}
+	if node.Call != nil {
+		p.PrintInner(node.Call)
+	}
+	p.indentLevel--
+	p.EndNode()
+}
+
+func (p *PrettyPrinter) printSingleWaitAction(node *BLangSingleWaitAction) {
+	p.StartNode()
+	p.PrintString("single-wait-action")
+	p.indentLevel++
+	p.PrintInner(node.FutureExpr)
+	p.indentLevel--
+	p.EndNode()
+}
+
+func (p *PrettyPrinter) printAlternateWaitAction(node *BLangAlternateWaitAction) {
+	p.StartNode()
+	p.PrintString("alternate-wait-action")
+	p.indentLevel++
+	for _, futureExpr := range node.FutureExprs {
+		p.PrintInner(futureExpr)
+	}
+	p.indentLevel--
+	p.EndNode()
+}
+
+func (p *PrettyPrinter) printMultipleWaitAction(node *BLangMultipleWaitAction) {
+	p.StartNode()
+	p.PrintString("multiple-wait-action")
+	p.indentLevel++
+	for i, futureExpr := range node.FutureExprs {
+		p.PrintString(node.FieldNames[i])
+		p.PrintInner(futureExpr)
+	}
+	p.indentLevel--
+	p.EndNode()
+}
+
 func (p *PrettyPrinter) printRemoteMethodCallAction(node *BLangRemoteMethodCallAction) {
 	p.StartNode()
 	p.PrintString("remote-method-call")
@@ -1353,14 +1407,14 @@ func (p *PrettyPrinter) printConstant(node *BLangVariable) {
 }
 
 // Break statement printer
-func (p *PrettyPrinter) printBreak(node *BLangBreak) {
+func (p *PrettyPrinter) printBreak() {
 	p.StartNode()
 	p.PrintString("break")
 	p.EndNode()
 }
 
 // Continue statement printer
-func (p *PrettyPrinter) printContinue(node *BLangContinue) {
+func (p *PrettyPrinter) printContinue() {
 	p.StartNode()
 	p.PrintString("continue")
 	p.EndNode()
@@ -1490,7 +1544,7 @@ func (p *PrettyPrinter) printMappingKeyValueField(kv *BLangMappingKeyValueField)
 }
 
 // Wildcard binding pattern printer
-func (p *PrettyPrinter) printWildCardBindingPattern(node *BLangWildCardBindingPattern) {
+func (p *PrettyPrinter) printWildCardBindingPattern() {
 	p.StartNode()
 	p.PrintString("wildcard-binding-pattern")
 	p.EndNode()
@@ -1963,6 +2017,8 @@ func (p *PrettyPrinter) printObjectType(node *BLangObjectType) {
 		p.PrintString("isolated")
 	}
 	switch node.NetworkQuals {
+	case ObjectNetworkQualsNone:
+		// No network qualifier to print.
 	case ObjectNetworkQualsClient:
 		p.PrintString("client")
 	case ObjectNetworkQualsService:
@@ -2336,7 +2392,7 @@ func (p *PrettyPrinter) printConstPattern(node *BLangConstPattern) {
 	p.EndNode()
 }
 
-func (p *PrettyPrinter) printWildCardMatchPattern(node *BLangWildCardMatchPattern) {
+func (p *PrettyPrinter) printWildCardMatchPattern() {
 	p.StartNode()
 	p.PrintString("wildcard-match-pattern")
 	p.EndNode()

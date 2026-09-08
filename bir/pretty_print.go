@@ -217,6 +217,14 @@ func (p *PrettyPrinter) PrintInstruction(instruction BIRInstruction) string {
 		return p.PrintLockEnd(instruction)
 	case *ResourceFunctionCall:
 		return p.PrintResourceFunctionCall(instruction)
+	case *StartAction:
+		return p.PrintStartAction(instruction)
+	case *SingleWaitAction:
+		return p.PrintSingleWaitAction(instruction)
+	case *AlternateWaitAction:
+		return p.PrintAlternateWaitAction(instruction)
+	case *MultipleWaitAction:
+		return p.PrintMultipleWaitAction(instruction)
 	case *NewObject:
 		return p.PrintNewObject(instruction)
 	case *NewStream:
@@ -444,32 +452,73 @@ func (p *PrettyPrinter) PrintGoto(g *Goto) string {
 }
 
 func (p *PrettyPrinter) PrintResourceFunctionCall(call *ResourceFunctionCall) string {
-	segs := strings.Builder{}
-	for i, seg := range call.PathSegments {
+	return fmt.Sprintf("%s = %s -> %s;", p.PrintOperand(*call.LhsOp), p.printCallSite(call.CallSite), call.ThenBB.ID.Value())
+}
+
+func (p *PrettyPrinter) PrintStartAction(action *StartAction) string {
+	return fmt.Sprintf("%s = start %s isolated=%t -> %s;", p.PrintOperand(*action.LhsOp), p.printCallSite(action.Call), action.IsIsolated, action.ThenBB.ID.Value())
+}
+
+func (p *PrettyPrinter) PrintSingleWaitAction(action *SingleWaitAction) string {
+	return fmt.Sprintf("%s = wait %s -> %s;", p.PrintOperand(*action.LhsOp), p.PrintOperand(action.Future), action.ThenBB.ID.Value())
+}
+
+func (p *PrettyPrinter) PrintAlternateWaitAction(action *AlternateWaitAction) string {
+	futures := strings.Builder{}
+	for i, future := range action.Futures {
 		if i > 0 {
-			segs.WriteString(",")
+			futures.WriteString(" | ")
 		}
-		segs.WriteString(p.PrintOperand(seg))
+		futures.WriteString(p.PrintOperand(future))
 	}
-	args := strings.Builder{}
-	for i, arg := range call.Args {
+	return fmt.Sprintf("%s = wait %s -> %s;", p.PrintOperand(*action.LhsOp), futures.String(), action.ThenBB.ID.Value())
+}
+
+func (p *PrettyPrinter) PrintMultipleWaitAction(action *MultipleWaitAction) string {
+	fields := strings.Builder{}
+	for i, future := range action.Futures {
 		if i > 0 {
-			args.WriteString(",")
+			fields.WriteString(", ")
 		}
-		args.WriteString(p.PrintOperand(arg))
+		fields.WriteString(action.FieldNames[i])
+		fields.WriteString(": ")
+		fields.WriteString(p.PrintOperand(future))
 	}
-	return fmt.Sprintf("%s = %s->[%s].%s(%s) -> %s;", p.PrintOperand(*call.LhsOp), p.PrintOperand(call.Receiver), segs.String(), call.MethodName, args.String(), call.ThenBB.ID.Value())
+	return fmt.Sprintf("%s = wait {%s} -> %s;", p.PrintOperand(*action.LhsOp), fields.String(), action.ThenBB.ID.Value())
 }
 
 func (p *PrettyPrinter) PrintCall(call *Call) string {
-	args := strings.Builder{}
-	for i, arg := range call.Args {
-		if i > 0 {
-			args.WriteString(",")
+	return fmt.Sprintf("%s = %s -> %s;", p.PrintOperand(*call.LhsOp), p.printCallSite(call.CallSite), call.ThenBB.ID.Value())
+}
+
+func (p *PrettyPrinter) printCallSite(call CallSite) string {
+	switch call.Kind {
+	case CallKindFunction:
+		return fmt.Sprintf("%s(%s)", call.Name.Value(), p.printOperands(call.Args))
+	case CallKindFunctionPointer:
+		name := call.Name.Value()
+		if call.FpOperand != nil {
+			name = p.PrintOperand(*call.FpOperand)
 		}
-		args.WriteString(p.PrintOperand(arg))
+		return fmt.Sprintf("%s(%s)", name, p.printOperands(call.Args))
+	case CallKindMethod:
+		return fmt.Sprintf("%s.%s(%s)", p.PrintOperand(*call.Receiver), call.Name.Value(), p.printOperands(call.Args[1:]))
+	case CallKindResource:
+		return fmt.Sprintf("%s->[%s].%s(%s)", p.PrintOperand(*call.Receiver), p.printOperands(call.PathSegments), call.MethodName, p.printOperands(call.Args))
+	default:
+		panic(fmt.Sprintf("unexpected call kind: %d", call.Kind))
 	}
-	return fmt.Sprintf("%s = %s(%s) -> %s;", p.PrintOperand(*call.LhsOp), call.Name.Value(), args.String(), call.ThenBB.ID.Value())
+}
+
+func (p *PrettyPrinter) printOperands(operands []BIROperand) string {
+	result := strings.Builder{}
+	for i, operand := range operands {
+		if i > 0 {
+			result.WriteString(",")
+		}
+		result.WriteString(p.PrintOperand(operand))
+	}
+	return result.String()
 }
 
 func (p *PrettyPrinter) PrintOperand(operand BIROperand) string {
