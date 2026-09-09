@@ -101,12 +101,12 @@ main() -> nil|error{
     %22 = println(%21) -> bb18;
   }
   bb18 {
-    %23 = ConstantLoad /etc
-    $desugar$0 = %23;
-    %25 = $default$0($desugar$0) -> bb19;
+    %24 = ConstantLoad /etc
+    $desugar$0 = %24;
+    %26 = $default$0($desugar$0) -> bb19;
   }
   bb19 {
-    $desugar$1 = %25;
+    $desugar$1 = %26;
     %28 = newObject $anon/.:Listener
     %29 = %28.init($desugar$0,$desugar$1) -> bb20;
   }
@@ -131,11 +131,11 @@ main() -> nil|error{
     return;
   }
   bb25 {
-    %27 = %30;
+    %23 = %30;
     GOTO bb26;
   }
   bb26 {
-    defaulted = %27;
+    defaulted = %23;
     %34 = defaulted.describe() -> bb27;
   }
   bb27 {

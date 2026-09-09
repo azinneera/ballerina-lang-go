@@ -25,13 +25,14 @@
   (function main () (
     (value-type null))
     (block-function-body
-      (var-def
-        (variable $desugar$0 (expr
-          (invocation $default$0 ()))))
       (expression-stmt
         (invocation io println (
+          (expression-thunk
+          (var-def
+            (variable $desugar$0 (expr
+              (invocation $default$0 ()))))
           (invocation combined (
-            (simple-var-ref $desugar$0))))))
+            (simple-var-ref $desugar$0)))))))
       (expression-stmt
         (invocation io println (
           (invocation combined (

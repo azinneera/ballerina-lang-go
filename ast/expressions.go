@@ -512,7 +512,6 @@ type (
 		bLangNodeBase
 		Key       *BLangMappingKey
 		ValueExpr BLangExpression
-		Readonly  bool
 	}
 
 	BLangMappingConstructorExpr struct {

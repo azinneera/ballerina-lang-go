@@ -128,8 +128,8 @@ main() -> nil{
     %47 = println(%46) -> bb20;
   }
   bb20 {
-    %48 = fp $anon/.:$default$2
-    $desugar$4 = %48;
+    %49 = fp $anon/.:$default$2
+    $desugar$4 = %49;
     typedLambda = lambda;
     %51 = $desugar$4() -> bb21;
   }

@@ -61,13 +61,14 @@
                   (simple-var-ref implementationArg)))))))))
   (function init () ()
     (block-function-body
-      (var-def
-        (variable $desugar$0 (expr
-          (invocation $default$2 ()))))
       (assignment
         (simple-var-ref moduleFunction)
+        (expression-thunk
+        (var-def
+          (variable $desugar$0 (expr
+            (invocation $default$2 ()))))
         (invocation getFunction (
-          (simple-var-ref $desugar$0))))))
+          (simple-var-ref $desugar$0)))))))
   (function getFunction (
     (variable outerArg (type
       (value-type int)) (expr
@@ -97,25 +98,27 @@
         (variable inferred (expr
           (invocation getFunction (
             (simple-var-ref $desugar$0))))))
-      (var-def
-        (variable $desugar$1 (expr
-          (invocation $default$0 ()))))
       (expression-stmt
         (invocation io println (
+          (expression-thunk
+          (var-def
+            (variable $desugar$1 (expr
+              (invocation $default$0 ()))))
           (invocation inferred (
-            (simple-var-ref $desugar$1))))))
+            (simple-var-ref $desugar$1)))))))
       (expression-stmt
         (invocation io println (
           (invocation inferred (
             (literal 11))))))
       (var-def
-        (variable $desugar$2 (expr
-          (invocation $default$2 ()))))
-      (var-def
         (variable grouped (expr
           (group-expr
+            (expression-thunk
+            (var-def
+              (variable $desugar$2 (expr
+                (invocation $default$2 ()))))
             (invocation getFunction (
-              (simple-var-ref $desugar$2)))))))
+              (simple-var-ref $desugar$2))))))))
       (expression-stmt
         (invocation io println (
           (invocation grouped (
@@ -151,13 +154,14 @@
           (invocation create expr:
             (simple-var-ref factory) (
             (simple-var-ref $desugar$4))))))
-      (var-def
-        (variable $desugar$5 (expr
-          (invocation $default$3 ()))))
       (expression-stmt
         (invocation io println (
+          (expression-thunk
+          (var-def
+            (variable $desugar$5 (expr
+              (invocation $default$3 ()))))
           (invocation fromMethod (
-            (simple-var-ref $desugar$5))))))
+            (simple-var-ref $desugar$5)))))))
       (expression-stmt
         (invocation io println (
           (invocation fromMethod (
@@ -183,13 +187,14 @@
           (remote-method-call create expr:
             (simple-var-ref remoteFactory) (
             (simple-var-ref $desugar$6))))))
-      (var-def
-        (variable $desugar$7 (expr
-          (invocation $default$5 ()))))
       (expression-stmt
         (invocation io println (
+          (expression-thunk
+          (var-def
+            (variable $desugar$7 (expr
+              (invocation $default$5 ()))))
           (invocation fromRemoteMethod (
-            (simple-var-ref $desugar$7))))))
+            (simple-var-ref $desugar$7)))))))
       (expression-stmt
         (invocation io println (
           (invocation fromRemoteMethod (
@@ -203,13 +208,14 @@
         (invocation io println (
           (invocation fromRemoteMethodAgain (
             (literal 52))))))
-      (var-def
-        (variable $desugar$8 (expr
-          (invocation $default$0 ()))))
       (expression-stmt
         (invocation io println (
+          (expression-thunk
+          (var-def
+            (variable $desugar$8 (expr
+              (invocation $default$0 ()))))
           (invocation moduleFunction (
-            (simple-var-ref $desugar$8))))))
+            (simple-var-ref $desugar$8)))))))
       (expression-stmt
         (invocation io println (
           (invocation moduleFunction (
@@ -222,13 +228,14 @@
           (user-defined-type DeclaredFunction)) (expr
           (invocation getFunction (
             (simple-var-ref $desugar$9))))))
-      (var-def
-        (variable $desugar$10 (expr
-          (invocation $default$1 ()))))
       (expression-stmt
         (invocation io println (
+          (expression-thunk
+          (var-def
+            (variable $desugar$10 (expr
+              (invocation $default$1 ()))))
           (invocation explicitlyTyped (
-            (simple-var-ref $desugar$10))))))
+            (simple-var-ref $desugar$10)))))))
       (expression-stmt
         (invocation io println (
           (invocation explicitlyTyped (
@@ -272,13 +279,14 @@
               (invocation io println (
                 (literal unexpected))))) (
           (block-stmt
-            (var-def
-              (variable $desugar$13 (expr
-                (invocation $default$0 ()))))
             (expression-stmt
               (invocation io println (
+                (expression-thunk
+                (var-def
+                  (variable $desugar$13 (expr
+                    (invocation $default$0 ()))))
                 (invocation negatedNarrowed (
-                  (simple-var-ref $desugar$13))))))
+                  (simple-var-ref $desugar$13)))))))
             (expression-stmt
               (invocation io println (
                 (invocation negatedNarrowed (

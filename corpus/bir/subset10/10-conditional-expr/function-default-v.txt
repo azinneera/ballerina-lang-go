@@ -80,8 +80,8 @@ main() -> nil{
     %14 = println(%13) -> bb6;
   }
   bb6 {
-    %15 = fp $anon/.:$default$1
-    $desugar$4 = %15;
+    %16 = fp $anon/.:$default$1
+    $desugar$4 = %16;
     %17 = fp $anon/.:$anonFunc$_0
     fn = %17;
     %19 = ConstantLoad 2
