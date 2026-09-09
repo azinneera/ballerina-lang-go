@@ -98,18 +98,22 @@ func validateAddArgs(cmd *cobra.Command, args []string) error {
 	if len(args) == 0 {
 		return addError("module name is not provided")
 	}
-	if len(args) > 1 {
-		return addError("too many arguments")
-	}
-	return nil
+	return requireAtMostOneArg(addError, args)
 }
 
 // runAdd executes the 'add' command: it scaffolds a new module inside the
 // package rooted at the current directory.
-// Java source: io.ballerina.cli.cmd.AddCommand
+// Java source: io.ballerina.cli.cmd.AddCommand — diverges from Java here:
+// Java's AddCommand only checks that Ballerina.toml exists, so it will
+// create modules/<name> at a workspace root too (a workspace's Ballerina.toml
+// has no [package] table, so the resulting module belongs to no package).
+// This port rejects that case explicitly instead of reproducing the bug.
 func runAdd(cmd *cobra.Command, moduleName, template string) error {
-	if _, err := os.Stat(projects.BallerinaTomlFile); err != nil {
+	if info, err := os.Stat(projects.BallerinaTomlFile); err != nil || info.IsDir() {
 		return addError("not a Ballerina project\nYou should run this command inside a Ballerina project.")
+	}
+	if isWorkspaceToml(projects.BallerinaTomlFile) {
+		return addError("cannot add a module at a workspace root\nRun this command inside one of the workspace's member packages.")
 	}
 
 	if err := validateModuleName(moduleName); err != nil {
@@ -153,13 +157,8 @@ func getAddTemplateSource(template addTemplateName) (sourceContent string, err e
 }
 
 // createModule atomically claims modulePath — os.Mkdir (not MkdirAll) fails
-// with fs.ErrExist if another process created it first, instead of silently
-// succeeding on an existing directory — then writes
-// modulePath/<moduleName>.bal. Since this call is the one that created
-// modulePath, it's always safe to remove on a later write failure: it can
-// never belong to a concurrent invocation. modulePath's parent (normally
-// projects.ModulesDir) is derived from modulePath itself rather than
-// hardcoded, so this stays correct for any modulePath a caller passes.
+// with fs.ErrExist if it already exists — then writes
+// modulePath/<moduleName>.bal, removing modulePath again on write failure.
 func createModule(modulePath, moduleName, sourceContent string) error {
 	if err := os.MkdirAll(filepath.Dir(modulePath), 0755); err != nil {
 		return fmt.Errorf("failed to create modules directory: %w", err)

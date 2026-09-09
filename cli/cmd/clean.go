@@ -49,7 +49,7 @@ func createCleanCmd() *cobra.Command {
 	workspace, every member package's target directory is deleted, along
 	with the workspace's own. It's not an error for the target directory to
 	already be absent.`,
-		Args: cobra.MaximumNArgs(1),
+		Args: validateCleanArgs,
 		RunE: func(cmd *cobra.Command, args []string) error {
 			return runClean(cmd, args, targetDir)
 		},
@@ -58,6 +58,11 @@ func createCleanCmd() *cobra.Command {
 	cmd.Flags().StringVar(&targetDir, "target-dir", "", "target directory path")
 
 	return cmd
+}
+
+// validateCleanArgs validates the arguments for the 'clean' command.
+func validateCleanArgs(cmd *cobra.Command, args []string) error {
+	return requireAtMostOneArg(cleanError, args)
 }
 
 // runClean executes the 'clean' command.
@@ -127,18 +132,29 @@ func runClean(cmd *cobra.Command, args []string, targetDir string) error {
 		}
 		return cleanDir(cmd, filepath.Join(absPath, ws.TargetDir()))
 	default:
-		return cleanDir(cmd, filepath.Join(absPath, project.TargetDir()))
+		targetDir := project.TargetDir()
+		if targetDir == "" {
+			return cleanError("clean command is not supported for projects without a target directory")
+		}
+		return cleanDir(cmd, filepath.Join(absPath, targetDir))
 	}
 }
 
 // cleanDir deletes dir if it exists. A missing dir is a silent no-op
-// success, matching Java's CleanCommand#cleanProject.
+// success, matching Java's CleanCommand#cleanProject. A stat error other
+// than "does not exist" is reported rather than silently treated as
+// absent, and a dir that resolves to a regular file (not a directory) is
+// rejected rather than deleted.
 func cleanDir(cmd *cobra.Command, dir string) error {
-	if dir == "" {
+	info, err := os.Stat(dir)
+	if os.IsNotExist(err) {
 		return nil
 	}
-	if _, err := os.Stat(dir); err != nil {
-		return nil
+	if err != nil {
+		return cleanError("failed to stat %s: %w", dir, err)
+	}
+	if !info.IsDir() {
+		return cleanError("target path %s is not a directory", dir)
 	}
 	if err := os.RemoveAll(dir); err != nil {
 		return cleanError("failed to delete %s: %w", dir, err)
@@ -160,22 +176,22 @@ func cleanCustomTargetDir(cmd *cobra.Command, targetDir string) error {
 
 	info, err := os.Stat(absPath)
 	if os.IsNotExist(err) {
-		return cleanError("provided target directory '%s' does not exist.", absPath)
+		return cleanError("provided target directory '%s' does not exist", absPath)
 	}
 	if err != nil {
 		return cleanError("failed to stat %s: %w", absPath, err)
 	}
 	if !info.IsDir() {
-		return cleanError("provided target path '%s' is not a directory.", absPath)
+		return cleanError("provided target path '%s' is not a directory", absPath)
 	}
 	if !isValidTargetDir(absPath) {
-		return cleanError("provided target directory '%s' is not a valid target directory.", absPath)
+		return cleanError("provided target directory '%s' is not a valid target directory", absPath)
 	}
 
 	if err := os.RemoveAll(absPath); err != nil {
 		return cleanError("failed to delete %s: %w", absPath, err)
 	}
-	if _, err := fmt.Fprintln(cmd.OutOrStdout(), "Successfully deleted '"+absPath+"'"); err != nil {
+	if _, err := fmt.Fprintln(cmd.OutOrStdout(), "Successfully deleted "+absPath); err != nil {
 		return cleanError("failed to write success message: %w", err)
 	}
 	return nil
@@ -188,8 +204,17 @@ func cleanCustomTargetDir(cmd *cobra.Command, targetDir string) error {
 // creates one), this port's bal pack currently only ever produces
 // target/bala/ — no cache/ directory — so cache/ is treated as one
 // recognized marker among several rather than a mandatory gate.
+//
+// "bin" is deliberately NOT one of these markers, even though bal build
+// creates target/bin/<name>: unlike bala/apidocs/cache, "bin" is an
+// extremely common directory name outside any Ballerina context (~/bin,
+// language-toolchain output dirs, etc.), so accepting it alone would let
+// `bal clean --target-dir <arbitrary-dir>` treat something like a user's
+// home directory as a valid target and delete it. A build-only target/
+// directory (bin/ with nothing else) is consequently not recognized by
+// --target-dir — a narrow coverage gap preferred over that blast radius.
 func isValidTargetDir(dir string) bool {
-	for _, sub := range []string{projects.CacheDir, "bala", "bin", "apidocs", filepath.Join(projects.CacheDir, "tests_cache")} {
+	for _, sub := range []string{projects.CacheDir, "bala", "apidocs"} {
 		if info, err := os.Stat(filepath.Join(dir, sub)); err == nil && info.IsDir() {
 			return true
 		}
