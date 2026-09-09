@@ -27,6 +27,33 @@ import (
 	"github.com/ballerina-nutcracker/ballerina/projects"
 )
 
+// TestValidateTemplate_CaseInsensitive verifies -t matches regardless of
+// case, consistent with bal add's own --template flag.
+func TestValidateTemplate_CaseInsensitive(t *testing.T) {
+	tests := []struct {
+		raw  string
+		want templateName
+	}{
+		{"LIB", templateLib},
+		{"Lib", templateLib},
+		{"lib", templateLib},
+		{"SERVICE", templateService},
+		{"Default", templateDefault},
+		{"MAIN", templateMain},
+	}
+	for _, tt := range tests {
+		got, err := validateTemplate(tt.raw)
+		if err != nil {
+			t.Errorf("validateTemplate(%q) = %v, want no error", tt.raw, err)
+		} else if got != tt.want {
+			t.Errorf("validateTemplate(%q) = %q, want %q", tt.raw, got, tt.want)
+		}
+	}
+	if _, err := validateTemplate("bogus"); err == nil {
+		t.Error("validateTemplate(\"bogus\") = nil error, want an error")
+	}
+}
+
 // TestNewWorkspace_LoadsCorrectly tests that a workspace created by `bal new
 // --workspace` can be loaded back with projects.Load() into the expected
 // typed *projects.WorkspaceProject shape. This is a library-level round-trip

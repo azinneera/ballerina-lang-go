@@ -75,6 +75,18 @@ func usageError(usage, format string, args ...any) error {
 	return fmt.Errorf("%w\n\nUSAGE:\n    %s\n\nFor more information try 'bal %s --help'", inner, usage, cmdName)
 }
 
+// requireAtMostOneArg reports a "too many arguments" error via errFn when
+// more than one positional argument is given. Shared by commands whose own
+// <cmd>Error wrapper already matches this signature (add, clean); new's
+// newErrorFor doesn't (it also takes a workspace bool), so it keeps its own
+// inline check instead of wrapping this in a closure.
+func requireAtMostOneArg(errFn func(format string, args ...any) error, args []string) error {
+	if len(args) > 1 {
+		return errFn("too many arguments")
+	}
+	return nil
+}
+
 // validateSourceFile validates the source file argument for the 'run' command.
 // Allows zero arguments (defaults to current directory in runBallerina).
 func validateSourceFile(cmd *cobra.Command, args []string) error {
