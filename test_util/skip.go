@@ -168,8 +168,6 @@ var UnsupportedTests = []string{
 	"subset8/08-future/fieldexpr1-v.bal",
 	// https://github.com/ballerina-nutcracker/ballerina/issues/442
 	"subset8/08-future/main-v.bal",
-	// https://github.com/ballerina-nutcracker/ballerina/issues/288
-	"subset8/08-future/xmlsubtype-v.bal", // xml:Element type unknown
 
 	// Match patterns:
 	//  Unsupported match pattern diagnostics for list/mapping patterns.
@@ -179,15 +177,6 @@ var UnsupportedTests = []string{
 
 	// rest param not supported in dependently typed functions
 	"subset8/08-function/dependent-fn-5-e.bal",
-
-	// Default parameters on langlib functions backed by opaque symbols. A
-	// default parameter is evaluated by a default closure generated from the
-	// defining module's AST; an opaque function is defined in Go and has no
-	// such module, so its parameters are all required and omitting one is a
-	// "missing required parameter" error. array:indexOf declares
-	// `int startIndex = 0`, so both of these omit it.
-	"subset10/10-langlibs/array-indexof-default-start-v.bal",
-	"subset10/10-langlibs/langlib-opaque-named-args-v.bal",
 }
 
 // IsUnsupported reports whether the given corpus test path is in

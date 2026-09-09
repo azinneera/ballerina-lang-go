@@ -16,12 +16,6 @@
 
 import ballerina/io;
 
-// `array:indexOf` is declared as `indexOf(arr, val, int startIndex = 0)`, so
-// omitting startIndex is valid Ballerina. It is skiplisted (see
-// test_util/skip.go): a default parameter is evaluated by a default closure
-// generated from the defining module's AST, and an opaque lang-library
-// function is defined in Go and has no such module. This test documents the
-// target behaviour until opaque functions can carry defaults.
 public function main() {
     int[] arr = [10, 20, 30, 40, 30];
     int? firstDefault = arr.indexOf(30);
