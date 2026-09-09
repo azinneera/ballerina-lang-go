@@ -70,7 +70,10 @@ func (v *walkTestVisitor) Visit(node ast.BLangNode) ast.Visitor {
 
 	switch n := node.(type) {
 	case *desugar.BLangExpressionThunk:
-		ast.Walk(v, n.Lambda)
+		for _, stmt := range n.InitStmts {
+			ast.Walk(v, stmt.(ast.BLangNode))
+		}
+		ast.Walk(v, n.Expr)
 		return nil
 	case *ast.BLangVariable:
 		v.checkSymbolLocation(n)
@@ -331,7 +334,10 @@ func prettyPrintFallback(p *ast.PrettyPrinter, node ast.BLangNode) {
 	case *desugar.BLangExpressionThunk:
 		p.StartNode()
 		p.PrintString("expression-thunk")
-		p.PrintInner(n.Lambda)
+		for _, stmt := range n.InitStmts {
+			p.PrintInner(stmt.(ast.BLangNode))
+		}
+		p.PrintInner(n.Expr)
 		p.EndNode()
 	default:
 		panic(fmt.Sprintf("desugar pretty printer: unsupported node %T", n)) //nolint:forbidigo // Fail when the test printer misses a desugar-owned node.

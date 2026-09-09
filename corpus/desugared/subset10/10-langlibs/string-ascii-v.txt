@@ -32,26 +32,22 @@
       (expression-stmt
         (invocation io println (
           (expression-thunk
-          (lambda
-            (function main$582$0$thunk$0 () ()
-              (block-function-body
-                (var-def
-                  (variable $desugar$0 (expr
-                    (invocation lang.string trim (
-                      (simple-var-ref s))))))
-                (var-def
-                  (variable $desugar$1 (expr
-                    (literal 6))))
-                (var-def
-                  (variable $desugar$2 (expr
-                    (invocation $default$0 (
-                      (simple-var-ref $desugar$0)
-                      (simple-var-ref $desugar$1))))))
-                (return
-                  (invocation lang.string substring (
-                    (simple-var-ref $desugar$0)
-                    (simple-var-ref $desugar$1)
-                    (simple-var-ref $desugar$2)))))))))))
+          (var-def
+            (variable $desugar$0 (expr
+              (invocation lang.string trim (
+                (simple-var-ref s))))))
+          (var-def
+            (variable $desugar$1 (expr
+              (literal 6))))
+          (var-def
+            (variable $desugar$2 (expr
+              (invocation $default$0 (
+                (simple-var-ref $desugar$0)
+                (simple-var-ref $desugar$1))))))
+          (invocation lang.string substring (
+            (simple-var-ref $desugar$0)
+            (simple-var-ref $desugar$1)
+            (simple-var-ref $desugar$2)))))))
       (expression-stmt
         (invocation io println (
           (invocation lang.string equalsIgnoreCaseAscii (

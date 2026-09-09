@@ -41,15 +41,11 @@
       (expression-stmt
         (invocation io println (
           (expression-thunk
-          (lambda
-            (function main$582$3$thunk$0 () ()
-              (block-function-body
-                (var-def
-                  (variable $desugar$1 (expr
-                    (invocation $desugar$0 ()))))
-                (return
-                  (invocation base (
-                    (simple-var-ref $desugar$1)))))))))))
+          (var-def
+            (variable $desugar$1 (expr
+              (invocation $desugar$0 ()))))
+          (invocation base (
+            (simple-var-ref $desugar$1)))))))
       (expression-stmt
         (invocation io println (
           (invocation base (
@@ -89,20 +85,16 @@
       (expression-stmt
         (invocation io println (
           (expression-thunk
-          (lambda
-            (function main$582$3$thunk$1 () ()
-              (block-function-body
-                (var-def
-                  (variable $desugar$3 (expr
-                    (literal 4))))
-                (var-def
-                  (variable $desugar$4 (expr
-                    (invocation $desugar$2 (
-                      (simple-var-ref $desugar$3))))))
-                (return
-                  (invocation localFn (
-                    (simple-var-ref $desugar$3)
-                    (simple-var-ref $desugar$4)))))))))))
+          (var-def
+            (variable $desugar$3 (expr
+              (literal 4))))
+          (var-def
+            (variable $desugar$4 (expr
+              (invocation $desugar$2 (
+                (simple-var-ref $desugar$3))))))
+          (invocation localFn (
+            (simple-var-ref $desugar$3)
+            (simple-var-ref $desugar$4)))))))
       (expression-stmt
         (invocation io println (
           (invocation localFn (
@@ -126,15 +118,11 @@
       (expression-stmt
         (invocation io println (
           (expression-thunk
-          (lambda
-            (function main$582$3$thunk$2 () ()
-              (block-function-body
-                (var-def
-                  (variable $desugar$6 (expr
-                    (invocation $desugar$5 ()))))
-                (return
-                  (invocation copied (
-                    (simple-var-ref $desugar$6)))))))))))
+          (var-def
+            (variable $desugar$6 (expr
+              (invocation $desugar$5 ()))))
+          (invocation copied (
+            (simple-var-ref $desugar$6)))))))
       (expression-stmt
         (invocation io println (
           (invocation takesFn (

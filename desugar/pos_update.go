@@ -33,7 +33,10 @@ func (v *posUpdateVisitor) Visit(node ast.BLangNode) ast.Visitor {
 		node.SetPosition(v.pos)
 	}
 	if thunk, ok := node.(*BLangExpressionThunk); ok {
-		ast.Walk(v, thunk.Lambda)
+		for _, stmt := range thunk.InitStmts {
+			ast.Walk(v, stmt.(ast.BLangNode))
+		}
+		ast.Walk(v, thunk.Expr)
 		return nil
 	}
 	return v

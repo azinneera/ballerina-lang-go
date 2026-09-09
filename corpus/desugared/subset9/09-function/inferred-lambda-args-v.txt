@@ -30,15 +30,11 @@
       (expression-stmt
         (invocation io println (
           (expression-thunk
-          (lambda
-            (function main$582$3$thunk$0 () ()
-              (block-function-body
-                (var-def
-                  (variable $desugar$0 (expr
-                    (invocation $default$0 ()))))
-                (return
-                  (invocation moduleLambda (
-                    (simple-var-ref $desugar$0)))))))))))
+          (var-def
+            (variable $desugar$0 (expr
+              (invocation $default$0 ()))))
+          (invocation moduleLambda (
+            (simple-var-ref $desugar$0)))))))
       (expression-stmt
         (invocation io println (
           (invocation moduleLambda (
@@ -46,15 +42,11 @@
       (expression-stmt
         (invocation io println (
           (expression-thunk
-          (lambda
-            (function main$582$3$thunk$1 () ()
-              (block-function-body
-                (var-def
-                  (variable $desugar$1 (expr
-                    (invocation $default$0 ()))))
-                (return
-                  (invocation moduleLambdaAlias (
-                    (simple-var-ref $desugar$1)))))))))))
+          (var-def
+            (variable $desugar$1 (expr
+              (invocation $default$0 ()))))
+          (invocation moduleLambdaAlias (
+            (simple-var-ref $desugar$1)))))))
       (expression-stmt
         (invocation io println (
           (invocation moduleLambdaAlias (
@@ -73,15 +65,11 @@
       (expression-stmt
         (invocation io println (
           (expression-thunk
-          (lambda
-            (function main$582$3$thunk$2 () ()
-              (block-function-body
-                (var-def
-                  (variable $desugar$2 (expr
-                    (invocation $default$1 ()))))
-                (return
-                  (invocation lambda (
-                    (simple-var-ref $desugar$2)))))))))))
+          (var-def
+            (variable $desugar$2 (expr
+              (invocation $default$1 ()))))
+          (invocation lambda (
+            (simple-var-ref $desugar$2)))))))
       (expression-stmt
         (invocation io println (
           (invocation lambda (
@@ -92,15 +80,11 @@
       (expression-stmt
         (invocation io println (
           (expression-thunk
-          (lambda
-            (function main$582$3$thunk$3 () ()
-              (block-function-body
-                (var-def
-                  (variable $desugar$3 (expr
-                    (invocation $default$1 ()))))
-                (return
-                  (invocation lambdaAlias (
-                    (simple-var-ref $desugar$3)))))))))))
+          (var-def
+            (variable $desugar$3 (expr
+              (invocation $default$1 ()))))
+          (invocation lambdaAlias (
+            (simple-var-ref $desugar$3)))))))
       (expression-stmt
         (invocation io println (
           (invocation lambdaAlias (
@@ -123,15 +107,11 @@
       (expression-stmt
         (invocation io println (
           (expression-thunk
-          (lambda
-            (function main$582$3$thunk$4 () ()
-              (block-function-body
-                (var-def
-                  (variable $desugar$5 (expr
-                    (invocation $desugar$4 ()))))
-                (return
-                  (invocation typedLambda (
-                    (simple-var-ref $desugar$5)))))))))))
+          (var-def
+            (variable $desugar$5 (expr
+              (invocation $desugar$4 ()))))
+          (invocation typedLambda (
+            (simple-var-ref $desugar$5)))))))
       (expression-stmt
         (invocation io println (
           (invocation typedLambda (
@@ -190,15 +170,11 @@
       (expression-stmt
         (invocation io println (
           (expression-thunk
-          (lambda
-            (function main$582$3$thunk$5 () ()
-              (block-function-body
-                (var-def
-                  (variable $desugar$6 (expr
-                    (invocation $default$3 ()))))
-                (return
-                  (invocation groupedLambda (
-                    (simple-var-ref $desugar$6)))))))))))
+          (var-def
+            (variable $desugar$6 (expr
+              (invocation $default$3 ()))))
+          (invocation groupedLambda (
+            (simple-var-ref $desugar$6)))))))
       (expression-stmt
         (invocation io println (
           (invocation groupedLambda (

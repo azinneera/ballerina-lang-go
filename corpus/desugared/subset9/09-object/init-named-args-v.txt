@@ -71,20 +71,16 @@
           (user-defined-type Listener)) (expr
           (checked-expr
             (expression-thunk
-            (lambda
-              (function main$582$1$thunk$0 () ()
-                (block-function-body
-                  (var-def
-                    (variable $desugar$0 (expr
-                      (literal /etc))))
-                  (var-def
-                    (variable $desugar$1 (expr
-                      (invocation $default$0 (
-                        (simple-var-ref $desugar$0))))))
-                  (return
-                    (new (
-                      (simple-var-ref $desugar$0)
-                      (simple-var-ref $desugar$1))))))))))))
+            (var-def
+              (variable $desugar$0 (expr
+                (literal /etc))))
+            (var-def
+              (variable $desugar$1 (expr
+                (invocation $default$0 (
+                  (simple-var-ref $desugar$0))))))
+            (new (
+              (simple-var-ref $desugar$0)
+              (simple-var-ref $desugar$1))))))))
       (expression-stmt
         (invocation io println (
           (invocation describe expr:

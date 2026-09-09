@@ -51,7 +51,6 @@ type packageContext struct {
 	desugarSymbolCounter   int
 	typeContext            semtypes.Context
 	xmlIteratorTypes       *semtypes.SemTypeCache
-	thunkFunctionTypes     *semtypes.SemTypeCache
 }
 
 var _ desugarContext = &packageContext{}
@@ -65,7 +64,6 @@ func newPackageContext(compilerCtx *context.CompilerContext, pkg *ast.BLangPacka
 		defaultClosureOwners: make(map[model.SymbolRef]struct{}),
 		typeContext:          semtypes.ContextFrom(compilerCtx.GetTypeEnv()),
 		xmlIteratorTypes:     semtypes.NewSemTypeCache(),
-		thunkFunctionTypes:   semtypes.NewSemTypeCache(),
 	}
 }
 
@@ -193,7 +191,6 @@ type functionContext struct {
 	owner                model.SymbolRef
 	scopeStack           []model.Scope
 	desugarSymbolCounter int
-	thunkCounter         int
 	loopVarStack         []ast.LExpr // Stack to track loop variables (nil for while, varRef for desugared foreach)
 	defaultClosureVars   map[model.SymbolRef]model.SymbolRef
 	generatedFunctions   []*ast.BLangFunction
@@ -310,15 +307,6 @@ func (ctx *functionContext) getSymbol(ref model.SymbolRef) model.Symbol {
 
 func (ctx *functionContext) typeEnv() semtypes.Env {
 	return ctx.pkgCtx.typeEnv()
-}
-
-func (ctx *functionContext) thunkFunctionType(returnTy semtypes.SemType) semtypes.SemType {
-	return ctx.pkgCtx.thunkFunctionTypes.GetOrBuild(returnTy, func() semtypes.SemType {
-		paramsDef := semtypes.NewListDefinition()
-		paramsTy := paramsDef.Define(ctx.typeEnv(), nil, semtypes.ListMutability(semtypes.CellMutabilityNone))
-		fnDef := semtypes.NewFunctionDefinition()
-		return fnDef.Define(ctx.typeEnv(), paramsTy, returnTy, semtypes.FunctionQualifiersFrom(ctx.typeEnv(), false, false))
-	})
 }
 
 type desugarContext interface {
@@ -1852,11 +1840,13 @@ func desugarFunctionWithContext(cx *functionContext, fn *ast.BLangFunction) *ast
 	return fn
 }
 
-// BLangExpressionThunk is a desugar-only expression that evaluates a
-// generated zero-argument lambda immediately at the source expression site.
+// BLangExpressionThunk is a desugar-only expression that runs InitStmts and
+// then evaluates Expr, in place of the source expression it replaces. BIR gen
+// lowers it inline, so it never becomes a function of its own.
 type BLangExpressionThunk struct {
 	ast.AbstractExpression
-	Lambda *ast.BLangLambdaFunction
+	InitStmts []ast.StatementNode
+	Expr      ast.BLangActionOrExpression
 }
 
 var _ ast.BLangExpression = &BLangExpressionThunk{}
