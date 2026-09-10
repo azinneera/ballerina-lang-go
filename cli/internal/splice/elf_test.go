@@ -52,7 +52,9 @@ func minimalELF32Header() []byte {
 }
 
 func TestEmbedELF_RejectsNon64BitOrMalformedStub(t *testing.T) {
+	t.Parallel()
 	t.Run("not an ELF file at all", func(t *testing.T) {
+		t.Parallel()
 		stubPath := filepath.Join(t.TempDir(), "stub")
 		if err := os.WriteFile(stubPath, []byte("not an elf file"), 0o755); err != nil {
 			t.Fatalf("writing stub: %v", err)
@@ -64,6 +66,7 @@ func TestEmbedELF_RejectsNon64BitOrMalformedStub(t *testing.T) {
 	})
 
 	t.Run("32-bit ELF", func(t *testing.T) {
+		t.Parallel()
 		stubPath := filepath.Join(t.TempDir(), "fake-32bit-elf")
 		if err := os.WriteFile(stubPath, minimalELF32Header(), 0o755); err != nil {
 			t.Fatalf("writing synthetic 32-bit ELF: %v", err)
@@ -76,6 +79,7 @@ func TestEmbedELF_RejectsNon64BitOrMalformedStub(t *testing.T) {
 }
 
 func TestEmbedELF_RejectsAlreadyPackedInput(t *testing.T) {
+	t.Parallel()
 	packedOnce := filepath.Join(t.TempDir(), "packed-once")
 	if err := EmbedELF(linuxAmd64StubPath, []byte("payload"), packedOnce); err != nil {
 		t.Fatalf("first EmbedELF: %v", err)

@@ -27,6 +27,7 @@ import (
 // hence a unit test rather than a corpus one. EmbedELF is just the
 // vehicle; embed() itself is format-agnostic.
 func TestEmbed_MissingStub(t *testing.T) {
+	t.Parallel()
 	missingStub := filepath.Join(t.TempDir(), "does-not-exist")
 	outPath := filepath.Join(t.TempDir(), "program")
 

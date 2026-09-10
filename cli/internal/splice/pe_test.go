@@ -111,6 +111,7 @@ func minimalZeroSlackPE64(t *testing.T) []byte {
 }
 
 func TestEmbedPE_FailsClearlyWhenHeaderSlackInsufficient(t *testing.T) {
+	t.Parallel()
 	stubPath := filepath.Join(t.TempDir(), "zero-slack.exe")
 	if err := os.WriteFile(stubPath, minimalZeroSlackPE64(t), 0o755); err != nil {
 		t.Fatalf("writing synthetic stub: %v", err)
@@ -134,6 +135,7 @@ func TestEmbedPE_FailsClearlyWhenHeaderSlackInsufficient(t *testing.T) {
 }
 
 func TestEmbedPE_RejectsAlreadyPackedInput(t *testing.T) {
+	t.Parallel()
 	packedOnce := filepath.Join(t.TempDir(), "packed-once.exe")
 	if err := EmbedPE(windowsAmd64StubPath, []byte("payload"), packedOnce); err != nil {
 		t.Fatalf("first EmbedPE: %v", err)

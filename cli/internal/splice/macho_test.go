@@ -80,6 +80,7 @@ func minimalZeroSlackMachO64(t *testing.T) []byte {
 }
 
 func TestEmbedMachO_FailsClearlyWhenHeaderSlackInsufficient(t *testing.T) {
+	t.Parallel()
 	stubPath := filepath.Join(t.TempDir(), "zero-slack-macho")
 	if err := os.WriteFile(stubPath, minimalZeroSlackMachO64(t), 0o755); err != nil {
 		t.Fatalf("writing synthetic stub: %v", err)
@@ -103,6 +104,7 @@ func TestEmbedMachO_FailsClearlyWhenHeaderSlackInsufficient(t *testing.T) {
 }
 
 func TestEmbedMachO_RejectsAlreadyPackedInput(t *testing.T) {
+	t.Parallel()
 	packedOnce := filepath.Join(t.TempDir(), "packed-once")
 	if err := EmbedMachO(darwinArm64StubPath, []byte("payload"), packedOnce); err != nil {
 		t.Fatalf("first EmbedMachO: %v", err)

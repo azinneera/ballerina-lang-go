@@ -113,6 +113,7 @@ func crossBuildBalrt(repoRoot, outPath, goos, goarch string) error {
 // per-platform bal build tests; this only covers the fail-loud path
 // ValidatePlatform makes unreachable in production.
 func TestEmbed_RejectsUnknownTargetOS(t *testing.T) {
+	t.Parallel()
 	outPath := filepath.Join(t.TempDir(), "packed")
 	if err := Embed(linuxAmd64StubPath, []byte("payload"), outPath, "plan9"); err == nil {
 		t.Fatal("expected an error for an unrecognized targetOS")
