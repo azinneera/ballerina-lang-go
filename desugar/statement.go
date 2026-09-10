@@ -90,52 +90,39 @@ func walkBlockFunctionBody(cx *functionContext, body *ast.BLangBlockFunctionBody
 }
 
 func walkAssignment(cx *functionContext, stmt *ast.BLangAssignment) desugaredNode[ast.StatementNode] {
-	var initStmts []ast.StatementNode
-
 	if stmt.VarRef != nil {
 		result := walkExpression(cx, stmt.VarRef)
-		initStmts = append(initStmts, result.initStmts...)
-		stmt.VarRef = result.replacementNode.(ast.LExpr)
+		stmt.VarRef = result.(ast.LExpr)
 	}
 
 	if stmt.Expr != nil {
 		result := walkExpression(cx, stmt.Expr)
-		initStmts = append(initStmts, result.initStmts...)
-		stmt.Expr = result.replacementNode
+		stmt.Expr = result
 	}
 
-	return desugaredNode[ast.StatementNode]{
-		initStmts:       initStmts,
-		replacementNode: stmt,
-	}
+	return desugaredNode[ast.StatementNode]{replacementNode: stmt}
 }
 
 func walkCompoundAssignment(cx *functionContext, stmt *ast.BLangCompoundAssignment) desugaredNode[ast.StatementNode] {
-	var initStmts []ast.StatementNode
 
 	if stmt.VarRef != nil {
 		result := walkExpression(cx, stmt.VarRef)
-		initStmts = append(initStmts, result.initStmts...)
-		stmt.VarRef = result.replacementNode.(ast.LExpr)
+		stmt.VarRef = result.(ast.LExpr)
 	}
 
 	if stmt.Expr != nil {
 		result := walkExpression(cx, stmt.Expr)
-		initStmts = append(initStmts, result.initStmts...)
-		stmt.Expr = result.replacementNode
+		stmt.Expr = result
 	}
 
-	return desugaredNode[ast.StatementNode]{
-		initStmts:       initStmts,
-		replacementNode: stmt,
-	}
+	return desugaredNode[ast.StatementNode]{replacementNode: stmt}
 }
 
 func walkExpressionStmt(cx *functionContext, stmt *ast.BLangExpressionStmt) desugaredNode[ast.StatementNode] {
 	var initStmts []ast.StatementNode
 
 	if stmt.Expr != nil {
-		result := walkExpression(cx, stmt.Expr)
+		result := walkExpressionInner(cx, stmt.Expr)
 		initStmts = append(initStmts, result.initStmts...)
 		stmt.Expr = result.replacementNode
 	}
@@ -150,7 +137,7 @@ func walkIf(cx *functionContext, stmt *ast.BLangIf) desugaredNode[ast.StatementN
 	var initStmts []ast.StatementNode
 
 	if stmt.Expr != nil {
-		result := walkExpression(cx, stmt.Expr)
+		result := walkExpressionInner(cx, stmt.Expr)
 		initStmts = append(initStmts, result.initStmts...)
 		stmt.Expr = result.replacementNode.(ast.BLangExpression)
 	}
@@ -181,12 +168,9 @@ func walkIf(cx *functionContext, stmt *ast.BLangIf) desugaredNode[ast.StatementN
 }
 
 func walkWhile(cx *functionContext, stmt *ast.BLangWhile) desugaredNode[ast.StatementNode] {
-	var initStmts []ast.StatementNode
-
 	if stmt.Expr != nil {
 		result := walkExpression(cx, stmt.Expr)
-		initStmts = append(initStmts, result.initStmts...)
-		stmt.Expr = result.replacementNode.(ast.BLangExpression)
+		stmt.Expr = result.(ast.BLangExpression)
 	}
 
 	// Push nil to loopVarStack to indicate this is a native while (not desugared foreach)
@@ -204,10 +188,7 @@ func walkWhile(cx *functionContext, stmt *ast.BLangWhile) desugaredNode[ast.Stat
 		stmt.OnFailClause = *onFailResult.replacementNode.(*ast.BLangOnFailClause)
 	}
 
-	return desugaredNode[ast.StatementNode]{
-		initStmts:       initStmts,
-		replacementNode: stmt,
-	}
+	return desugaredNode[ast.StatementNode]{replacementNode: stmt}
 }
 
 func walkLock(cx *functionContext, stmt *ast.BLangLock) desugaredNode[ast.StatementNode] {
@@ -254,7 +235,7 @@ func walkSimpleVariableDef(cx *functionContext, stmt *ast.BLangVariableDef) desu
 			cx.pkgCtx.addDefaultClosureOwner(stmt.Var.Expr)
 		}
 		if stmt.Var.Expr != nil {
-			result := walkExpression(cx, stmt.Var.Expr)
+			result := walkExpressionInner(cx, stmt.Var.Expr)
 			initStmts = append(initStmts, result.initStmts...)
 			stmt.Var.Expr = result.replacementNode
 		}
@@ -270,7 +251,7 @@ func walkPanic(cx *functionContext, stmt *ast.BLangPanic) desugaredNode[ast.Stat
 	var initStmts []ast.StatementNode
 
 	if stmt.Expr != nil {
-		result := walkExpression(cx, stmt.Expr)
+		result := walkExpressionInner(cx, stmt.Expr)
 		initStmts = append(initStmts, result.initStmts...)
 		stmt.Expr = result.replacementNode.(ast.BLangExpression)
 	}
@@ -285,7 +266,7 @@ func walkReturn(cx *functionContext, stmt *ast.BLangReturn) desugaredNode[ast.St
 	var initStmts []ast.StatementNode
 
 	if stmt.Expr != nil {
-		result := walkExpression(cx, stmt.Expr)
+		result := walkExpressionInner(cx, stmt.Expr)
 		initStmts = append(initStmts, result.initStmts...)
 		stmt.Expr = result.replacementNode
 	}
@@ -366,8 +347,7 @@ func desugarForEachOnList(cx *functionContext, collection ast.BLangActionOrExpre
 
 	// Step 1: evaluate collection once into a temp variable
 	collResult := walkExpression(cx, collection)
-	initStmts = append(initStmts, collResult.initStmts...)
-	collExpr := collResult.replacementNode
+	collExpr := collResult
 
 	collType := collExpr.GetDeterminedType()
 	collName, collVarSymbol := cx.addDesugardSymbol(collType, model.SymbolKindVariable, basePos)
@@ -529,8 +509,7 @@ func desugarForEachOnMap(cx *functionContext, collection ast.BLangActionOrExpres
 
 	// Step 1: evaluate collection once into a temp variable
 	collResult := walkExpression(cx, collection)
-	initStmts = append(initStmts, collResult.initStmts...)
-	collExpr := collResult.replacementNode
+	collExpr := collResult
 
 	collType := collExpr.GetDeterminedType()
 	collName, collVarSymbol := cx.addDesugardSymbol(collType, model.SymbolKindVariable, basePos)
@@ -704,12 +683,10 @@ func desugarForEachOnRange(cx *functionContext, rangeExpr *ast.BLangBinaryExpr, 
 	basePos := rangeExpr.GetPosition()
 
 	startResult := walkExpression(cx, rangeExpr.LhsExpr)
-	initStmts = append(initStmts, startResult.initStmts...)
-	startExpr := startResult.replacementNode
+	startExpr := startResult
 
 	endResult := walkExpression(cx, rangeExpr.RhsExpr)
-	initStmts = append(initStmts, endResult.initStmts...)
-	endExpr := endResult.replacementNode
+	endExpr := endResult
 
 	// Keep loop control separate so the source variable can be declared and captured afresh in each iteration.
 	controlName, controlVarSymbol := cx.addDesugardSymbol(semtypes.Int, model.SymbolKindVariable, basePos)
@@ -916,8 +893,7 @@ func desugarForEachOnIterable(cx *functionContext, collection ast.BLangActionOrE
 
 	// Step 1: Evaluate collection into temp var
 	collResult := walkExpression(cx, collection)
-	initStmts = append(initStmts, collResult.initStmts...)
-	collExpr := collResult.replacementNode
+	collExpr := collResult
 
 	collType := collExpr.GetDeterminedType()
 	collName, collSymbol := cx.addDesugardSymbol(collType, model.SymbolKindVariable, basePos)
@@ -1075,12 +1051,9 @@ func desugarForEachOnIterable(cx *functionContext, collection ast.BLangActionOrE
 }
 
 func walkMatchStatement(cx *functionContext, stmt *ast.BLangMatchStatement) desugaredNode[ast.StatementNode] {
-	var initStmts []ast.StatementNode
-
 	if stmt.Expr != nil {
 		result := walkExpression(cx, stmt.Expr)
-		initStmts = append(initStmts, result.initStmts...)
-		stmt.Expr = result.replacementNode
+		stmt.Expr = result
 	}
 
 	for i := range stmt.MatchClauses {
@@ -1095,20 +1068,15 @@ func walkMatchStatement(cx *functionContext, stmt *ast.BLangMatchStatement) desu
 				continue
 			}
 			patternResult := walkExpression(cx, constPattern.Expr)
-			initStmts = append(initStmts, patternResult.initStmts...)
-			constPattern.Expr = patternResult.replacementNode.(ast.BLangExpression)
+			constPattern.Expr = patternResult.(ast.BLangExpression)
 		}
 		if clause.Guard != nil {
 			guardResult := walkExpression(cx, clause.Guard)
-			initStmts = append(initStmts, guardResult.initStmts...)
-			clause.Guard = guardResult.replacementNode.(ast.BLangExpression)
+			clause.Guard = guardResult.(ast.BLangExpression)
 		}
 		bodyResult := walkBlockStmt(cx, &clause.Body)
 		clause.Body = *bodyResult.replacementNode.(*ast.BLangBlockStmt)
 	}
 
-	return desugaredNode[ast.StatementNode]{
-		initStmts:       initStmts,
-		replacementNode: stmt,
-	}
+	return desugaredNode[ast.StatementNode]{replacementNode: stmt}
 }

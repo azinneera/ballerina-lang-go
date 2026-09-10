@@ -43,10 +43,10 @@ main() -> nil|error{
   }
   bb4 {
     store = %3;
-    %6 = $default$0() -> bb5;
+    %7 = $default$0() -> bb5;
   }
   bb5 {
-    $desugar$0 = %6;
+    $desugar$0 = %7;
     %9 = ConstantLoad price
     %10 = $desugar$0;
     %11 = store->[%9].get(%10) -> bb6;
@@ -60,18 +60,18 @@ main() -> nil|error{
     return;
   }
   bb8 {
-    %8 = %11;
+    %6 = %11;
     GOTO bb9;
   }
   bb9 {
-    defaultPrice = %8;
-    %14 = ConstantLoad 40
-    $desugar$1 = %14;
-    %16 = $desugar$1;
-    %17 = $default$1(%16) -> bb10;
+    defaultPrice = %6;
+    %15 = ConstantLoad 40
+    $desugar$1 = %15;
+    %17 = $desugar$1;
+    %18 = $default$1(%17) -> bb10;
   }
   bb10 {
-    $desugar$2 = %17;
+    $desugar$2 = %18;
     %20 = ConstantLoad total
     %21 = $desugar$1;
     %22 = $desugar$2;
@@ -86,11 +86,11 @@ main() -> nil|error{
     return;
   }
   bb13 {
-    %19 = %23;
+    %14 = %23;
     GOTO bb14;
   }
   bb14 {
-    defaultTax = %19;
+    defaultTax = %14;
     %27 = ConstantLoad total
     %28 = ConstantLoad 40
     %29 = %28;

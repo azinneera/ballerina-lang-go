@@ -812,12 +812,13 @@ main() -> nil{
   }
   bb146 {
     PushScopeFrame 24
+    %0 = ConstantLoad required missing
     $desugar$24 = (4, j);
-    %1 = ConstantLoad lax field access failed
-    %2 = newError error(%1)
-    $desugar$25 = %2;
-    %4 = $desugar$24 is error
-    %4 ? bb147 : bb148;
+    %2 = ConstantLoad lax field access failed
+    %3 = newError error(%2)
+    $desugar$25 = %3;
+    %5 = $desugar$24 is error
+    %5 ? bb147 : bb148;
   }
   bb147 {
     PushScopeFrame 0
@@ -826,8 +827,8 @@ main() -> nil{
     GOTO bb161;
   }
   bb148 {
-    %5 = $desugar$24 !is mapping
-    %5 ? bb149 : bb150;
+    %6 = $desugar$24 !is mapping
+    %6 ? bb149 : bb150;
   }
   bb149 {
     PushScopeFrame 2
@@ -889,15 +890,15 @@ main() -> nil{
     GOTO bb161;
   }
   bb161 {
-    %6 = ConstantLoad required missing
-    %7 = printError(%6,$desugar$25) -> bb162;
+    %7 = printError(%0,$desugar$25) -> bb162;
   }
   bb162 {
+    %8 = ConstantLoad optional missing
     $desugar$27 = (4, j);
-    %9 = ConstantLoad <nil>
-    $desugar$28 = %9;
-    %11 = $desugar$27 is nil
-    %11 ? bb163 : bb164;
+    %10 = ConstantLoad <nil>
+    $desugar$28 = %10;
+    %12 = $desugar$27 is nil
+    %12 ? bb163 : bb164;
   }
   bb163 {
     PushScopeFrame 0
@@ -905,8 +906,8 @@ main() -> nil{
     GOTO bb180;
   }
   bb164 {
-    %12 = $desugar$27 is error
-    %12 ? bb165 : bb166;
+    %13 = $desugar$27 is error
+    %13 ? bb165 : bb166;
   }
   bb165 {
     PushScopeFrame 0
@@ -915,8 +916,8 @@ main() -> nil{
     GOTO bb179;
   }
   bb166 {
-    %13 = $desugar$27 !is mapping
-    %13 ? bb167 : bb168;
+    %14 = $desugar$27 !is mapping
+    %14 ? bb167 : bb168;
   }
   bb167 {
     PushScopeFrame 2
@@ -980,8 +981,7 @@ main() -> nil{
     GOTO bb180;
   }
   bb180 {
-    %14 = ConstantLoad optional missing
-    %15 = printNil(%14,$desugar$28) -> bb181;
+    %15 = printNil(%8,$desugar$28) -> bb181;
   }
   bb181 {
     $desugar$30 = (4, j);
@@ -1169,12 +1169,13 @@ main() -> nil{
     PushScopeFrame 108
     %0 = ConstantLoad <nil>
     nilReceiver = %0;
+    %2 = ConstantLoad required nil receiver
     $desugar$36 = nilReceiver;
-    %3 = ConstantLoad lax field access failed
-    %4 = newError error(%3)
-    $desugar$37 = %4;
-    %6 = $desugar$36 is error
-    %6 ? bb218 : bb219;
+    %4 = ConstantLoad lax field access failed
+    %5 = newError error(%4)
+    $desugar$37 = %5;
+    %7 = $desugar$36 is error
+    %7 ? bb218 : bb219;
   }
   bb218 {
     PushScopeFrame 0
@@ -1183,8 +1184,8 @@ main() -> nil{
     GOTO bb232;
   }
   bb219 {
-    %7 = $desugar$36 !is mapping
-    %7 ? bb220 : bb221;
+    %8 = $desugar$36 !is mapping
+    %8 ? bb220 : bb221;
   }
   bb220 {
     PushScopeFrame 2
@@ -1246,15 +1247,15 @@ main() -> nil{
     GOTO bb232;
   }
   bb232 {
-    %8 = ConstantLoad required nil receiver
-    %9 = printError(%8,$desugar$37) -> bb233;
+    %9 = printError(%2,$desugar$37) -> bb233;
   }
   bb233 {
+    %10 = ConstantLoad optional nil receiver
     $desugar$39 = nilReceiver;
-    %11 = ConstantLoad <nil>
-    $desugar$40 = %11;
-    %13 = $desugar$39 is nil
-    %13 ? bb234 : bb235;
+    %12 = ConstantLoad <nil>
+    $desugar$40 = %12;
+    %14 = $desugar$39 is nil
+    %14 ? bb234 : bb235;
   }
   bb234 {
     PushScopeFrame 0
@@ -1262,8 +1263,8 @@ main() -> nil{
     GOTO bb251;
   }
   bb235 {
-    %14 = $desugar$39 is error
-    %14 ? bb236 : bb237;
+    %15 = $desugar$39 is error
+    %15 ? bb236 : bb237;
   }
   bb236 {
     PushScopeFrame 0
@@ -1272,8 +1273,8 @@ main() -> nil{
     GOTO bb250;
   }
   bb237 {
-    %15 = $desugar$39 !is mapping
-    %15 ? bb238 : bb239;
+    %16 = $desugar$39 !is mapping
+    %16 ? bb238 : bb239;
   }
   bb238 {
     PushScopeFrame 2
@@ -1337,18 +1338,18 @@ main() -> nil{
     GOTO bb251;
   }
   bb251 {
-    %16 = ConstantLoad optional nil receiver
-    %17 = printNil(%16,$desugar$40) -> bb252;
+    %17 = printNil(%10,$desugar$40) -> bb252;
   }
   bb252 {
     %18 = ConstantLoad 1
     scalarReceiver = %18;
+    %20 = ConstantLoad required non-mapping receiver
     $desugar$42 = scalarReceiver;
-    %21 = ConstantLoad lax field access failed
-    %22 = newError error(%21)
-    $desugar$43 = %22;
-    %24 = $desugar$42 is error
-    %24 ? bb253 : bb254;
+    %22 = ConstantLoad lax field access failed
+    %23 = newError error(%22)
+    $desugar$43 = %23;
+    %25 = $desugar$42 is error
+    %25 ? bb253 : bb254;
   }
   bb253 {
     PushScopeFrame 0
@@ -1357,8 +1358,8 @@ main() -> nil{
     GOTO bb267;
   }
   bb254 {
-    %25 = $desugar$42 !is mapping
-    %25 ? bb255 : bb256;
+    %26 = $desugar$42 !is mapping
+    %26 ? bb255 : bb256;
   }
   bb255 {
     PushScopeFrame 2
@@ -1420,15 +1421,15 @@ main() -> nil{
     GOTO bb267;
   }
   bb267 {
-    %26 = ConstantLoad required non-mapping receiver
-    %27 = printError(%26,$desugar$43) -> bb268;
+    %27 = printError(%20,$desugar$43) -> bb268;
   }
   bb268 {
+    %28 = ConstantLoad optional non-mapping receiver
     $desugar$45 = scalarReceiver;
-    %29 = ConstantLoad <nil>
-    $desugar$46 = %29;
-    %31 = $desugar$45 is nil
-    %31 ? bb269 : bb270;
+    %30 = ConstantLoad <nil>
+    $desugar$46 = %30;
+    %32 = $desugar$45 is nil
+    %32 ? bb269 : bb270;
   }
   bb269 {
     PushScopeFrame 0
@@ -1436,8 +1437,8 @@ main() -> nil{
     GOTO bb286;
   }
   bb270 {
-    %32 = $desugar$45 is error
-    %32 ? bb271 : bb272;
+    %33 = $desugar$45 is error
+    %33 ? bb271 : bb272;
   }
   bb271 {
     PushScopeFrame 0
@@ -1446,8 +1447,8 @@ main() -> nil{
     GOTO bb285;
   }
   bb272 {
-    %33 = $desugar$45 !is mapping
-    %33 ? bb273 : bb274;
+    %34 = $desugar$45 !is mapping
+    %34 ? bb273 : bb274;
   }
   bb273 {
     PushScopeFrame 2
@@ -1511,16 +1512,16 @@ main() -> nil{
     GOTO bb286;
   }
   bb286 {
-    %34 = ConstantLoad optional non-mapping receiver
-    %35 = printError(%34,$desugar$46) -> bb287;
+    %35 = printError(%28,$desugar$46) -> bb287;
   }
   bb287 {
+    %36 = ConstantLoad propagated earlier error
     $desugar$48 = (6, j);
-    %37 = ConstantLoad lax field access failed
-    %38 = newError error(%37)
-    $desugar$49 = %38;
-    %40 = $desugar$48 is error
-    %40 ? bb288 : bb289;
+    %38 = ConstantLoad lax field access failed
+    %39 = newError error(%38)
+    $desugar$49 = %39;
+    %41 = $desugar$48 is error
+    %41 ? bb288 : bb289;
   }
   bb288 {
     PushScopeFrame 0
@@ -1529,8 +1530,8 @@ main() -> nil{
     GOTO bb302;
   }
   bb289 {
-    %41 = $desugar$48 !is mapping
-    %41 ? bb290 : bb291;
+    %42 = $desugar$48 !is mapping
+    %42 ? bb290 : bb291;
   }
   bb290 {
     PushScopeFrame 2
@@ -1593,11 +1594,11 @@ main() -> nil{
   }
   bb302 {
     $desugar$51 = $desugar$49;
-    %43 = ConstantLoad lax field access failed
-    %44 = newError error(%43)
-    $desugar$52 = %44;
-    %46 = $desugar$51 is error
-    %46 ? bb303 : bb304;
+    %44 = ConstantLoad lax field access failed
+    %45 = newError error(%44)
+    $desugar$52 = %45;
+    %47 = $desugar$51 is error
+    %47 ? bb303 : bb304;
   }
   bb303 {
     PushScopeFrame 0
@@ -1606,8 +1607,8 @@ main() -> nil{
     GOTO bb317;
   }
   bb304 {
-    %47 = $desugar$51 !is mapping
-    %47 ? bb305 : bb306;
+    %48 = $desugar$51 !is mapping
+    %48 ? bb305 : bb306;
   }
   bb305 {
     PushScopeFrame 2
@@ -1669,8 +1670,7 @@ main() -> nil{
     GOTO bb317;
   }
   bb317 {
-    %48 = ConstantLoad propagated earlier error
-    %49 = printError(%48,$desugar$52) -> bb318;
+    %49 = printError(%36,$desugar$52) -> bb318;
   }
   bb318 {
     %50 = ConstantLoad required

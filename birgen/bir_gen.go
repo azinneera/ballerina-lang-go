@@ -1056,21 +1056,30 @@ func lambdaFunction(ctx context, curBB *bir.BIRBasicBlock, expr *ast.BLangLambda
 	ctx.function().pkgCtx.birPkg.Functions = append(ctx.function().pkgCtx.birPkg.Functions, *birFunc)
 	funcType := expr.GetDeterminedType()
 	resultOperand := ctx.addTempVar(funcType)
-	fpLoad := &bir.FPLoad{}
-	fpLoad.Pos = ctx.function().loc(expr.GetPosition())
-	fpLoad.FunctionLookupKey = birFunc.FunctionLookupKey
-	fpLoad.Type = funcType
+	fpLoad := bir.NewFPLoad(birFunc.FunctionLookupKey, funcType, resultOperand, ctx.function().loc(expr.GetPosition()))
 	fpLoad.IsClosure = root.fn.isClosure
-	fpLoad.LhsOp = resultOperand
 	curBB.Instructions = append(curBB.Instructions, fpLoad)
 	// If the inner function is a closure, this function also needs parent frame
 	// access to maintain the frame chain for nested closures
 	if root.fn.isClosure {
 		ctx.function().isClosure = true
 	}
-	return expressionEffect{result: resultOperand,
-		block: curBB,
-	}, true
+	return expressionEffect{result: resultOperand, block: curBB}, true
+}
+
+func expressionThunk(ctx context, curBB *bir.BIRBasicBlock, expr *desugar.BLangExpressionThunk) (expressionEffect, bool) {
+	for _, stmt := range expr.InitStmts {
+		effect, ok := handleStatement(ctx, curBB, stmt)
+		if !ok {
+			return expressionEffect{}, false
+		}
+		curBB = effect.block
+		if curBB == nil {
+			ctx.internalError("expression thunk setup cannot complete abruptly", stmt.GetPosition())
+			return expressionEffect{}, false
+		}
+	}
+	return handleActionOrExpression(ctx, curBB, expr.Expr)
 }
 
 type expressionEffect struct {
@@ -1118,6 +1127,8 @@ func handleActionOrExpression(ctx context, curBB *bir.BIRBasicBlock, expr ast.BL
 		return groupExpression(ctx, curBB, expr)
 	case *ast.BLangIndexBasedAccess:
 		return indexBasedAccess(ctx, curBB, expr)
+	case *ast.BLangFieldBaseAccess:
+		return optionalFieldAccess(ctx, curBB, expr)
 	case *ast.BLangListConstructorExpr:
 		return listConstructorExpression(ctx, curBB, expr)
 	case *ast.BLangTypeConversionExpr:
@@ -1136,6 +1147,8 @@ func handleActionOrExpression(ctx context, curBB *bir.BIRBasicBlock, expr ast.BL
 		return newExpression(ctx, curBB, expr)
 	case *desugar.BLangServiceInit:
 		return serviceInitExpression(ctx, curBB, expr)
+	case *desugar.BLangExpressionThunk:
+		return expressionThunk(ctx, curBB, expr)
 	case *ast.BLangLambdaFunction:
 		return lambdaFunction(ctx, curBB, expr)
 	case *ast.BLangRemoteMethodCallAction:
@@ -1736,6 +1749,42 @@ func indexBasedAccess(ctx context, bb *bir.BIRBasicBlock, expr *ast.BLangIndexBa
 	return expressionEffect{result: resultOperand,
 		block: currBB,
 	}, true
+}
+
+func optionalFieldAccess(ctx context, curBB *bir.BIRBasicBlock, expr *ast.BLangFieldBaseAccess) (expressionEffect, bool) {
+	if !expr.IsOptionalAccess() {
+		ctx.internalError("non-optional field access should have been desugared to index access", expr.GetPosition())
+		return expressionEffect{}, false
+	}
+	pos := ctx.function().loc(expr.GetPosition())
+	baseEffect, ok := handleActionOrExpression(ctx, curBB, expr.Expr)
+	if !ok {
+		return baseEffect, false
+	}
+	keyOperand := ctx.addTempVar(semtypes.String)
+	baseEffect.block.Instructions = append(baseEffect.block.Instructions, bir.NewConstantLoad(keyOperand, expr.Field.GetValue(), pos))
+	resultOperand := ctx.addTempVar(expr.GetDeterminedType())
+	load := bir.NewFieldAccess(bir.InstructionKindMapLoad, resultOperand, keyOperand, baseEffect.result, pos)
+
+	baseTy := expr.Expr.GetDeterminedType()
+	// TODO: cover the error-base path when lax optional access typing is
+	// supported: https://github.com/ballerina-nutcracker/ballerina/issues/558
+	if semtypes.IsNever(semtypes.Intersect(baseTy, semtypes.Error)) {
+		baseEffect.block.Instructions = append(baseEffect.block.Instructions, load)
+		return expressionEffect{result: resultOperand, block: baseEffect.block}, true
+	}
+
+	isErrorOperand := ctx.addTempVar(semtypes.Boolean)
+	baseEffect.block.Instructions = append(baseEffect.block.Instructions, bir.NewTypeTest(semtypes.Error, isErrorOperand, baseEffect.result, pos))
+	errorBB := ctx.function().addBB()
+	loadBB := ctx.function().addBB()
+	doneBB := ctx.function().addBB()
+	baseEffect.block.Terminator = bir.NewBranch(isErrorOperand, errorBB, loadBB, pos)
+	errorBB.Instructions = append(errorBB.Instructions, bir.NewMove(baseEffect.result, resultOperand, pos))
+	errorBB.Terminator = bir.NewGoto(doneBB, pos)
+	loadBB.Instructions = append(loadBB.Instructions, load)
+	loadBB.Terminator = bir.NewGoto(doneBB, pos)
+	return expressionEffect{result: resultOperand, block: doneBB}, true
 }
 
 func groupExpression(ctx context, curBB *bir.BIRBasicBlock, expr *ast.BLangGroupExpr) (expressionEffect, bool) {
