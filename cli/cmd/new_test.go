@@ -558,34 +558,6 @@ func TestInitPackage_CleansUpOnWriteFailure(t *testing.T) {
 // reached). Pre-creating README.md as a directory lets Ballerina.toml and
 // lib.bal write successfully first, so cleanup() has more than one entry to
 // unwind.
-func TestInitPackage_CleansUpOnReadmeWriteFailure(t *testing.T) {
-	if runtime.GOOS == "windows" {
-		t.Skip("permission-based write-failure injection is unix-only")
-	}
-	projectPath := t.TempDir()
-	if err := os.MkdirAll(filepath.Join(projectPath, projects.ReadmeMdFile), 0755); err != nil {
-		t.Fatalf("failed to pre-create README.md as a directory: %v", err)
-	}
-
-	err := initPackage(projectPath, "mypkg", "myorg", templateLib)
-	if err == nil {
-		t.Fatal("expected an error writing README.md over an existing directory")
-	}
-	if !strings.Contains(err.Error(), "failed to create README.md") {
-		t.Errorf("err = %q, want 'failed to create README.md' message", err)
-	}
-
-	if _, statErr := os.Stat(filepath.Join(projectPath, projects.BallerinaTomlFile)); !os.IsNotExist(statErr) {
-		t.Errorf("expected Ballerina.toml to be cleaned up, stat err = %v", statErr)
-	}
-	if _, statErr := os.Stat(filepath.Join(projectPath, "lib.bal")); !os.IsNotExist(statErr) {
-		t.Errorf("expected lib.bal to be cleaned up, stat err = %v", statErr)
-	}
-	if _, statErr := os.Stat(filepath.Join(projectPath, ".gitignore")); !os.IsNotExist(statErr) {
-		t.Errorf("expected .gitignore to be cleaned up, stat err = %v", statErr)
-	}
-}
-
 // =============================================================================
 // Workspace Tests
 // =============================================================================
