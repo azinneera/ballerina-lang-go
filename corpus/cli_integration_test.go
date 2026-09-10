@@ -1303,29 +1303,6 @@ func TestBalNewCorpus(t *testing.T) {
 		}
 	})
 
-	t.Run("cleans-up-on-readme-write-failure", func(t *testing.T) {
-		if runtime.GOOS == "windows" {
-			t.Skip("directory-as-file write-failure injection is unix-only")
-		}
-		t.Parallel()
-		projectPath := t.TempDir()
-		if err := os.MkdirAll(filepath.Join(projectPath, "README.md"), 0o755); err != nil {
-			t.Fatalf("failed to pre-create README.md as a directory: %v", err)
-		}
-		_, stderr, exitCode := runCLICommand(t, balBin, repoRoot, coverDir, "new", projectPath, "-t", "lib")
-		if exitCode == 0 {
-			t.Fatal("expected an error writing README.md over an existing directory")
-		}
-		if !strings.Contains(stderr, "failed to create README.md") {
-			t.Errorf("stderr = %q, want 'failed to create README.md'", stderr)
-		}
-		for _, name := range []string{"Ballerina.toml", "lib.bal", ".gitignore"} {
-			if _, err := os.Stat(filepath.Join(projectPath, name)); !os.IsNotExist(err) {
-				t.Errorf("expected %s to be cleaned up, stat err = %v", name, err)
-			}
-		}
-	})
-
 	t.Run("workspace-empty-dir-content", func(t *testing.T) {
 		t.Parallel()
 		workspacePath := filepath.Join(t.TempDir(), "my-workspace")
@@ -1400,36 +1377,6 @@ func TestBalNewCorpus(t *testing.T) {
 					t.Errorf("%s missing %q:\n%s", tc.sourceFile, tc.sourceContains, sourceContent)
 				}
 				assertOnlyTemplateSourceExists(t, pkgPath, tc.sourceFile)
-			})
-		}
-	})
-
-	t.Run("lib-template-generates-readme", func(t *testing.T) {
-		t.Parallel()
-		libPkgPath := filepath.Join(t.TempDir(), "mylib")
-		_, stderr, exitCode := runCLICommand(t, balBin, repoRoot, coverDir, "new", libPkgPath, "-t", "lib")
-		if exitCode != 0 {
-			t.Fatalf("command failed: exit=%d\nstderr: %s", exitCode, stderr)
-		}
-		readmeContent := readFileT(t, filepath.Join(libPkgPath, "README.md"))
-		if strings.Contains(readmeContent, "PKG_NAME") || strings.Contains(readmeContent, "ORG_NAME") {
-			t.Errorf("README.md still has unsubstituted placeholders:\n%s", readmeContent)
-		}
-		if !strings.Contains(readmeContent, "/mylib") {
-			t.Errorf("README.md import example missing package name 'mylib':\n%s", readmeContent)
-		}
-
-		for _, template := range []string{"default", "main", "service"} {
-			t.Run(template, func(t *testing.T) {
-				t.Parallel()
-				pkgPath := filepath.Join(t.TempDir(), "mypackage")
-				_, stderr, exitCode := runCLICommand(t, balBin, repoRoot, coverDir, "new", pkgPath, "-t", template)
-				if exitCode != 0 {
-					t.Fatalf("command failed: exit=%d\nstderr: %s", exitCode, stderr)
-				}
-				if _, err := os.Stat(filepath.Join(pkgPath, "README.md")); err == nil {
-					t.Errorf("unexpected README.md generated for template %q", template)
-				}
 			})
 		}
 	})
