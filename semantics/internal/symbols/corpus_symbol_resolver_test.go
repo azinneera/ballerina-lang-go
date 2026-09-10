@@ -28,13 +28,6 @@ import (
 	"github.com/ballerina-nutcracker/ballerina/test_util/testphases"
 )
 
-// symbolResolverSkipList is the symbol-resolver *additional* skip list, on
-// top of the shared test_util.UnsupportedTests baseline.
-var symbolResolverSkipList = []string{
-	// https://github.com/ballerina-nutcracker/ballerina/issues/417
-	"subset8/08-xml/namespace12-v.bal",
-}
-
 func TestSymbolResolver(t *testing.T) {
 	flag.Parse()
 	testPairs := test_util.GetValidAndPanicTests(t, test_util.AST)
@@ -48,7 +41,7 @@ func TestSymbolResolver(t *testing.T) {
 }
 
 func testSymbolResolution(t *testing.T, testCase test_util.TestCase) {
-	if test_util.IsUnsupported(testCase.InputPath) || test_util.MatchesSkip(testCase.InputPath, symbolResolverSkipList) {
+	if test_util.IsUnsupported(testCase.InputPath) {
 		t.Skipf("Skipping symbol resolver test for %s", testCase.InputPath)
 		return
 	}

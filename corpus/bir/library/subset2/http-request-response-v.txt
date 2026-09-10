@@ -303,12 +303,12 @@ main() -> nil|error{
     %127 = println(%126) -> bb70;
   }
   bb70 {
-    %128 = ConstantLoad X-Resp
-    $desugar$11 = %128;
-    %130 = $default$1($desugar$11) -> bb71;
+    %129 = ConstantLoad X-Resp
+    $desugar$11 = %129;
+    %131 = $default$1($desugar$11) -> bb71;
   }
   bb71 {
-    $desugar$12 = %130;
+    $desugar$12 = %131;
     %133 = getHeader(res,$desugar$11,$desugar$12) -> bb72;
   }
   bb72 {
@@ -320,19 +320,19 @@ main() -> nil|error{
     return;
   }
   bb74 {
-    %132 = %133;
+    %128 = %133;
     GOTO bb75;
   }
   bb75 {
-    %135 = println(%132) -> bb76;
+    %135 = println(%128) -> bb76;
   }
   bb76 {
-    %136 = ConstantLoad X-Resp
-    $desugar$13 = %136;
-    %138 = $default$3($desugar$13) -> bb77;
+    %137 = ConstantLoad X-Resp
+    $desugar$13 = %137;
+    %139 = $default$3($desugar$13) -> bb77;
   }
   bb77 {
-    $desugar$14 = %138;
+    $desugar$14 = %139;
     %141 = getHeaders(res,$desugar$13,$desugar$14) -> bb78;
   }
   bb78 {
@@ -344,11 +344,11 @@ main() -> nil|error{
     return;
   }
   bb80 {
-    %140 = %141;
+    %136 = %141;
     GOTO bb81;
   }
   bb81 {
-    rs = %140;
+    rs = %136;
     %144 = length(rs) -> bb82;
   }
   bb82 {
@@ -356,10 +356,10 @@ main() -> nil|error{
     %146 = println(%145) -> bb83;
   }
   bb83 {
-    %147 = $default$2() -> bb84;
+    %148 = $default$2() -> bb84;
   }
   bb84 {
-    $desugar$15 = %147;
+    $desugar$15 = %148;
     %150 = getHeaderNames(res,$desugar$15) -> bb85;
   }
   bb85 {
@@ -369,8 +369,8 @@ main() -> nil|error{
     %152 = %151;
     %153 = ConstantLoad 1
     %154 = %153;
-    %149 = >= %152 %154;
-    %155 = %149;
+    %147 = >= %152 %154;
+    %155 = %147;
     %156 = println(%155) -> bb87;
   }
   bb87 {

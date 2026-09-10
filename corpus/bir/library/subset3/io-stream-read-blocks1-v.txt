@@ -15,10 +15,10 @@ main() -> nil|error{
     content = %11;
     $desugar$0 = blockPath;
     $desugar$1 = content;
-    %15 = $default$4($desugar$0,$desugar$1) -> bb1;
+    %16 = $default$4($desugar$0,$desugar$1) -> bb1;
   }
   bb1 {
-    $desugar$2 = %15;
+    $desugar$2 = %16;
     %18 = fileWriteBytes($desugar$0,$desugar$1,$desugar$2) -> bb2;
   }
   bb2 {
@@ -30,7 +30,7 @@ main() -> nil|error{
     return;
   }
   bb4 {
-    %17 = %18;
+    %13 = %18;
     GOTO bb5;
   }
   bb5 {
@@ -150,16 +150,16 @@ main() -> nil|error{
     %0 = ConstantLoad /tmp/bal_io_stream_read_blocks_default.bin
     defaultPath = %0;
     $desugar$3 = defaultPath;
-    %3 = ConstantLoad 9
-    %4 = ConstantLoad 8
-    %5 = ConstantLoad 7
-    %6 = ConstantLoad 3
-    %7 = newArray [int:Unsigned8...][%6]{%3, %4, %5}
-    $desugar$4 = %7;
-    %9 = $default$4($desugar$3,$desugar$4) -> bb27;
+    %4 = ConstantLoad 9
+    %5 = ConstantLoad 8
+    %6 = ConstantLoad 7
+    %7 = ConstantLoad 3
+    %8 = newArray [int:Unsigned8...][%7]{%4, %5, %6}
+    $desugar$4 = %8;
+    %10 = $default$4($desugar$3,$desugar$4) -> bb27;
   }
   bb27 {
-    $desugar$5 = %9;
+    $desugar$5 = %10;
     %12 = fileWriteBytes($desugar$3,$desugar$4,$desugar$5) -> bb28;
   }
   bb28 {
@@ -175,15 +175,15 @@ main() -> nil|error{
     return;
   }
   bb30 {
-    %11 = %12;
+    %2 = %12;
     GOTO bb31;
   }
   bb31 {
     $desugar$6 = defaultPath;
-    %15 = $default$0($desugar$6) -> bb32;
+    %16 = $default$0($desugar$6) -> bb32;
   }
   bb32 {
-    $desugar$7 = %15;
+    $desugar$7 = %16;
     %18 = $desugar$7;
     %19 = fileReadBlocksAsStream($desugar$6,%18) -> bb33;
   }
@@ -200,11 +200,11 @@ main() -> nil|error{
     return;
   }
   bb35 {
-    %17 = %19;
+    %14 = %19;
     GOTO bb36;
   }
   bb36 {
-    defaultStream = %17;
+    defaultStream = %14;
     %22 = streamNext defaultStream
     d1 = %22;
     %24 = d1 is {| value: readonly&[int:Unsigned8...], never... |}

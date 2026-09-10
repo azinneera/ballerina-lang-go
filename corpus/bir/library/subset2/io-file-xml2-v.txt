@@ -13,10 +13,10 @@ main() -> nil|error{
     data = %9;
     $desugar$0 = path;
     $desugar$1 = data;
-    %13 = $default$6($desugar$0,$desugar$1) -> bb1;
+    %14 = $default$6($desugar$0,$desugar$1) -> bb1;
   }
   bb1 {
-    $desugar$2 = %13;
+    $desugar$2 = %14;
     %16 = fileWriteXml($desugar$0,$desugar$1,$desugar$2) -> bb2;
   }
   bb2 {
@@ -28,7 +28,7 @@ main() -> nil|error{
     return;
   }
   bb4 {
-    %15 = %16;
+    %11 = %16;
     GOTO bb5;
   }
   bb5 {
@@ -56,10 +56,10 @@ main() -> nil|error{
     data2 = %24;
     $desugar$3 = path;
     $desugar$4 = data2;
-    %28 = $default$6($desugar$3,$desugar$4) -> bb11;
+    %29 = $default$6($desugar$3,$desugar$4) -> bb11;
   }
   bb11 {
-    $desugar$5 = %28;
+    $desugar$5 = %29;
     %31 = fileWriteXml($desugar$3,$desugar$4,$desugar$5) -> bb12;
   }
   bb12 {
@@ -71,7 +71,7 @@ main() -> nil|error{
     return;
   }
   bb14 {
-    %30 = %31;
+    %26 = %31;
     GOTO bb15;
   }
   bb15 {

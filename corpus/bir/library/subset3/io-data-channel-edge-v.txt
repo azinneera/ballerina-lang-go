@@ -383,10 +383,10 @@ main() -> nil|error{
     %60 = ConstantLoad /tmp/bal_io_dc_varint.bin
     path = %60;
     $desugar$8 = path;
-    %63 = $default$11($desugar$8) -> bb84;
+    %64 = $default$11($desugar$8) -> bb84;
   }
   bb84 {
-    $desugar$9 = %63;
+    $desugar$9 = %64;
     %66 = openWritableFile($desugar$8,$desugar$9) -> bb85;
   }
   bb85 {
@@ -401,11 +401,11 @@ main() -> nil|error{
     return;
   }
   bb87 {
-    %65 = %66;
+    %62 = %66;
     GOTO bb88;
   }
   bb88 {
-    wb = %65;
+    wb = %62;
     $desugar$10 = wb;
     %70 = $default$10($desugar$10) -> bb89;
   }

@@ -4,10 +4,10 @@ main() -> nil|error{
     %1 = ConstantLoad /tmp/bal_io_char_write.txt
     path = %1;
     $desugar$0 = path;
-    %4 = $default$11($desugar$0) -> bb1;
+    %5 = $default$11($desugar$0) -> bb1;
   }
   bb1 {
-    $desugar$1 = %4;
+    $desugar$1 = %5;
     %7 = openWritableFile($desugar$0,$desugar$1) -> bb2;
   }
   bb2 {
@@ -19,11 +19,11 @@ main() -> nil|error{
     return;
   }
   bb4 {
-    %6 = %7;
+    %3 = %7;
     GOTO bb5;
   }
   bb5 {
-    wb = %6;
+    wb = %3;
     %10 = newObject ballerina/io:WritableCharacterChannel
     %11 = ConstantLoad UTF-8
     %12 = init(%10,wb,%11) -> bb6;
@@ -280,10 +280,10 @@ main() -> nil|error{
     %29 = ConstantLoad /tmp/bal_io_char_write_latin1.txt
     lpath = %29;
     $desugar$2 = lpath;
-    %32 = $default$11($desugar$2) -> bb64;
+    %33 = $default$11($desugar$2) -> bb64;
   }
   bb64 {
-    $desugar$3 = %32;
+    $desugar$3 = %33;
     %35 = openWritableFile($desugar$2,$desugar$3) -> bb65;
   }
   bb65 {
@@ -297,11 +297,11 @@ main() -> nil|error{
     return;
   }
   bb67 {
-    %34 = %35;
+    %31 = %35;
     GOTO bb68;
   }
   bb68 {
-    lb = %34;
+    lb = %31;
     %38 = newObject ballerina/io:WritableCharacterChannel
     %39 = ConstantLoad ISO-8859-1
     %40 = init(%38,lb,%39) -> bb69;
@@ -463,10 +463,10 @@ main() -> nil|error{
     %80 = ConstantLoad /tmp/bal_io_char_write_utf16.bin
     upath = %80;
     $desugar$4 = upath;
-    %83 = $default$11($desugar$4) -> bb105;
+    %84 = $default$11($desugar$4) -> bb105;
   }
   bb105 {
-    $desugar$5 = %83;
+    $desugar$5 = %84;
     %86 = openWritableFile($desugar$4,$desugar$5) -> bb106;
   }
   bb106 {
@@ -480,11 +480,11 @@ main() -> nil|error{
     return;
   }
   bb108 {
-    %85 = %86;
+    %82 = %86;
     GOTO bb109;
   }
   bb109 {
-    ub = %85;
+    ub = %82;
     %89 = newObject ballerina/io:WritableCharacterChannel
     %90 = ConstantLoad UTF-16
     %91 = init(%89,ub,%90) -> bb110;

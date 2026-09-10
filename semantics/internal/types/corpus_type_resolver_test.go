@@ -28,13 +28,6 @@ import (
 	"github.com/ballerina-nutcracker/ballerina/test_util/testphases"
 )
 
-// typeResolverSkipList is the type-resolver *additional* skip list, on top of
-// the shared test_util.UnsupportedTests baseline.
-var typeResolverSkipList = []string{
-	// https://github.com/ballerina-nutcracker/ballerina/issues/417
-	"subset8/08-xml/namespace12-v.bal",
-}
-
 func TestTypeResolver(t *testing.T) {
 	flag.Parse()
 
@@ -49,7 +42,7 @@ func TestTypeResolver(t *testing.T) {
 }
 
 func testTypeResolution(t *testing.T, testCase test_util.TestCase) {
-	if test_util.IsUnsupported(testCase.InputPath) || test_util.MatchesSkip(testCase.InputPath, typeResolverSkipList) {
+	if test_util.IsUnsupported(testCase.InputPath) {
 		t.Skipf("Skipping type resolver test for %s", testCase.InputPath)
 		return
 	}

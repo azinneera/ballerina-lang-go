@@ -81,6 +81,7 @@ func (sr *symbolReader) deserialize() (result model.ExportedSymbolSpace, err err
 	sr.externalRefKeys = sr.readExternalSymbolRefPool()
 
 	mainSpace := sr.readSymbolSpace()
+	sr.readMappingDefaults(mainSpace)
 	annotationSpace := sr.readSymbolSpace()
 
 	return model.NewExportedSymbolSpaces([]*model.SymbolSpace{mainSpace}, []*model.SymbolSpace{annotationSpace}), nil
@@ -90,12 +91,38 @@ func (sr *symbolReader) readResourceMethodSymbol(space *model.SymbolSpace) {
 	name, isPublic, ty := sr.readSymbolBase()
 	methodName := sr.readStringCP()
 	pathType := sr.readType()
-	typedSig, sigHandle := sr.readFunctionSignatureBody(space)
+	typedSig, sigHandle := sr.readFunctionSignatureBody()
 	rm := model.NewResourceMethodSymbol(name, methodName, isPublic, diagnostics.NewBuiltinLocation())
 	rm.SetType(ty)
 	rm.SetTypedSignature(typedSig)
 	rm.SetPathListType(pathType)
 	ref := addDeserializedSymbol(space, name, rm)
+	if sigHandle >= 0 {
+		sr.env.AssociateFunctionSignature(ref, sr.sigHandles[sigHandle])
+	}
+}
+
+func (sr *symbolReader) readDependentlyTypedResourceMethodSymbol(space *model.SymbolSpace) {
+	name := sr.readStringCP()
+	var isPublic bool
+	read(sr.r, &isPublic)
+	methodName := sr.readStringCP()
+	pathType := sr.readType()
+	var paramCount int64
+	read(sr.r, &paramCount)
+	paramTypes := make([]semtypes.SemType, paramCount)
+	for i := int64(0); i < paramCount; i++ {
+		paramTypes[i] = sr.readType()
+	}
+	var flags uint8
+	read(sr.r, &flags)
+	sym := model.NewDependentlyTypedResourceMethodSymbol(name, methodName, model.FuncSymbolFlags(flags), isPublic, diagnostics.NewBuiltinLocation())
+	sym.SetPathListType(pathType)
+	sym.SetParamTypes(paramTypes)
+	var sigHandle int64
+	read(sr.r, &sigHandle)
+	sym.SetReturnType(sr.readTypeOp())
+	ref := addDeserializedSymbol(space, name, sym)
 	if sigHandle >= 0 {
 		sr.env.AssociateFunctionSignature(ref, sr.sigHandles[sigHandle])
 	}
@@ -118,6 +145,16 @@ func addDeserializedSymbol(space *model.SymbolSpace, name string, sym model.Symb
 func (sr *symbolReader) storeAnnotations(ref model.SymbolRef, annotations values.AnnotationValues) {
 	for key, value := range annotations {
 		sr.env.SetSymbolAnnotationValue(ref, key, value)
+	}
+}
+
+// storeRecordFieldAnnotations records deserialized per-field annotation values
+// on the compiler environment, keyed by the record type symbol's ref.
+func (sr *symbolReader) storeRecordFieldAnnotations(ref model.SymbolRef, fieldAnnotations values.FieldAnnotationValues) {
+	for field, annotations := range fieldAnnotations {
+		for key, value := range annotations {
+			sr.env.SetRecordFieldAnnotationValue(ref, field, key, value)
+		}
 	}
 }
 
@@ -149,6 +186,43 @@ func (sr *symbolReader) readSymbolSpace() *model.SymbolSpace {
 	}
 
 	return space
+}
+
+func (sr *symbolReader) readMappingDefaults(space *model.SymbolSpace) {
+	var count int64
+	read(sr.r, &count)
+	if count < 0 {
+		panic(fmt.Sprintf("invalid mapping-default entry count: %d", count))
+	}
+	seen := make(map[int32]struct{}, count)
+	for i := int64(0); i < count; i++ {
+		var atomIndex int32
+		read(sr.r, &atomIndex)
+		if _, duplicate := seen[atomIndex]; duplicate {
+			panic(fmt.Sprintf("duplicate mapping-default atom index: %d", atomIndex))
+		}
+		seen[atomIndex] = struct{}{}
+		atom, ok := sr.tp.MappingAtomicTypeAt(atomIndex)
+		if !ok {
+			panic(fmt.Sprintf("invalid mapping-default atom index: %d", atomIndex))
+		}
+		var defaultCount int64
+		read(sr.r, &defaultCount)
+		if defaultCount < 0 {
+			panic(fmt.Sprintf("invalid field-default count: %d", defaultCount))
+		}
+		if defaultCount > 0 && space == nil {
+			panic("mapping defaults require a main symbol space")
+		}
+		defaults := make([]model.FieldDefault, defaultCount)
+		for j := range defaults {
+			defaults[j] = model.FieldDefault{
+				FieldName: sr.readStringCP(),
+				FnRef:     sr.readSymbolRef(space),
+			}
+		}
+		sr.env.SetMappingDefaults(atom, defaults)
+	}
 }
 
 func (sr *symbolReader) readSymbol(space *model.SymbolSpace, opaque []model.Symbol) {
@@ -191,6 +265,8 @@ func (sr *symbolReader) readSymbol(space *model.SymbolSpace, opaque []model.Symb
 		sr.readDependentlyTypedFunctionSymbol(space)
 	case symTagResourceMethod:
 		sr.readResourceMethodSymbol(space)
+	case symTagDependentlyTypedResourceMethod:
+		sr.readDependentlyTypedResourceMethodSymbol(space)
 	default:
 		panic(fmt.Sprintf("unknown symbol tag: %d", tag))
 	}
@@ -223,11 +299,13 @@ func (sr *symbolReader) readRecordSymbol(space *model.SymbolSpace) {
 	sym := model.NewRecordSymbol(name, isPublic, diagnostics.NewBuiltinLocation())
 	sym.SetType(ty)
 	annotations := sr.readAnnotationValues()
+	fieldAnnotations := sr.readFieldAnnotationValues()
 	for _, m := range sr.readInclusionMembers(space) {
 		sym.AddMember(m)
 	}
 	ref := addDeserializedSymbol(space, name, &sym)
 	sr.storeAnnotations(ref, annotations)
+	sr.storeRecordFieldAnnotations(ref, fieldAnnotations)
 }
 
 func (sr *symbolReader) readObjectTypeSymbol(space *model.SymbolSpace) {
@@ -501,7 +579,7 @@ func (sr *symbolReader) readAnnotationSymbol(space *model.SymbolSpace) {
 func (sr *symbolReader) readFunctionSymbol(space *model.SymbolSpace) {
 	name, isPublic, ty := sr.readSymbolBase()
 
-	typedSig, sigHandle := sr.readFunctionSignatureBody(space)
+	typedSig, sigHandle := sr.readFunctionSignatureBody()
 	sym := model.NewFunctionSymbol(name, typedSig, isPublic, diagnostics.NewBuiltinLocation())
 	sym.SetType(ty)
 	ref := addDeserializedSymbol(space, name, sym)
@@ -510,7 +588,7 @@ func (sr *symbolReader) readFunctionSymbol(space *model.SymbolSpace) {
 	}
 }
 
-func (sr *symbolReader) readFunctionSignatureBody(space *model.SymbolSpace) (model.TypedFunctionSignature, int64) {
+func (sr *symbolReader) readFunctionSignatureBody() (model.TypedFunctionSignature, int64) {
 	var paramCount int64
 	read(sr.r, &paramCount)
 	paramTypes := make([]semtypes.SemType, paramCount)
@@ -541,9 +619,22 @@ func (sr *symbolReader) readFunctionSignatureTable(space *model.SymbolSpace) {
 	var count int64
 	read(sr.r, &count)
 	sr.sigHandles = make([]model.FunctionSignatureRef, count)
+	returnIndexes := make([]int64, count)
 	for i := int64(0); i < count; i++ {
 		params, hasRest := sr.readUntypedFunctionSignatureParams(space)
 		sr.sigHandles[i] = sr.env.AllocateFunctionSignature(params, hasRest)
+		read(sr.r, &returnIndexes[i])
+	}
+	for i, returnIndex := range returnIndexes {
+		if returnIndex < 0 {
+			continue
+		}
+		if returnIndex >= int64(len(sr.sigHandles)) {
+			panic(fmt.Sprintf("invalid return function signature index: %d", returnIndex))
+		}
+		if !sr.env.AssociateReturnFunctionSignature(sr.sigHandles[i], sr.sigHandles[returnIndex]) {
+			panic(fmt.Sprintf("conflicting return function signature association: %d", i))
+		}
 	}
 }
 

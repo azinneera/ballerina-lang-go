@@ -251,16 +251,16 @@ main() -> nil|error{
     %70 = ConstantLoad /tmp/bal_io_byte_channel_base64.bin
     path = %70;
     $desugar$0 = path;
-    %73 = ConstantLoad 72
-    %74 = ConstantLoad 105
-    %75 = ConstantLoad 33
-    %76 = ConstantLoad 3
-    %77 = newArray [int:Unsigned8...][%76]{%73, %74, %75}
-    $desugar$1 = %77;
-    %79 = $default$4($desugar$0,$desugar$1) -> bb62;
+    %74 = ConstantLoad 72
+    %75 = ConstantLoad 105
+    %76 = ConstantLoad 33
+    %77 = ConstantLoad 3
+    %78 = newArray [int:Unsigned8...][%77]{%74, %75, %76}
+    $desugar$1 = %78;
+    %80 = $default$4($desugar$0,$desugar$1) -> bb62;
   }
   bb62 {
-    $desugar$2 = %79;
+    $desugar$2 = %80;
     %82 = fileWriteBytes($desugar$0,$desugar$1,$desugar$2) -> bb63;
   }
   bb63 {
@@ -272,7 +272,7 @@ main() -> nil|error{
     return;
   }
   bb65 {
-    %81 = %82;
+    %72 = %82;
     GOTO bb66;
   }
   bb66 {

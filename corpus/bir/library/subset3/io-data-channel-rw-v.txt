@@ -2,10 +2,10 @@ module $anon.. v 0.0.0;
 roundtrip("BE"|"LE",string) -> nil|error{
   bb0 {
     $desugar$0 = path;
-    %4 = $default$11($desugar$0) -> bb1;
+    %5 = $default$11($desugar$0) -> bb1;
   }
   bb1 {
-    $desugar$1 = %4;
+    $desugar$1 = %5;
     %7 = openWritableFile($desugar$0,$desugar$1) -> bb2;
   }
   bb2 {
@@ -17,11 +17,11 @@ roundtrip("BE"|"LE",string) -> nil|error{
     return;
   }
   bb4 {
-    %6 = %7;
+    %3 = %7;
     GOTO bb5;
   }
   bb5 {
-    wb = %6;
+    wb = %3;
     %10 = newObject ballerina/io:WritableDataChannel
     %11 = init(%10,wb,ord) -> bb6;
   }

@@ -85,8 +85,8 @@ $anonFunc$_6(int) -> int{
 }
 main() -> nil{
   bb0 {
-    %1 = fp $anon/.:$default$1
-    $desugar$0 = %1;
+    %2 = fp $anon/.:$default$1
+    $desugar$0 = %2;
     %3 = fp $anon/.:$anonFunc$_0
     base = %3;
     %5 = $desugar$0() -> bb1;
@@ -110,8 +110,8 @@ main() -> nil{
     %15 = println(%14) -> bb5;
   }
   bb5 {
-    %16 = fp $anon/.:$default$3
-    $desugar$2 = %16;
+    %17 = fp $anon/.:$default$3
+    $desugar$2 = %17;
     %18 = fp $anon/.:$anonFunc$_1
     localFn = %18;
     %20 = ConstantLoad 4
@@ -141,8 +141,8 @@ main() -> nil{
     %36 = println(%35) -> bb10;
   }
   bb10 {
-    %37 = fp $anon/.:$default$5
-    $desugar$5 = %37;
+    %38 = fp $anon/.:$default$5
+    $desugar$5 = %38;
     copied = base;
     %40 = $desugar$5() -> bb11;
   }
@@ -318,8 +318,8 @@ applyInlineFns(int,[function(int) returns int...]...) -> int{
   }
   bb6 {
     PushScopeFrame 10
-    %0 = fp $anon/.:$default$12
-    $desugar$3 = %0;
+    %1 = fp $anon/.:$default$12
+    $desugar$3 = %1;
     %2 = (1, $desugar$0)[(1, $desugar$1)];
     fn = %2;
     %4 = (1, res);

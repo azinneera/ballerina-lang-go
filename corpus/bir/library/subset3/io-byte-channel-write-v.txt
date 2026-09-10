@@ -4,10 +4,10 @@ main() -> nil|error{
     %1 = ConstantLoad /tmp/bal_io_byte_channel_write.bin
     path = %1;
     $desugar$0 = path;
-    %4 = $default$11($desugar$0) -> bb1;
+    %5 = $default$11($desugar$0) -> bb1;
   }
   bb1 {
-    $desugar$1 = %4;
+    $desugar$1 = %5;
     %7 = openWritableFile($desugar$0,$desugar$1) -> bb2;
   }
   bb2 {
@@ -19,11 +19,11 @@ main() -> nil|error{
     return;
   }
   bb4 {
-    %6 = %7;
+    %3 = %7;
     GOTO bb5;
   }
   bb5 {
-    writer = %6;
+    writer = %3;
     %10 = ConstantLoad 1
     %11 = ConstantLoad 2
     %12 = ConstantLoad 3

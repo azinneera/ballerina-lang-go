@@ -2,7 +2,7 @@
 
 This directory contains the Go-native implementations of the `ballerina/*` standard library
 packages baked into the interpreter binary. Each package is compiled into embedded `.sym`/`.bir`
-artefacts and laid out as `<name>/0.0.1/go1.26/`. See each package's own README (linked below)
+artefacts and laid out as `<name>/0.0.1/go1.27/`. See each package's own README (linked below)
 for the full feature-by-feature support table and behavioural notes.
 
 ## Packages
@@ -12,22 +12,33 @@ in each package's support table (Supported + Partially Supported + Not Yet Suppo
 
 | Package                                           | Supported | Partially Supported | Not Yet Supported | Support % |
 |---------------------------------------------------|---|---|---|---|
-| [crypto](crypto/0.0.1/go1.26/README.md)           | 26 | 1 | 5 | 81% |
-| [http](http/0.0.1/go1.26/README.md)               | 26 | 7 | 40 | 36% |
-| [io](io/0.0.1/go1.26/README.md)                   | 21 | 2 | 4 | 78% |
-| [log](log/0.0.1/go1.26/README.md)                 | 7 | 2 | 15 | 29% |
-| [math.vector](math.vector/0.0.1/go1.26/README.md) | 5 | 0 | 0 | 100% |
-| [os](os/0.0.1/go1.26/README.md)                   | 11 | 1 | 0 | 92% |
-| [random](random/0.0.1/go1.26/README.md)           | 3 | 1 | 1 | 60% |
-| [time](time/0.0.1/go1.26/README.md)               | 31 | 1 | 0 | 97% |
-| [url](url/0.0.1/go1.26/README.md)                 | 3 | 0 | 1 | 75% |
-| **Total**                                         | **133** | **15** | **66** | **62%** |
+| [avro](avro/0.0.1/go1.27/README.md)               | 15 | 1 | 0 | 94% |
+| [crypto](crypto/0.0.1/go1.27/README.md)           | 26 | 1 | 5 | 81% |
+| [http](http/0.0.1/go1.27/README.md)               | 28 | 7 | 38 | 38% |
+| [io](io/0.0.1/go1.27/README.md)                   | 21 | 2 | 4 | 78% |
+| [log](log/0.0.1/go1.27/README.md)                 | 7 | 2 | 15 | 29% |
+| [math.vector](math.vector/0.0.1/go1.27/README.md) | 5 | 0 | 0 | 100% |
+| [os](os/0.0.1/go1.27/README.md)                   | 11 | 1 | 0 | 92% |
+| [protobuf](protobuf/0.0.1/go1.27/README.md)       | 11 | 2 | 0 | 85% |
+| [random](random/0.0.1/go1.27/README.md)           | 3 | 1 | 1 | 60% |
+| [time](time/0.0.1/go1.27/README.md)               | 31 | 1 | 0 | 97% |
+| [url](url/0.0.1/go1.27/README.md)                 | 3 | 0 | 1 | 75% |
+| **Total**                                         | **161** | **18** | **64** | **66%** |
 
 ## Notable Behavioural Changes
 
 Consolidated from each package's README. Only permanent, architectural Go-level divergences are
 listed here; temporary language gaps are tracked as `Not Yet Supported` rows in the per-package
 tables instead.
+
+### avro
+
+- **An unparseable schema returns an error instead of panicking.** jBallerina lets the underlying schema-parser exception escape `init`, so `new avro:Schema("not-a-schema")` panics even though `init` declares `returns Error?`; the Go-native version returns an `avro:Error` with the message `Avro schema parsing error` — this is what the module specification describes, and it stays inside the declared signature.
+- **Union branch selection prefers the natural branch and applies one rule everywhere.** jBallerina uses two different rules: a union inside a record field goes through a tag table where a `float` or `double` branch also claims `int` and `decimal` values, while a top-level union bypasses that table entirely and is resolved by the underlying Avro library — which rejects `string`, `bytes`, `record`, `enum`, `array`, and `fixed` branches outright. The Go-native version applies one rule at every position: the first branch whose Avro type is the value's natural encoding wins, and only if no branch matches does the widening tag table apply. Consequently a top-level `["null","string"]` (and every other combination jBallerina rejects) works, and `["double","long"]` given an `int` selects the lossless `long` branch where a jBallerina record field would select `double`. A `bytes`/`fixed` branch and an `array` branch — or a `record` branch and a `map` branch — sharing a union are told apart by the value's own inherent type rather than by declaration order, since a Ballerina `byte[]` and a `T[]` both reach the union as the same list representation, and a record and a `map<T>` both reach it as the same mapping representation.
+- **A `float` is not narrowed into an `int` or `long` schema.** jBallerina converts nothing in this case — the value falls through to Apache Avro's `GenericDatumWriter`, which casts to `java.lang.Number` and truncates toward zero, so `3.9` is stored as `3`. The Go-native version returns an `avro:Error` instead of writing a payload that does not represent the value. Conversions jBallerina performs deliberately are kept as they are: an `int` narrows into an `int` schema with the same wrapping `Long.intValue()` semantics, an `int` widens into a `float` or `double` schema, a `decimal` widens into a `double` schema, and a `string` schema stringifies whatever it is given.
+- **A `bytes`/`fixed` schema requires a value whose own type is `byte[]`.** An `int[]` is rejected even when every value happens to fit in a byte (0-255) — including a bare list literal such as `schema.toAvro([1, 2, 3])`, which carries no `byte[]` type of its own since `toAvro` takes `anydata`; declare the value as `byte[]` first. jBallerina agrees this should be an error but does not implement it as one: passing a plain `int[]`, in range or not, throws an uncaught `NullPointerException` instead of returning an error.
+- **Avro map keys are encoded in insertion order.** jBallerina iterates a Java `HashMap`, so the key order in an encoded Avro map is unspecified; the Go-native version writes keys in the Ballerina value's insertion order — the Avro encoding does not constrain map key order and readers are insensitive to it.
+- **A `fixed` schema with `"size": 0` is rejected.** jBallerina's underlying Avro library accepts a zero-size `fixed` type, which always encodes to zero bytes. The Go-native version's underlying codec requires a size greater than zero and rejects the schema itself with an `avro:Error` from `new`. Zero-size `fixed` types have no practical use and are not expected to appear in real schemas.
 
 ### crypto
 
@@ -51,7 +62,8 @@ tables instead.
 - **`fileWriteJson` key ordering.** jBallerina writes JSON object keys in insertion order; the Go-native version writes them in **alphabetical order** — Go's `encoding/json` sorts map keys.
 - **Streams are consumed via `next()`/`close()` only.** The returned streams are driven with explicit `.next()` and `.close()` calls. Iterating a stream with a `foreach` statement or a query (`from ... in`) expression is not yet supported at the language level, so those constructs cannot yet consume these streams.
 - **Write-from-stream accepts a generic `error?` completion.** jBallerina declares `fileWriteLinesFromStream`/`fileWriteBlocksFromStream` with a `stream<_, io:Error?>` parameter, which rejects a stream held as `stream<_, error?>` (e.g. `stream<byte[], error?> s = check io:fileReadBlocksAsStream(p); check io:fileWriteBlocksFromStream(out, s);` fails to compile in jBallerina). This port widens the parameter completion type to the generic `error?`, so both `io:Error?` and plain `error?` completion streams are accepted. This is a strict superset — every jBallerina-valid call still compiles — and the return type remains the specific `io:Error?`.
-- **`writeVarInt`/`readVarInt` round-trip the full `int` range.** jBallerina's variable-length integer implementation breaks for very large magnitudes (`readVarInt` panics on encodings longer than 8 bytes and `writeVarInt(int:MIN_VALUE)` writes `0x00`). This port encodes with the minimal correct width and reads up to 10 bytes, so every `int` round-trips; the wire format matches jBallerina for all values it handles correctly.
+- **`writeVarInt`/`readVarInt` round-trip the full `int` range.** jBallerina's variable-length integer implementation breaks for very large magnitudes: `readVarInt` panics on encodings longer than 8 bytes (so its own `writeVarInt` output for values needing 9-10 bytes cannot be read back), and `writeVarInt(int:MIN_VALUE)` silently writes a single `0x00` byte. This port encodes such values with the minimal correct width and reads encodings up to 10 bytes, so every `int` round-trips; the wire format is identical to jBallerina for all values jBallerina handles correctly.
+- **Unknown charset handling differs between `writeString` and `readString`.** `WritableDataChannel.writeString` surfaces an unsupported charset as a Go error, which the interpreter turns into a panic, matching jBallerina's unchecked `UnsupportedEncodingException`. `ReadableDataChannel.readString` instead returns it as an `io:Error` value.
 
 ### log
 
@@ -61,6 +73,10 @@ tables instead.
 ### os
 
 - **Environment mutations are process-wide.** jBallerina uses per-strand env maps for isolation; the Go-native version calls `os.Setenv` / `os.Unsetenv` directly, mutating the process-wide environment. This is safe for single-threaded Ballerina programs but not for concurrent strand execution.
+
+### protobuf
+
+- **`map<anydata>` keys from an unpacked Struct are sorted alphabetically.** jBallerina's field order for a deserialized `Struct` reflects Java's map implementation; the Go-native version sorts keys alphabetically instead, since Go's map type does not preserve insertion or wire order.
 
 ### random
 

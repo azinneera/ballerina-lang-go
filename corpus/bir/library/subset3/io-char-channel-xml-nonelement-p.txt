@@ -1,12 +1,12 @@
 module $anon.. v 0.0.0;
 main() -> nil|error{
   bb0 {
-    %1 = ConstantLoad /tmp/bal_io_char_xml_nonelement.xml
-    $desugar$0 = %1;
-    %3 = $default$11($desugar$0) -> bb1;
+    %2 = ConstantLoad /tmp/bal_io_char_xml_nonelement.xml
+    $desugar$0 = %2;
+    %4 = $default$11($desugar$0) -> bb1;
   }
   bb1 {
-    $desugar$1 = %3;
+    $desugar$1 = %4;
     %6 = openWritableFile($desugar$0,$desugar$1) -> bb2;
   }
   bb2 {
@@ -18,11 +18,11 @@ main() -> nil|error{
     return;
   }
   bb4 {
-    %5 = %6;
+    %1 = %6;
     GOTO bb5;
   }
   bb5 {
-    wb = %5;
+    wb = %1;
     %9 = newObject ballerina/io:WritableCharacterChannel
     %10 = ConstantLoad UTF-8
     %11 = init(%9,wb,%10) -> bb6;

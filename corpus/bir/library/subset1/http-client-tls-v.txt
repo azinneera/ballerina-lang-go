@@ -36,14 +36,14 @@ main() -> nil|error{
   }
   bb7 {
     c1 = %1;
-    %14 = ConstantLoad /path
-    $desugar$0 = %14;
-    %16 = $default$21($desugar$0) -> bb8;
+    %15 = ConstantLoad /path
+    $desugar$0 = %15;
+    %17 = $default$21($desugar$0) -> bb8;
   }
   bb8 {
-    $desugar$1 = %16;
-    %18 = ConstantLoad typedesc
-    $desugar$2 = %18;
+    $desugar$1 = %17;
+    %19 = ConstantLoad typedesc
+    $desugar$2 = %19;
     %21 = $remote$get(c1,$desugar$0,$desugar$1,$desugar$2) -> bb9;
   }
   bb9 {
@@ -55,11 +55,11 @@ main() -> nil|error{
     return;
   }
   bb11 {
-    %20 = %21;
+    %14 = %21;
     GOTO bb12;
   }
   bb12 {
-    r1 = %20;
+    r1 = %14;
     %25 = ConstantLoad statusCode
     %24 = r1[%25];
     %26 = %24;
@@ -113,14 +113,14 @@ main() -> nil|error{
   }
   bb20 {
     c2 = %28;
-    %53 = ConstantLoad /path
-    $desugar$3 = %53;
-    %55 = $default$21($desugar$3) -> bb21;
+    %54 = ConstantLoad /path
+    $desugar$3 = %54;
+    %56 = $default$21($desugar$3) -> bb21;
   }
   bb21 {
-    $desugar$4 = %55;
-    %57 = ConstantLoad typedesc
-    $desugar$5 = %57;
+    $desugar$4 = %56;
+    %58 = ConstantLoad typedesc
+    $desugar$5 = %58;
     %60 = $remote$get(c2,$desugar$3,$desugar$4,$desugar$5) -> bb22;
   }
   bb22 {
@@ -132,11 +132,11 @@ main() -> nil|error{
     return;
   }
   bb24 {
-    %59 = %60;
+    %53 = %60;
     GOTO bb25;
   }
   bb25 {
-    r2 = %59;
+    r2 = %53;
     %64 = ConstantLoad statusCode
     %63 = r2[%64];
     %65 = %63;
@@ -187,14 +187,14 @@ main() -> nil|error{
   }
   bb33 {
     c3 = %67;
-    %89 = ConstantLoad /path
-    $desugar$6 = %89;
-    %91 = $default$21($desugar$6) -> bb34;
+    %90 = ConstantLoad /path
+    $desugar$6 = %90;
+    %92 = $default$21($desugar$6) -> bb34;
   }
   bb34 {
-    $desugar$7 = %91;
-    %93 = ConstantLoad typedesc
-    $desugar$8 = %93;
+    $desugar$7 = %92;
+    %94 = ConstantLoad typedesc
+    $desugar$8 = %94;
     %96 = $remote$get(c3,$desugar$6,$desugar$7,$desugar$8) -> bb35;
   }
   bb35 {
@@ -206,11 +206,11 @@ main() -> nil|error{
     return;
   }
   bb37 {
-    %95 = %96;
+    %89 = %96;
     GOTO bb38;
   }
   bb38 {
-    r3 = %95;
+    r3 = %89;
     %100 = ConstantLoad statusCode
     %99 = r3[%100];
     %101 = %99;

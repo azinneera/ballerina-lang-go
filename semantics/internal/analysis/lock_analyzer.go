@@ -151,7 +151,14 @@ func validateLockStmt(a analyzer, lock *ast.BLangLock) bool {
 	if !validateLockInvocations(a, &lock.Body) {
 		return false
 	}
-	return validateLockBody(a, lock)
+	if !validateLockBody(a, lock) {
+		return false
+	}
+	if lock.RestrictedSymbol.IsEmpty() {
+		a.semanticErr("no restricted variable referenced in lock statement", lock.GetPosition())
+		return false
+	}
+	return true
 }
 
 // resolveRestricted determines the lock's restricted variable, caching
@@ -174,6 +181,10 @@ func validateLockInvocations(a analyzer, body ast.BLangNode) bool {
 	everyNode(a, body, func(_ analyzer, inner ast.BLangNode) bool {
 		switch n := inner.(type) {
 		case *ast.BLangLambdaFunction, *ast.BLangFunction:
+			return false
+		case *ast.BLangStartAction:
+			a.semanticErr("cannot start strand inside a lock statement", n.GetPosition())
+			ok = false
 			return false
 		case *ast.BLangInvocation:
 			if loc, invalid := isolatedInvocationViolation(a, n); invalid {
@@ -298,6 +309,30 @@ func isolatedInvocationViolationInner(ctx *context.CompilerContext, tyCtx semtyp
 	return diagnostics.Location{}, false
 }
 
+func isIsolatedInvocationTarget(a analyzer, call ast.Invocable) bool {
+	tyCtx := a.tyCtx()
+	return semtypes.IsSubtype(tyCtx, a.ctx().SymbolType(call.ResolvedSymbol()), semtypes.CreateIsolatedFn(tyCtx))
+}
+
+func isIsolatedInvocation(a analyzer, call ast.Invocable) bool {
+	if receiver := call.Receiver(); receiver != nil && !isIsolatedExpression(a, receiver) {
+		return false
+	}
+	if resource, ok := call.(*ast.BLangClientResourceAccessAction); ok {
+		for i := range resource.Path {
+			if expr := resource.Path[i].Expr; expr != nil && !isIsolatedExpression(a, expr) {
+				return false
+			}
+		}
+	}
+	for _, arg := range call.CallArgs() {
+		if !isIsolatedExpression(a, arg) {
+			return false
+		}
+	}
+	return true
+}
+
 // validateLockBody validates transfer in and out conditions.
 // transfer in:
 //   - expression fallowing return must be isolated expression
@@ -339,13 +374,14 @@ func (v *lockBodyVisitor) Visit(n ast.BLangNode) ast.Visitor {
 		v.checkAssignment(node.VarRef.(ast.BLangExpression), node.Expr, node.GetPosition())
 		return v
 	case *ast.BLangReturn:
-		if node.Expr != nil && !isIsolatedExpression(v.a, node.Expr.(ast.BLangExpression)) {
-			v.a.semanticErr("access of mutable variable", node.Expr.(ast.BLangNode).GetPosition())
+		if node.Expr != nil && !v.isIsolatedActionOrExpression(node.Expr) {
+			v.a.semanticErr("not an isolated expression", node.Expr.(ast.BLangNode).GetPosition())
 			v.ok = false
 		}
+		return nil
 	case ast.BLangExpression:
 		if v.containsTransferInRef(node) {
-			if !isIsolatedExpression(v.a, node) {
+			if !v.isIsolatedExpression(node) {
 				v.a.semanticErr("access of mutable variable", node.GetPosition())
 				v.ok = false
 			}
@@ -353,6 +389,20 @@ func (v *lockBodyVisitor) Visit(n ast.BLangNode) ast.Visitor {
 		}
 	}
 	return v
+}
+
+func (v *lockBodyVisitor) isIsolatedActionOrExpression(expr ast.BLangActionOrExpression) bool {
+	if v.lock.RestrictedSymbol.IsEmpty() {
+		return isIsolatedActionOrExpression(v.a, expr)
+	}
+	return isIsolatedTransferredActionOrExpression(v.a, expr)
+}
+
+func (v *lockBodyVisitor) isIsolatedExpression(expr ast.BLangExpression) bool {
+	if v.lock.RestrictedSymbol.IsEmpty() {
+		return isIsolatedExpression(v.a, expr)
+	}
+	return isIsolatedTransferredExpression(v.a, expr)
 }
 
 // checkAssignment validates transfer in for assignment.
@@ -384,7 +434,7 @@ func (v *lockBodyVisitor) checkAssignment(lhs ast.BLangExpression, rhs ast.BLang
 	if !ok {
 		return
 	}
-	if !isIsolatedExpression(v.a, expr) {
+	if !v.isIsolatedExpression(expr) {
 		v.a.semanticErr("access of mutable variable", rhs.GetPosition())
 		v.ok = false
 	}
@@ -485,7 +535,40 @@ func (sa *semanticAnalyzer) buildModuleVarMetadata() map[model.SymbolRef]varDecl
 //     expressions are isolated iff every immediate value child is itself an
 //     isolated expression.
 //  3. All other expressions are not isolated.
+func isIsolatedActionOrExpression(a analyzer, expr ast.BLangActionOrExpression) bool {
+	return isIsolatedActionOrExpressionInner(a, expr, false)
+}
+
+func isIsolatedTransferredActionOrExpression(a analyzer, expr ast.BLangActionOrExpression) bool {
+	return isIsolatedActionOrExpressionInner(a, expr, true)
+}
+
+func isIsolatedActionOrExpressionInner(a analyzer, expr ast.BLangActionOrExpression, checkInvocableOperands bool) bool {
+	switch expr := expr.(type) {
+	case ast.BLangExpression:
+		return isIsolatedExpressionInner(a, expr, checkInvocableOperands)
+	case ast.Invocable:
+		if !isIsolatedInvocationTarget(a, expr) {
+			return false
+		}
+		return !checkInvocableOperands || isIsolatedInvocation(a, expr)
+	case *ast.BLangStartAction:
+		call, ok := expr.Call.(ast.Invocable)
+		return ok && isIsolatedInvocationTarget(a, call) && isIsolatedInvocation(a, call)
+	default:
+		return false
+	}
+}
+
 func isIsolatedExpression(a analyzer, expr ast.BLangExpression) bool {
+	return isIsolatedExpressionInner(a, expr, false)
+}
+
+func isIsolatedTransferredExpression(a analyzer, expr ast.BLangExpression) bool {
+	return isIsolatedExpressionInner(a, expr, true)
+}
+
+func isIsolatedExpressionInner(a analyzer, expr ast.BLangExpression, checkInvocableOperands bool) bool {
 	if expr == nil {
 		a.ctx().InternalError("nil expression in isolation check", diagnostics.Location{})
 		return false
@@ -497,10 +580,10 @@ func isIsolatedExpression(a analyzer, expr ast.BLangExpression) bool {
 	}
 	switch e := expr.(type) {
 	case *ast.BLangGroupExpr:
-		return isIsolatedExpression(a, e.Expression)
+		return isIsolatedExpressionInner(a, e.Expression, checkInvocableOperands)
 	case *ast.BLangListConstructorExpr:
 		for _, m := range e.Exprs {
-			if !isIsolatedExpression(a, m) {
+			if !isIsolatedExpressionInner(a, m, checkInvocableOperands) {
 				return false
 			}
 		}
@@ -512,19 +595,19 @@ func isIsolatedExpression(a analyzer, expr ast.BLangExpression) bool {
 				a.ctx().InternalError(fmt.Sprintf("unexpected mapping field kind %T", f), f.GetPosition())
 				return false
 			}
-			if !isIsolatedExpression(a, kv.ValueExpr) {
+			if !isIsolatedExpressionInner(a, kv.ValueExpr, checkInvocableOperands) {
 				return false
 			}
 		}
 		return true
 	case *ast.BLangTypeConversionExpr:
-		return isIsolatedExpression(a, e.Expression)
+		return isIsolatedExpressionInner(a, e.Expression, checkInvocableOperands)
 	case *ast.BLangCheckedExpr:
-		return isIsolatedExpression(a, e.Expr.(ast.BLangExpression))
+		return isIsolatedExpressionInner(a, e.Expr.(ast.BLangExpression), checkInvocableOperands)
 	case *ast.BLangCheckPanickedExpr:
-		return isIsolatedExpression(a, e.Expr.(ast.BLangExpression))
+		return isIsolatedExpressionInner(a, e.Expr.(ast.BLangExpression), checkInvocableOperands)
 	case *ast.BLangTrapExpr:
-		return isIsolatedExpression(a, e.Expr)
+		return isIsolatedActionOrExpressionInner(a, e.Expr, checkInvocableOperands)
 	}
 	return false
 }
@@ -649,33 +732,26 @@ func validateIsolatedFunction(a analyzer, fn invokableSignatureNode) {
 //     unless they are isolated. (we detect that they are in lock statements in normal semantic analysis)
 //  4. Captures of outer-scope locally-declared variables (including
 //     parameters of an enclosing function) must be effectively final and
-//     have a type that is a subtype of `Isolated`. Lambdas push a new
-//     function-boundary frame so refs that resolve past that frame land on
-//     the capture branch of checkRead; non-lambda closures (record-field
-//     defaults, default-parameter expressions) reach the same rule via the
-//     fall-through branch on a missing scope lookup.
+//     have a type that is a subtype of `Isolated`. Closure boundaries validate
+//     captures explicitly before walking their bodies.
 func isIsolatedFunctionInner(a analyzer, node ast.BLangNode, scope *localScope) {
 	if scope == nil {
-		scope = newLocalScope(nil, true)
+		scope = newLocalScope(nil)
 	}
 	v := &isolatedFnVisitor{a: a, scope: scope}
 	ast.Walk(v, node)
 }
 
-// localScope is a lexical scope frame in a parent-linked chain. A frame
-// marked fnBoundary starts a new function frame: lookups that pass through
-// such a frame are captures of an enclosing function's locals.
+// localScope is a lexical scope frame in a parent-linked chain.
 type localScope struct {
-	parent     *localScope
-	fnBoundary bool
-	vars       map[model.SymbolRef]varDeclMetadata
+	parent *localScope
+	vars   map[model.SymbolRef]varDeclMetadata
 }
 
-func newLocalScope(parent *localScope, fnBoundary bool) *localScope {
+func newLocalScope(parent *localScope) *localScope {
 	return &localScope{
-		parent:     parent,
-		fnBoundary: fnBoundary,
-		vars:       map[model.SymbolRef]varDeclMetadata{},
+		parent: parent,
+		vars:   map[model.SymbolRef]varDeclMetadata{},
 	}
 }
 
@@ -683,20 +759,13 @@ func (s *localScope) define(sym model.SymbolRef, md varDeclMetadata) {
 	s.vars[sym] = md
 }
 
-// lookup walks the scope chain. The third return is true iff at least one
-// function-boundary frame was crossed before the symbol was found, i.e. the
-// reference is a capture of an enclosing function's local.
-func (s *localScope) lookup(sym model.SymbolRef) (varDeclMetadata, bool, bool) {
-	crossed := false
+func (s *localScope) lookup(sym model.SymbolRef) (varDeclMetadata, bool) {
 	for cur := s; cur != nil; cur = cur.parent {
 		if md, ok := cur.vars[sym]; ok {
-			return md, true, crossed
-		}
-		if cur.fnBoundary {
-			crossed = true
+			return md, true
 		}
 	}
-	return varDeclMetadata{}, false, false
+	return varDeclMetadata{}, false
 }
 
 type isolatedFnVisitor struct {
@@ -719,6 +788,17 @@ func (visitor *isolatedFnVisitor) Visit(n ast.BLangNode) ast.Visitor {
 			Final: v.IsFinal(),
 		})
 		return visitor
+	case *ast.BLangStartAction:
+		call, ok := node.Call.(ast.Invocable)
+		if !ok {
+			a.internalErr("start action operand is not invocable", node.GetPosition())
+			return nil
+		}
+		if !isIsolatedInvocationTarget(a, call) || !isIsolatedInvocation(a, call) {
+			a.semanticErr("start action is not isolated", node.GetPosition())
+		}
+		visitor.walkInvocableOperands(call)
+		return nil
 	case *ast.BLangInvocation:
 		if loc, invalid := isolatedInvocationViolation(a, node); invalid {
 			a.semanticErr("invocation of a non-isolated function", loc)
@@ -748,10 +828,26 @@ func (visitor *isolatedFnVisitor) Visit(n ast.BLangNode) ast.Visitor {
 	return visitor
 }
 
+func (visitor *isolatedFnVisitor) walkInvocableOperands(call ast.Invocable) {
+	if receiver := call.Receiver(); receiver != nil {
+		ast.Walk(visitor, receiver)
+	}
+	if resource, ok := call.(*ast.BLangClientResourceAccessAction); ok {
+		for i := range resource.Path {
+			if expr := resource.Path[i].Expr; expr != nil {
+				ast.Walk(visitor, expr)
+			}
+		}
+	}
+	for _, arg := range call.CallArgs() {
+		ast.Walk(visitor, arg)
+	}
+}
+
 func (visitor *isolatedFnVisitor) walkLambda(node *ast.BLangLambdaFunction) {
 	fn := node.Function
 	validateIsolatedCapture(visitor.a, visitor.scope, fn.GetBody().(ast.BLangNode))
-	inner := newLocalScope(visitor.scope, true)
+	inner := newLocalScope(visitor.scope)
 	for _, param := range fn.RequiredParams {
 		sym := param.Symbol()
 		inner.define(sym, varDeclMetadata{Type: visitor.a.ctx().SymbolType(sym), Final: true})
@@ -790,9 +886,13 @@ func (v *captureVisitor) Visit(n ast.BLangNode) ast.Visitor {
 	if n == nil {
 		return v
 	}
+	switch n.(type) {
+	case *ast.BLangLambdaFunction, *ast.BLangFunction:
+		return nil
+	}
 	if ref, ok := n.(*ast.BLangVarRef); ok {
 		unnarrowed := v.a.ctx().UnnarrowedSymbol(ref.Symbol())
-		if md, found, _ := v.outer.lookup(unnarrowed); found {
+		if md, found := v.outer.lookup(unnarrowed); found {
 			if !md.Final || !semtypes.IsSubtype(v.a.tyCtx(), md.Type, v.isolated) {
 				v.a.semanticErr("invalid capture of mutable variable in isolated lambda", ref.GetPosition())
 			}
@@ -809,7 +909,7 @@ func (v *captureVisitor) VisitTypeData(_ *ast.TypeData) ast.Visitor { return v }
 // Restricted-variable resolution goes through resolveRestricted so it
 // happens at most once per lock regardless of which pass reaches it first.
 func (visitor *isolatedFnVisitor) walkLock(node *ast.BLangLock) {
-	inner := newLocalScope(visitor.scope, false)
+	inner := newLocalScope(visitor.scope)
 	if resolveRestricted(visitor.a, node) && !node.RestrictedSymbol.IsEmpty() {
 		inner.define(node.RestrictedSymbol, varDeclMetadata{})
 	}
@@ -843,7 +943,7 @@ func checkIsolatedNewWithContext(ctx *context.CompilerContext, tyCtx semtypes.Co
 func (visitor *isolatedFnVisitor) checkRead(ref *ast.BLangVarRef) {
 	tyCtx := visitor.a.tyCtx()
 	unnarrowed := visitor.a.ctx().UnnarrowedSymbol(ref.Symbol())
-	if _, ok, _ := visitor.scope.lookup(unnarrowed); ok {
+	if _, ok := visitor.scope.lookup(unnarrowed); ok {
 		// local declaration
 		return
 	}

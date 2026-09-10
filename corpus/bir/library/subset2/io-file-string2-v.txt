@@ -4,12 +4,12 @@ main() -> nil|error{
     %1 = ConstantLoad /tmp/bal_io_string2.txt
     path = %1;
     $desugar$0 = path;
-    %4 = ConstantLoad First
-    $desugar$1 = %4;
-    %6 = $default$1($desugar$0,$desugar$1) -> bb1;
+    %5 = ConstantLoad First
+    $desugar$1 = %5;
+    %7 = $default$1($desugar$0,$desugar$1) -> bb1;
   }
   bb1 {
-    $desugar$2 = %6;
+    $desugar$2 = %7;
     %9 = fileWriteString($desugar$0,$desugar$1,$desugar$2) -> bb2;
   }
   bb2 {
@@ -21,7 +21,7 @@ main() -> nil|error{
     return;
   }
   bb4 {
-    %8 = %9;
+    %3 = %9;
     GOTO bb5;
   }
   bb5 {

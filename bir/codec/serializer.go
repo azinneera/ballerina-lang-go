@@ -31,7 +31,7 @@ import (
 
 const (
 	BIR_MAGIC   = "\xba\x10\xc0\xde"
-	BIR_VERSION = 82
+	BIR_VERSION = 84
 )
 
 type birWriter struct {
@@ -73,7 +73,7 @@ func (bw *birWriter) serialize(pkg *bir.BIRPackage) (result []byte, err error) {
 
 	write(buf, int32(BIR_VERSION))
 
-	tpBytes := semtypes.MarshalTypePool(bw.tp, bw.env)
+	tpBytes := semtypes.MarshalTypePool(bw.tp, bw.env).Bytes()
 	write(buf, int64(len(tpBytes)))
 	_, err = buf.Write(tpBytes)
 	if err != nil {
@@ -120,6 +120,7 @@ func (bw *birWriter) writeClassDefs(buf *bytes.Buffer, pkg *bir.BIRPackage) {
 func (bw *birWriter) writeClassDef(buf *bytes.Buffer, classDef *bir.BIRClassDef) {
 	bw.writeStringCPEntry(buf, classDef.Name.Value())
 	bw.writeStringCPEntry(buf, classDef.LookupKey)
+	bw.writeAnnotationValues(buf, classDef.Annotations)
 	bw.writeLength(buf, len(classDef.Fields))
 	for _, field := range classDef.Fields {
 		bw.writeStringCPEntry(buf, field.Name)
@@ -186,8 +187,13 @@ func (bw *birWriter) writeFunction(buf *bytes.Buffer, fn *bir.BIRFunction) {
 	for _, requiredParam := range fn.RequiredParams {
 		bw.writeStringCPEntry(buf, requiredParam.Name.Value())
 		bw.writeFlags(buf, requiredParam.Flags)
+		bw.writeAnnotationValues(buf, requiredParam.Annotations)
 	}
 	write(buf, fn.RestParams != nil)
+	if fn.RestParams != nil {
+		bw.writeFlags(buf, fn.RestParams.Flags)
+		bw.writeAnnotationValues(buf, fn.RestParams.Annotations)
+	}
 
 	birbuf := &bytes.Buffer{}
 	bw.writeLength(birbuf, fn.ArgsCount)
@@ -422,28 +428,8 @@ func (bw *birWriter) writeTerminator(buf *bytes.Buffer, term bir.BIRTerminator) 
 		bw.writeStringCPEntry(buf, term.TrueBB.ID.Value())
 		bw.writeStringCPEntry(buf, term.FalseBB.ID.Value())
 	case *bir.Call:
-		write(buf, term.IsMethodCall)
-		bw.writePackageCPEntry(buf, term.CalleePkg)
-		bw.writeStringCPEntry(buf, term.Name.Value())
-		bw.writeStringCPEntry(buf, term.FunctionLookupKey)
-
-		bw.writeLength(buf, len(term.Args))
-		for _, arg := range term.Args {
-			bw.writeOperand(buf, &arg)
-		}
-
-		if term.LhsOp != nil {
-			write(buf, uint8(1))
-			bw.writeOperand(buf, term.LhsOp)
-		} else {
-			write(buf, uint8(0))
-		}
-
-		bw.writeStringCPEntry(buf, term.ThenBB.ID.Value())
-
-		if term.Kind == bir.InstructionKindFPCall {
-			bw.writeOperand(buf, term.FpOperand)
-		}
+		bw.writeCallSite(buf, term.CallSite)
+		bw.writeCallContinuation(buf, &term.BIRTerminatorBase)
 	case *bir.Return:
 	case *bir.Panic:
 		bw.writeOperand(buf, term.ErrorOp)
@@ -453,27 +439,73 @@ func (bw *birWriter) writeTerminator(buf *bytes.Buffer, term bir.BIRTerminator) 
 	case *bir.LockEnd:
 		bw.writeStringCPEntry(buf, term.LockKey)
 		bw.writeStringCPEntry(buf, term.ThenBB.ID.Value())
-	case *bir.ResourceFunctionCall:
-		bw.writeOperand(buf, &term.Receiver)
-		bw.writeStringCPEntry(buf, term.MethodName)
-		bw.writeLength(buf, len(term.PathSegments))
-		for i := range term.PathSegments {
-			bw.writeOperand(buf, &term.PathSegments[i])
-		}
-		bw.writeLength(buf, len(term.Args))
-		for i := range term.Args {
-			bw.writeOperand(buf, &term.Args[i])
-		}
-		if term.LhsOp != nil {
-			write(buf, uint8(1))
-			bw.writeOperand(buf, term.LhsOp)
-		} else {
-			write(buf, uint8(0))
-		}
+	case *bir.StartAction:
+		bw.writeCallSite(buf, term.Call)
+		write(buf, term.IsIsolated)
+		bw.writeCallContinuation(buf, &term.BIRTerminatorBase)
+	case *bir.SingleWaitAction:
+		bw.writeOperand(buf, &term.Future)
+		bw.writeOperand(buf, term.LhsOp)
 		bw.writeStringCPEntry(buf, term.ThenBB.ID.Value())
+	case *bir.AlternateWaitAction:
+		bw.writeLength(buf, len(term.Futures))
+		for i := range term.Futures {
+			bw.writeOperand(buf, &term.Futures[i])
+		}
+		bw.writeOperand(buf, term.LhsOp)
+		bw.writeStringCPEntry(buf, term.ThenBB.ID.Value())
+	case *bir.MultipleWaitAction:
+		bw.writeType(buf, term.Type)
+		bw.writeLength(buf, len(term.Futures))
+		for i := range term.Futures {
+			bw.writeStringCPEntry(buf, term.FieldNames[i])
+			bw.writeOperand(buf, &term.Futures[i])
+		}
+		bw.writeOperand(buf, term.LhsOp)
+		bw.writeStringCPEntry(buf, term.ThenBB.ID.Value())
+	case *bir.ResourceFunctionCall:
+		bw.writeCallSite(buf, term.CallSite)
+		bw.writeCallContinuation(buf, &term.BIRTerminatorBase)
 	default:
 		panic(fmt.Sprintf("unsupported terminator type: %T", term))
 	}
+}
+
+func (bw *birWriter) writeCallSite(buf *bytes.Buffer, call bir.CallSite) {
+	write(buf, uint8(call.Kind))
+	bw.writeLength(buf, len(call.Args))
+	for i := range call.Args {
+		bw.writeOperand(buf, &call.Args[i])
+	}
+	switch call.Kind {
+	case bir.CallKindFunction, bir.CallKindFunctionPointer, bir.CallKindMethod:
+		bw.writePackageCPEntry(buf, call.CalleePkg)
+		bw.writeStringCPEntry(buf, call.Name.Value())
+		bw.writeStringCPEntry(buf, call.FunctionLookupKey)
+		switch call.Kind {
+		case bir.CallKindFunctionPointer:
+			bw.writeOperand(buf, call.FpOperand)
+		case bir.CallKindMethod:
+			bw.writeOperand(buf, call.Receiver)
+		}
+	case bir.CallKindResource:
+		bw.writeOperand(buf, call.Receiver)
+		bw.writeStringCPEntry(buf, call.MethodName)
+		bw.writeLength(buf, len(call.PathSegments))
+		for i := range call.PathSegments {
+			bw.writeOperand(buf, &call.PathSegments[i])
+		}
+	default:
+		panic(fmt.Sprintf("unsupported call kind: %d", call.Kind))
+	}
+}
+
+func (bw *birWriter) writeCallContinuation(buf *bytes.Buffer, term *bir.BIRTerminatorBase) {
+	write(buf, term.LhsOp != nil)
+	if term.LhsOp != nil {
+		bw.writeOperand(buf, term.LhsOp)
+	}
+	bw.writeStringCPEntry(buf, term.ThenBB.ID.Value())
 }
 
 func (bw *birWriter) writeOperand(buf *bytes.Buffer, op *bir.BIROperand) {
@@ -519,6 +551,19 @@ func (bw *birWriter) writeConstValue(buf *bytes.Buffer, value any) {
 	}
 	write(buf, int8(tag))
 	bw.writeConstValueByTag(buf, tag, value)
+}
+
+func (bw *birWriter) writeAnnotationValues(buf *bytes.Buffer, annotations values.AnnotationValues) {
+	keys := make([]string, 0, len(annotations))
+	for key := range annotations {
+		keys = append(keys, key)
+	}
+	sort.Strings(keys)
+	bw.writeLength(buf, len(keys))
+	for _, key := range keys {
+		bw.writeStringCPEntry(buf, key)
+		bw.writeConstValue(buf, annotations[key])
+	}
 }
 
 func (bw *birWriter) writeConstValueByTag(buf *bytes.Buffer, tag typeTag, value any) {
@@ -635,15 +680,16 @@ func (bw *birWriter) writeConstValueByTag(buf *bytes.Buffer, tag typeTag, value 
 			panic(fmt.Sprintf("expected typedesc for tag %v, got %T", tag, value))
 		}
 		bw.writeType(buf, td.Type)
-		keys := make([]string, 0, len(td.Annotations))
-		for key := range td.Annotations {
-			keys = append(keys, key)
+		bw.writeAnnotationValues(buf, td.Annotations)
+		fields := make([]string, 0, len(td.FieldAnnotations))
+		for field := range td.FieldAnnotations {
+			fields = append(fields, field)
 		}
-		sort.Strings(keys)
-		write(buf, int64(len(keys)))
-		for _, key := range keys {
-			bw.writeStringCPEntry(buf, key)
-			bw.writeConstValue(buf, td.Annotations[key])
+		sort.Strings(fields)
+		bw.writeLength(buf, len(fields))
+		for _, field := range fields {
+			bw.writeStringCPEntry(buf, field)
+			bw.writeAnnotationValues(buf, td.FieldAnnotations[field])
 		}
 	case typeTagRuntimeRef:
 		ref, ok := value.(*values.RuntimeAnnotationValueRef)

@@ -30,22 +30,31 @@ import (
 )
 
 type invocable interface {
-	ast.BLangActionOrExpression
-	ResolvedSymbol() model.SymbolRef
-	Receiver() ast.BLangExpression
+	ast.Invocable
 	SetReceiver(ast.BLangExpression)
-	CallArgs() []ast.BLangExpression
 	SetCallArgs([]ast.BLangExpression)
 }
 
-func walkExpression(cx *functionContext, node ast.BLangActionOrExpression) desugaredNode[ast.BLangActionOrExpression] {
+func walkExpression(cx *functionContext, node ast.BLangActionOrExpression) ast.BLangActionOrExpression {
+	lowered := walkExpressionInner(cx, node)
+	if len(lowered.initStmts) == 0 {
+		return lowered.replacementNode
+	}
+	// Enclose setup statements at the expression boundary so they retain the
+	// expression's lazy evaluation, loop, and trap semantics.
+	return createExpressionThunk(lowered)
+}
+
+func walkExpressionInner(cx *functionContext, node ast.BLangActionOrExpression) desugaredNode[ast.BLangActionOrExpression] {
 	switch expr := node.(type) {
 	case *ast.BLangBinaryExpr:
 		return walkBinaryExpr(cx, expr)
+	case *ast.BLangTernaryExpr:
+		return walkTernaryExpr(cx, expr)
 	case *ast.BLangUnaryExpr:
 		return walkUnaryExpr(cx, expr)
-	case *ast.BLangElvisExpr:
-		return walkElvisExpr(cx, expr)
+	case *ast.BLangNilConditionalExpr:
+		return walkNilConditionalExpr(cx, expr)
 	case *ast.BLangGroupExpr:
 		return walkGroupExpr(cx, expr)
 	case *ast.BLangIndexBasedAccess:
@@ -96,46 +105,55 @@ func walkExpression(cx *functionContext, node ast.BLangActionOrExpression) desug
 		return desugaredNode[ast.BLangActionOrExpression]{replacementNode: expr}
 	case *ast.BLangNewExpression:
 		return walkNewExpression(cx, expr)
-	case *BLangServiceInit:
-		// Desugar-introduced node; nothing to rewrite further.
+	case *BLangServiceInit, *BLangExpressionThunk:
+		// Desugar-introduced nodes; nothing to rewrite further.
 		return desugaredNode[ast.BLangActionOrExpression]{replacementNode: expr}
 	case *ast.BLangNamedArgsExpression:
 		result := walkExpression(cx, expr.Expr)
-		expr.Expr = result.replacementNode.(ast.BLangExpression)
+		expr.Expr = result.(ast.BLangExpression)
 		return desugaredNode[ast.BLangActionOrExpression]{
-			initStmts:       result.initStmts,
 			replacementNode: expr,
 		}
 	case *ast.BLangRemoteMethodCallAction:
 		return walkInvocation(cx, expr)
 	case *ast.BLangClientResourceAccessAction:
 		return walkClientResourceAccessAction(cx, expr)
+	case *ast.BLangStartAction:
+		return walkStartAction(cx, expr)
+	case *ast.BLangSingleWaitAction:
+		expr.FutureExpr = walkExpression(cx, expr.FutureExpr).(ast.BLangExpression)
+		return desugaredNode[ast.BLangActionOrExpression]{replacementNode: expr}
+	case *ast.BLangAlternateWaitAction:
+		for i, futureExpr := range expr.FutureExprs {
+			expr.FutureExprs[i] = walkExpression(cx, futureExpr).(ast.BLangExpression)
+		}
+		return desugaredNode[ast.BLangActionOrExpression]{replacementNode: expr}
+	case *ast.BLangMultipleWaitAction:
+		for i, futureExpr := range expr.FutureExprs {
+			expr.FutureExprs[i] = walkExpression(cx, futureExpr).(ast.BLangExpression)
+		}
+		return desugaredNode[ast.BLangActionOrExpression]{replacementNode: expr}
 	case *ast.BLangWildCardBindingPattern:
 		// Wildcard binding pattern can appear in variable references (e.g., _ = expr)
 		return desugaredNode[ast.BLangActionOrExpression]{replacementNode: expr}
 	case *ast.BLangXMLSequenceLiteral:
-		var initStmts []ast.StatementNode
 		for i, child := range expr.Children {
 			r := walkExpression(cx, child)
-			initStmts = append(initStmts, r.initStmts...)
-			expr.Children[i] = r.replacementNode.(ast.BLangExpression)
+			expr.Children[i] = r.(ast.BLangExpression)
 		}
-		return desugaredNode[ast.BLangActionOrExpression]{initStmts: initStmts, replacementNode: expr}
+		return desugaredNode[ast.BLangActionOrExpression]{replacementNode: expr}
 	case *ast.BLangXMLElementLiteral:
-		var initStmts []ast.StatementNode
 		for i := range expr.Attrs {
 			if expr.Attrs[i].Value != nil {
 				r := walkExpression(cx, expr.Attrs[i].Value)
-				initStmts = append(initStmts, r.initStmts...)
-				expr.Attrs[i].Value = r.replacementNode.(ast.BLangExpression)
+				expr.Attrs[i].Value = r.(ast.BLangExpression)
 			}
 		}
 		if expr.Content != nil {
 			r := walkExpression(cx, expr.Content)
-			initStmts = append(initStmts, r.initStmts...)
-			expr.Content = r.replacementNode.(ast.BLangExpression)
+			expr.Content = r.(ast.BLangExpression)
 		}
-		return desugaredNode[ast.BLangActionOrExpression]{initStmts: initStmts, replacementNode: expr}
+		return desugaredNode[ast.BLangActionOrExpression]{replacementNode: expr}
 	case *ast.BLangXMLPILiteral, *ast.BLangXMLCommentLiteral, *ast.BLangXMLTextLiteral:
 		return desugaredNode[ast.BLangActionOrExpression]{replacementNode: expr}
 	case *ast.BLangTemplateExpr:
@@ -143,349 +161,247 @@ func walkExpression(cx *functionContext, node ast.BLangActionOrExpression) desug
 	case *ast.BLangXMLTemplateExpr:
 		return walkXMLTemplateExpr(cx, expr)
 	default:
-		panic(fmt.Sprintf("unexpected expression type: %T", node))
+		cx.internalError(fmt.Sprintf("unexpected expression type: %T", node), node.GetPosition())
+		return desugaredNode[ast.BLangActionOrExpression]{replacementNode: node}
 	}
 }
 
-func walkBinaryExpr(cx *functionContext, expr *ast.BLangBinaryExpr) desugaredNode[ast.BLangActionOrExpression] {
-	var initStmts []ast.StatementNode
+func createExpressionThunk(lowered desugaredNode[ast.BLangActionOrExpression]) *BLangExpressionThunk {
+	pos := lowered.replacementNode.GetPosition()
+	thunk := &BLangExpressionThunk{InitStmts: lowered.initStmts, Expr: lowered.replacementNode}
+	thunk.SetDeterminedType(lowered.replacementNode.GetDeterminedType())
+	thunk.SetPosition(pos)
+	return thunk
+}
 
+func walkTernaryExpr(cx *functionContext, expr *ast.BLangTernaryExpr) desugaredNode[ast.BLangActionOrExpression] {
+	expr.Condition = walkExpression(cx, expr.Condition).(ast.BLangExpression)
+	expr.ThenExpr = walkExpression(cx, expr.ThenExpr).(ast.BLangExpression)
+	expr.ElseExpr = walkExpression(cx, expr.ElseExpr).(ast.BLangExpression)
+	return desugaredNode[ast.BLangActionOrExpression]{replacementNode: expr}
+}
+
+func walkBinaryExpr(cx *functionContext, expr *ast.BLangBinaryExpr) desugaredNode[ast.BLangActionOrExpression] {
 	if expr.LhsExpr != nil {
 		result := walkExpression(cx, expr.LhsExpr)
-		initStmts = append(initStmts, result.initStmts...)
-		expr.LhsExpr = result.replacementNode.(ast.BLangExpression)
+		expr.LhsExpr = result.(ast.BLangExpression)
 	}
 
 	if expr.RhsExpr != nil {
 		result := walkExpression(cx, expr.RhsExpr)
-		initStmts = append(initStmts, result.initStmts...)
-		expr.RhsExpr = result.replacementNode.(ast.BLangExpression)
+		expr.RhsExpr = result.(ast.BLangExpression)
 	}
 
-	if !isNilLiftableBinaryOp(expr.OpKind) {
-		return desugaredNode[ast.BLangActionOrExpression]{
-			initStmts:       initStmts,
-			replacementNode: expr,
-		}
-	}
-
-	lhsTy := expr.LhsExpr.GetDeterminedType()
-	rhsTy := expr.RhsExpr.GetDeterminedType()
-	if semtypes.IsZero(lhsTy) || semtypes.IsZero(rhsTy) {
-		return desugaredNode[ast.BLangActionOrExpression]{
-			initStmts:       initStmts,
-			replacementNode: expr,
-		}
-	}
-	lhsHasNil := semtypes.ContainsBasicType(lhsTy, semtypes.Nil)
-	rhsHasNil := semtypes.ContainsBasicType(rhsTy, semtypes.Nil)
-
-	if !lhsHasNil && !rhsHasNil {
-		return desugaredNode[ast.BLangActionOrExpression]{
-			initStmts:       initStmts,
-			replacementNode: expr,
-		}
-	}
-
-	basePos := expr.GetPosition()
-	resultTy := expr.GetDeterminedType()
-
-	// Create temp vars for nullable operands
-	var lhsVarName *ast.BLangIdentifier
-	var lhsSymbol model.SymbolRef
-	if lhsHasNil {
-		lhsVarName, lhsSymbol, initStmts = createOperandTempVar(cx, lhsTy, expr.LhsExpr, basePos, initStmts)
-	}
-
-	var rhsVarName *ast.BLangIdentifier
-	var rhsSymbol model.SymbolRef
-	if rhsHasNil {
-		rhsVarName, rhsSymbol, initStmts = createOperandTempVar(cx, rhsTy, expr.RhsExpr, basePos, initStmts)
-	}
-
-	// Create result temp var initialized to nil
-	resultVarName, resultSymbol, initStmts := createNilResultVar(cx, resultTy, basePos, initStmts)
-
-	// Build the nil check condition
-	var nilCheckCond ast.BLangExpression
-	if lhsHasNil {
-		nilCheckCond = createNilTypeTest(lhsVarName, lhsSymbol, lhsTy, basePos)
-	}
-	if rhsHasNil {
-		rhsNilCheck := createNilTypeTest(rhsVarName, rhsSymbol, rhsTy, basePos)
-		if nilCheckCond == nil {
-			nilCheckCond = rhsNilCheck
-		} else {
-			orExpr := &ast.BLangBinaryExpr{
-				LhsExpr: nilCheckCond,
-				RhsExpr: rhsNilCheck,
-				OpKind:  model.OperatorKind_OR,
-			}
-			orExpr.SetDeterminedType(semtypes.Boolean)
-			orExpr.SetPosition(basePos)
-			nilCheckCond = orExpr
-		}
-	}
-
-	// Build the operation in the else branch
-	var lhsRef ast.BLangExpression
-	if lhsHasNil {
-		lhsRef = createVarRef(lhsVarName, lhsSymbol, semtypes.Diff(lhsTy, semtypes.Nil))
-	} else {
-		lhsRef = expr.LhsExpr
-	}
-
-	var rhsRef ast.BLangExpression
-	if rhsHasNil {
-		rhsRef = createVarRef(rhsVarName, rhsSymbol, semtypes.Diff(rhsTy, semtypes.Nil))
-	} else {
-		rhsRef = expr.RhsExpr
-	}
-
-	newBinaryExpr := &ast.BLangBinaryExpr{
-		LhsExpr: lhsRef,
-		RhsExpr: rhsRef,
-		OpKind:  expr.OpKind,
-	}
-	newBinaryExpr.SetDeterminedType(semtypes.Diff(resultTy, semtypes.Nil))
-	newBinaryExpr.SetPosition(basePos)
-
-	resultAssign := createResultAssignment(resultVarName, resultSymbol, resultTy, newBinaryExpr, basePos)
-
-	elseBody := &ast.BLangBlockStmt{
-		Stmts: []ast.StatementNode{resultAssign},
-	}
-	elseBody.SetDeterminedType(semtypes.Never)
-	ifStmt := &ast.BLangIf{
-		Expr:     nilCheckCond,
-		Body:     ast.BLangBlockStmt{},
-		ElseStmt: elseBody,
-	}
-	ifStmt.Body.SetDeterminedType(semtypes.Never)
-	ifStmt.SetDeterminedType(semtypes.Never)
-	ifStmt.SetScope(cx.currentScope())
-	setPositionIfMissing(ifStmt, basePos)
-	initStmts = append(initStmts, ifStmt)
-
-	replacementRef := createVarRef(resultVarName, resultSymbol, resultTy)
-	setPositionIfMissing(replacementRef, basePos)
-
-	return desugaredNode[ast.BLangActionOrExpression]{
-		initStmts:       initStmts,
-		replacementNode: replacementRef,
-	}
+	return desugaredNode[ast.BLangActionOrExpression]{replacementNode: expr}
 }
 
 func walkUnaryExpr(cx *functionContext, expr *ast.BLangUnaryExpr) desugaredNode[ast.BLangActionOrExpression] {
-	var initStmts []ast.StatementNode
 
 	if expr.Expr != nil {
 		result := walkExpression(cx, expr.Expr)
-		initStmts = append(initStmts, result.initStmts...)
-		expr.Expr = result.replacementNode.(ast.BLangExpression)
+		expr.Expr = result.(ast.BLangExpression)
 	}
 
 	// Unary + is identity — desugar to just the operand (BIR gen doesn't handle unary +)
 	if expr.Operator == model.OperatorKind_ADD {
-		return desugaredNode[ast.BLangActionOrExpression]{
-			initStmts:       initStmts,
-			replacementNode: expr.Expr,
-		}
+		return desugaredNode[ast.BLangActionOrExpression]{replacementNode: expr.Expr}
 	}
 
-	if !isNilLiftableUnaryOp(expr.Operator) {
-		return desugaredNode[ast.BLangActionOrExpression]{
-			initStmts:       initStmts,
-			replacementNode: expr,
-		}
-	}
-
-	operandTy := expr.Expr.GetDeterminedType()
-	if !semtypes.ContainsBasicType(operandTy, semtypes.Nil) {
-		return desugaredNode[ast.BLangActionOrExpression]{
-			initStmts:       initStmts,
-			replacementNode: expr,
-		}
-	}
-
-	basePos := expr.GetPosition()
-	resultTy := expr.GetDeterminedType()
-
-	// Create operand temp var
-	operandVarName, operandSymbol, initStmts := createOperandTempVar(cx, operandTy, expr.Expr, basePos, initStmts)
-
-	// Create result temp var initialized to nil
-	resultVarName, resultSymbol, initStmts := createNilResultVar(cx, resultTy, basePos, initStmts)
-
-	// Build nil check: if ($operand is ()) { } else { ... }
-	nilCheck := createNilTypeTest(operandVarName, operandSymbol, operandTy, basePos)
-
-	// Build the operation for the if-body (operand is not nil)
-	nonNilTy := semtypes.Diff(operandTy, semtypes.Nil)
-	operandRef := createVarRef(operandVarName, operandSymbol, nonNilTy)
-
-	newUnary := &ast.BLangUnaryExpr{
-		Expr:     operandRef,
-		Operator: expr.Operator,
-	}
-	newUnary.SetDeterminedType(semtypes.Diff(resultTy, semtypes.Nil))
-	newUnary.SetPosition(basePos)
-	var opExpr ast.BLangExpression = newUnary
-
-	resultAssign := createResultAssignment(resultVarName, resultSymbol, resultTy, opExpr, basePos)
-
-	// if ($operand is ()) { } else { $result = op $operand }
-	elseBody := &ast.BLangBlockStmt{
-		Stmts: []ast.StatementNode{resultAssign},
-	}
-	elseBody.SetDeterminedType(semtypes.Never)
-	ifStmt := &ast.BLangIf{
-		Expr:     nilCheck,
-		Body:     ast.BLangBlockStmt{},
-		ElseStmt: elseBody,
-	}
-	ifStmt.Body.SetDeterminedType(semtypes.Never)
-	ifStmt.SetDeterminedType(semtypes.Never)
-	ifStmt.SetScope(cx.currentScope())
-	setPositionIfMissing(ifStmt, basePos)
-	initStmts = append(initStmts, ifStmt)
-
-	replacementRef := createVarRef(resultVarName, resultSymbol, resultTy)
-	setPositionIfMissing(replacementRef, basePos)
-
-	return desugaredNode[ast.BLangActionOrExpression]{
-		initStmts:       initStmts,
-		replacementNode: replacementRef,
-	}
+	return desugaredNode[ast.BLangActionOrExpression]{replacementNode: expr}
 }
 
-func walkElvisExpr(cx *functionContext, expr *ast.BLangElvisExpr) desugaredNode[ast.BLangActionOrExpression] {
-	var initStmts []ast.StatementNode
+func walkNilConditionalExpr(cx *functionContext, expr *ast.BLangNilConditionalExpr) desugaredNode[ast.BLangActionOrExpression] {
 
 	if expr.LhsExpr != nil {
 		result := walkExpression(cx, expr.LhsExpr)
-		initStmts = append(initStmts, result.initStmts...)
-		expr.LhsExpr = result.replacementNode.(ast.BLangExpression)
+		expr.LhsExpr = result.(ast.BLangExpression)
 	}
 
 	if expr.RhsExpr != nil {
 		result := walkExpression(cx, expr.RhsExpr)
-		initStmts = append(initStmts, result.initStmts...)
-		expr.RhsExpr = result.replacementNode.(ast.BLangExpression)
+		expr.RhsExpr = result.(ast.BLangExpression)
 	}
 
-	return desugaredNode[ast.BLangActionOrExpression]{
-		initStmts:       initStmts,
-		replacementNode: expr,
-	}
+	return desugaredNode[ast.BLangActionOrExpression]{replacementNode: expr}
 }
 
 func walkGroupExpr(cx *functionContext, expr *ast.BLangGroupExpr) desugaredNode[ast.BLangActionOrExpression] {
-	var initStmts []ast.StatementNode
 
 	if expr.Expression != nil {
 		result := walkExpression(cx, expr.Expression)
-		initStmts = append(initStmts, result.initStmts...)
-		expr.Expression = result.replacementNode.(ast.BLangExpression)
+		expr.Expression = result.(ast.BLangExpression)
 	}
 
-	return desugaredNode[ast.BLangActionOrExpression]{
-		initStmts:       initStmts,
-		replacementNode: expr,
-	}
+	return desugaredNode[ast.BLangActionOrExpression]{replacementNode: expr}
 }
 
 func walkIndexBasedAccess(cx *functionContext, expr *ast.BLangIndexBasedAccess) desugaredNode[ast.BLangActionOrExpression] {
-	var initStmts []ast.StatementNode
 
 	if expr.Expr != nil {
 		result := walkExpression(cx, expr.Expr)
-		initStmts = append(initStmts, result.initStmts...)
-		expr.Expr = result.replacementNode.(ast.BLangExpression)
+		expr.Expr = result.(ast.BLangExpression)
 	}
 
 	if expr.IndexExpr != nil {
 		result := walkExpression(cx, expr.IndexExpr)
-		initStmts = append(initStmts, result.initStmts...)
-		expr.IndexExpr = result.replacementNode.(ast.BLangExpression)
+		expr.IndexExpr = result.(ast.BLangExpression)
 	}
 
-	return desugaredNode[ast.BLangActionOrExpression]{
-		initStmts:       initStmts,
-		replacementNode: expr,
-	}
+	return desugaredNode[ast.BLangActionOrExpression]{replacementNode: expr}
 }
 
 func walkFieldBaseAccess(cx *functionContext, expr *ast.BLangFieldBaseAccess) desugaredNode[ast.BLangActionOrExpression] {
-	var initStmts []ast.StatementNode
+	if expr.IsLax() {
+		return walkLaxFieldBaseAccess(cx, expr)
+	}
 
 	if expr.Expr != nil {
 		result := walkExpression(cx, expr.Expr)
-		initStmts = append(initStmts, result.initStmts...)
-		expr.Expr = result.replacementNode.(ast.BLangExpression)
+		expr.Expr = result.(ast.BLangExpression)
 	}
 
 	if expr.IsOptionalAccess() {
-		return walkOptionalFieldBaseAccess(cx, expr, initStmts)
+		return desugaredNode[ast.BLangActionOrExpression]{replacementNode: expr}
 	}
 
 	indexAccess := createFieldIndexAccess(expr.Expr, expr.Field.GetValue(), expr.GetDeterminedType(), expr.GetPosition())
 
-	return desugaredNode[ast.BLangActionOrExpression]{
-		initStmts:       initStmts,
-		replacementNode: indexAccess,
-	}
+	return desugaredNode[ast.BLangActionOrExpression]{replacementNode: indexAccess}
 }
 
-func walkOptionalFieldBaseAccess(cx *functionContext, expr *ast.BLangFieldBaseAccess, initStmts []ast.StatementNode) desugaredNode[ast.BLangActionOrExpression] {
-	basePos := expr.GetPosition()
-	VName, VSymbol, initStmts := createOperandTempVar(cx, expr.Expr.GetDeterminedType(), expr.Expr, basePos, initStmts)
+func walkLaxFieldBaseAccess(cx *functionContext, expr *ast.BLangFieldBaseAccess) desugaredNode[ast.BLangActionOrExpression] {
+	var initStmts []ast.StatementNode
+	pos := expr.GetPosition()
 	resultTy := expr.GetDeterminedType()
-	resultName, resultSymbol, initStmts := createNilResultVar(cx, resultTy, basePos, initStmts)
-
-	VForError := createVarRef(VName, VSymbol, semtypes.Error)
-	setPositionIfMissing(VForError, basePos)
-	errorAssign := createResultAssignment(resultName, resultSymbol, resultTy, VForError, basePos)
-	errorBody := &ast.BLangBlockStmt{Stmts: []ast.StatementNode{errorAssign}}
-	errorBody.SetDeterminedType(semtypes.Never)
-	setPositionIfMissing(errorBody, basePos)
-
+	memberTy := semtypes.Diff(resultTy, semtypes.Error)
 	baseTy := expr.Expr.GetDeterminedType()
-	VForIndex := createVarRef(VName, VSymbol, semtypes.Diff(baseTy, semtypes.Error))
-	setPositionIfMissing(VForIndex, basePos)
-	fieldName := expr.Field.GetValue()
-	indexAccess := createFieldIndexAccess(VForIndex, fieldName, optionalFieldIndexResultType(cx, baseTy, fieldName), basePos)
-	indexAssign := createResultAssignment(resultName, resultSymbol, resultTy, indexAccess, basePos)
-	elseBody := &ast.BLangBlockStmt{Stmts: []ast.StatementNode{indexAssign}}
-	elseBody.SetDeterminedType(semtypes.Never)
-	setPositionIfMissing(elseBody, basePos)
 
-	// TODO: update when handling lax case https://github.com/ballerina-nutcracker/ballerina/issues/558
-	ifStmt := &ast.BLangIf{
-		Expr:     createErrorTypeTest(VName, VSymbol, baseTy, basePos),
-		Body:     *errorBody,
-		ElseStmt: elseBody,
-	}
-	ifStmt.SetDeterminedType(semtypes.Never)
-	setPositionIfMissing(ifStmt, basePos)
-	initStmts = append(initStmts, ifStmt)
+	receiver := walkExpression(cx, expr.Expr).(ast.BLangExpression)
+	receiverName, receiverSymbol, initStmts := createOperandTempVar(cx, baseTy, receiver, pos, initStmts)
 
-	replacementRef := createVarRef(resultName, resultSymbol, resultTy)
-	setPositionIfMissing(replacementRef, basePos)
-	return desugaredNode[ast.BLangActionOrExpression]{
-		initStmts:       initStmts,
-		replacementNode: replacementRef,
+	var resultInit ast.BLangExpression
+	if expr.IsOptionalAccess() {
+		resultInit = createNilLiteral(pos)
+	} else {
+		resultInit = createErrorWithMessage("lax field access failed", pos)
 	}
+	resultName, resultSymbol, initStmts := createOperandTempVar(cx, resultTy, resultInit, pos, initStmts)
+
+	receiverTest := func(ty semtypes.SemType, negated bool) *ast.BLangTypeTestExpr {
+		ref := createVarRef(receiverName, receiverSymbol, baseTy)
+		setPositionIfMissing(ref, pos)
+		test := ast.NewBLangTypeTestExpr(pos, ref, ast.TypeData{Type: ty}, negated)
+		test.SetDeterminedType(semtypes.Boolean)
+		setPositionIfMissing(test, pos)
+		return test
+	}
+	assignReceiver := func(ty semtypes.SemType) *ast.BLangAssignment {
+		ref := createVarRef(receiverName, receiverSymbol, ty)
+		setPositionIfMissing(ref, pos)
+		return createResultAssignment(resultName, resultSymbol, resultTy, ref, pos)
+	}
+	assignError := func(message string) *ast.BLangAssignment {
+		return createResultAssignment(resultName, resultSymbol, resultTy, createErrorWithMessage(message, pos), pos)
+	}
+	block := func(stmts ...ast.StatementNode) ast.BLangBlockStmt {
+		body := ast.BLangBlockStmt{Stmts: stmts}
+		body.SetDeterminedType(semtypes.Never)
+		setPositionIfMissing(&body, pos)
+		return body
+	}
+	newIf := func(test ast.BLangExpression, body ast.BLangBlockStmt, elseStmt ast.StatementNode) *ast.BLangIf {
+		stmt := &ast.BLangIf{Expr: test, Body: body, ElseStmt: elseStmt}
+		stmt.SetDeterminedType(semtypes.Never)
+		stmt.SetScope(cx.currentScope())
+		setPositionIfMissing(stmt, pos)
+		return stmt
+	}
+
+	mappingTy := semtypes.Intersect(baseTy, semtypes.Mapping)
+	mapRef := createVarRef(receiverName, receiverSymbol, mappingTy)
+	setPositionIfMissing(mapRef, pos)
+	keyExpr := createStringLiteral(expr.Field.GetValue(), pos)
+	getInvocation := createLangMapGetInvocation(cx, mapRef, keyExpr, memberTy, pos)
+	lookupTy := semtypes.Union(memberTy, semtypes.Error)
+	trapExpr := &ast.BLangTrapExpr{Expr: getInvocation}
+	trapExpr.SetDeterminedType(lookupTy)
+	setPositionIfMissing(trapExpr, pos)
+	lookupName, lookupSymbol, lookupStmts := createOperandTempVar(cx, lookupTy, trapExpr, pos, nil)
+
+	lookupErrorRef := createVarRef(lookupName, lookupSymbol, semtypes.Error)
+	setPositionIfMissing(lookupErrorRef, pos)
+	lookupErrorAssign := createResultAssignment(resultName, resultSymbol, resultTy, lookupErrorRef, pos)
+	lookupValueRef := createVarRef(lookupName, lookupSymbol, memberTy)
+	setPositionIfMissing(lookupValueRef, pos)
+	lookupValueAssign := createResultAssignment(resultName, resultSymbol, resultTy, lookupValueRef, pos)
+	lookupTestRef := createVarRef(lookupName, lookupSymbol, lookupTy)
+	setPositionIfMissing(lookupTestRef, pos)
+	lookupMemberTest := ast.NewBLangTypeTestExpr(pos, lookupTestRef, ast.TypeData{Type: memberTy}, false)
+	lookupMemberTest.SetDeterminedType(semtypes.Boolean)
+	setPositionIfMissing(lookupMemberTest, pos)
+	invalidMemberBody := block(assignError("invalid lax field member"))
+	memberIf := newIf(lookupMemberTest, block(lookupValueAssign), &invalidMemberBody)
+
+	lookupErrorTest := createErrorTypeTest(lookupName, lookupSymbol, lookupTy, pos)
+	var lookupErrorBody ast.BLangBlockStmt
+	if expr.IsOptionalAccess() {
+		lookupErrorBody = block()
+	} else {
+		lookupErrorBody = block(lookupErrorAssign)
+	}
+	lookupIf := newIf(lookupErrorTest, lookupErrorBody, memberIf)
+	mappingBody := block(append(lookupStmts, lookupIf)...)
+
+	notMappingIf := newIf(receiverTest(semtypes.Mapping, true), block(assignError("lax field access receiver is not a mapping")), &mappingBody)
+	errorIf := newIf(receiverTest(semtypes.Error, false), block(assignReceiver(semtypes.Error)), notMappingIf)
+	var outer ast.StatementNode = errorIf
+	if expr.IsOptionalAccess() {
+		outer = newIf(receiverTest(semtypes.Nil, false), block(), errorIf)
+	}
+	initStmts = append(initStmts, outer)
+
+	resultRef := createVarRef(resultName, resultSymbol, resultTy)
+	setPositionIfMissing(resultRef, pos)
+	return desugaredNode[ast.BLangActionOrExpression]{initStmts: initStmts, replacementNode: resultRef}
 }
 
-func optionalFieldIndexResultType(cx *functionContext, baseTy semtypes.SemType, fieldName string) semtypes.SemType {
-	tyCtx := cx.typeCtx()
-	mappingTy := semtypes.Intersect(semtypes.Diff(semtypes.Diff(baseTy, semtypes.Error), semtypes.Nil), semtypes.Mapping)
-	memberTy := semtypes.MappingMemberTypeInner(tyCtx, mappingTy, semtypes.StringConst(fieldName))
-	if semtypes.ContainsUndef(memberTy) || semtypes.IsSubtype(tyCtx, semtypes.Nil, baseTy) {
-		return semtypes.Union(semtypes.Diff(memberTy, semtypes.Undef), semtypes.Nil)
+func createLangMapGetInvocation(cx *functionContext, mapExpr ast.BLangExpression, keyExpr ast.BLangExpression, returnTy semtypes.SemType, pos diagnostics.Location) *ast.BLangInvocation {
+	const pkgName = "lang.map"
+	space, ok := cx.getImportedSymbolSpace(pkgName)
+	if !ok {
+		cx.internalError(pkgName+" symbol space not found", pos)
+		return nil
 	}
-	return memberTy
+	symbolRef, ok := space.GetSymbol("get")
+	if !ok {
+		cx.internalError(pkgName+":get symbol not found", pos)
+		return nil
+	}
+	cx.addImplicitImport(pkgName, ast.BLangImportPackage{
+		OrgName:      &ast.BLangIdentifier{Value: "ballerina"},
+		PkgNameComps: []ast.BLangIdentifier{{Value: "lang"}, {Value: "map"}},
+		Alias:        &ast.BLangIdentifier{Value: pkgName},
+	})
+	pkgAlias := &ast.BLangIdentifier{Value: pkgName}
+	pkgAlias.SetDeterminedType(semtypes.Never)
+	setPositionIfMissing(pkgAlias, pos)
+	name := &ast.BLangIdentifier{Value: "get"}
+	name.SetDeterminedType(semtypes.Never)
+	setPositionIfMissing(name, pos)
+	inv := &ast.BLangInvocation{PkgAlias: pkgAlias}
+	inv.Name = name
+	inv.ArgExprs = []ast.BLangExpression{mapExpr, keyExpr}
+	inv.SetSymbol(symbolRef)
+	inv.SetDeterminedType(returnTy)
+	setPositionIfMissing(inv, pos)
+	return inv
+}
+
+func createNilLiteral(pos diagnostics.Location) *ast.BLangLiteral {
+	lit := &ast.BLangLiteral{Value: nil}
+	lit.SetDeterminedType(semtypes.Nil)
+	setPositionIfMissing(lit, pos)
+	return lit
 }
 
 func createFieldIndexAccess(expr ast.BLangExpression, fieldName string, ty semtypes.SemType, pos diagnostics.Location) *ast.BLangIndexBasedAccess {
@@ -505,14 +421,6 @@ func createFieldIndexAccess(expr ast.BLangExpression, fieldName string, ty semty
 	return indexAccess
 }
 
-func createErrorTypeTest(varName *ast.BLangIdentifier, symbol model.SymbolRef, ty semtypes.SemType, pos diagnostics.Location) *ast.BLangTypeTestExpr {
-	ref := createVarRef(varName, symbol, ty)
-	setPositionIfMissing(ref, pos)
-	typeTest := ast.NewBLangTypeTestExpr(pos, ref, ast.TypeData{Type: semtypes.Error}, false)
-	typeTest.SetDeterminedType(semtypes.Boolean)
-	return typeTest
-}
-
 func walkTemplateExpr(cx *functionContext, expr *ast.BLangTemplateExpr) desugaredNode[ast.BLangActionOrExpression] {
 	if len(expr.Insertions) == 0 {
 		lit := &ast.BLangLiteral{Value: expr.Strings[0], OriginalValue: expr.Strings[0]}
@@ -520,21 +428,27 @@ func walkTemplateExpr(cx *functionContext, expr *ast.BLangTemplateExpr) desugare
 		lit.SetDeterminedType(semtypes.StringConst(expr.Strings[0]))
 		return desugaredNode[ast.BLangActionOrExpression]{replacementNode: lit}
 	}
-	var initStmts []ast.StatementNode
 	for i, ins := range expr.Insertions {
 		r := walkExpression(cx, ins)
-		initStmts = append(initStmts, r.initStmts...)
-		expr.Insertions[i] = r.replacementNode.(ast.BLangExpression)
+		expr.Insertions[i] = r.(ast.BLangExpression)
 	}
-	return desugaredNode[ast.BLangActionOrExpression]{initStmts: initStmts, replacementNode: expr}
+	return desugaredNode[ast.BLangActionOrExpression]{replacementNode: expr}
+}
+
+func walkStartAction(cx *functionContext, action *ast.BLangStartAction) desugaredNode[ast.BLangActionOrExpression] {
+	callResult := walkExpressionInner(cx, action.Call)
+	action.Call = callResult.replacementNode.(ast.Invocable)
+	return desugaredNode[ast.BLangActionOrExpression]{
+		initStmts:       callResult.initStmts,
+		replacementNode: action,
+	}
 }
 
 func walkClientResourceAccessAction(cx *functionContext, expr *ast.BLangClientResourceAccessAction) desugaredNode[ast.BLangActionOrExpression] {
 	var initStmts []ast.StatementNode
 	if expr.Expr != nil {
 		result := walkExpression(cx, expr.Expr)
-		initStmts = append(initStmts, result.initStmts...)
-		expr.Expr = result.replacementNode.(ast.BLangExpression)
+		expr.Expr = result.(ast.BLangExpression)
 	}
 	for i := range expr.Path {
 		seg := &expr.Path[i]
@@ -542,8 +456,7 @@ func walkClientResourceAccessAction(cx *functionContext, expr *ast.BLangClientRe
 			continue
 		}
 		result := walkExpression(cx, seg.Expr)
-		initStmts = append(initStmts, result.initStmts...)
-		seg.Expr = result.replacementNode.(ast.BLangExpression)
+		seg.Expr = result.(ast.BLangExpression)
 	}
 	initStmts = append(initStmts, walkInvocationArgs(cx, expr)...)
 	return desugaredNode[ast.BLangActionOrExpression]{
@@ -553,11 +466,9 @@ func walkClientResourceAccessAction(cx *functionContext, expr *ast.BLangClientRe
 }
 
 func walkXMLTemplateExpr(cx *functionContext, expr *ast.BLangXMLTemplateExpr) desugaredNode[ast.BLangActionOrExpression] {
-	var initStmts []ast.StatementNode
 	for i, ins := range expr.Insertions {
 		r := walkExpression(cx, ins)
-		initStmts = append(initStmts, r.initStmts...)
-		insert := r.replacementNode.(ast.BLangExpression)
+		insert := r.(ast.BLangExpression)
 		if shouldEscapeXMLTemplateInsertion(insert, expr.InsertionKinds[i], cx) {
 			insert = escapeXMLTemplateInsertion(cx, insert, expr.InsertionKinds[i])
 		}
@@ -567,7 +478,7 @@ func walkXMLTemplateExpr(cx *functionContext, expr *ast.BLangXMLTemplateExpr) de
 	plain := &ast.BLangTemplateExpr{Kind: ast.TemplateExprKindXML, Strings: expr.Strings, Insertions: expr.Insertions}
 	plain.SetPosition(expr.GetPosition())
 	plain.SetDeterminedType(expr.GetDeterminedType())
-	return desugaredNode[ast.BLangActionOrExpression]{initStmts: initStmts, replacementNode: plain}
+	return desugaredNode[ast.BLangActionOrExpression]{replacementNode: plain}
 }
 
 func shouldEscapeXMLTemplateInsertion(insert ast.BLangExpression, kind ast.XMLTemplateInsertionKind, cx *functionContext) bool {
@@ -585,7 +496,7 @@ func escapeXMLTemplateInsertion(cx *functionContext, insert ast.BLangExpression,
 	case ast.XMLTemplateInsertionKindContent:
 		return createLangInternalInvocation(cx, "escapeXMLContent", semtypes.String, []ast.BLangExpression{insert}, insert.GetPosition())
 	default:
-		cx.internalError("unexpected xml template insert kind")
+		cx.internalError("unexpected xml template insert kind", insert.GetPosition())
 		return insert
 	}
 }
@@ -601,12 +512,12 @@ func xmlTemplateNamespaceDecls(cx *functionContext, refs []model.SymbolRef) []xm
 		symbol := cx.getSymbol(ref)
 		key, err := model.XMLNamespaceDeclKey(symbol)
 		if err != nil {
-			cx.internalError(err.Error())
+			cx.internalError(err.Error(), symbol.Location())
 			continue
 		}
 		uri, err := model.XMLNamespaceURI(symbol)
 		if err != nil {
-			cx.internalError(err.Error())
+			cx.internalError(err.Error(), symbol.Location())
 			continue
 		}
 		decls = append(decls, xmlNamespaceDecl{key: key, uri: uri})
@@ -662,8 +573,7 @@ func walkInvocation(cx *functionContext, expr invocable) desugaredNode[ast.BLang
 
 	if expr.Receiver() != nil {
 		result := walkExpression(cx, expr.Receiver())
-		initStmts = append(initStmts, result.initStmts...)
-		expr.SetReceiver(result.replacementNode.(ast.BLangExpression))
+		expr.SetReceiver(result.(ast.BLangExpression))
 	}
 
 	initStmts = append(initStmts, walkInvocationArgs(cx, expr)...)
@@ -686,7 +596,8 @@ func walkCallArgs(cx *functionContext, args []ast.BLangExpression, pos diagnosti
 	if shouldHoistArgs(args) {
 		sig, ok := fnSig()
 		if !ok {
-			cx.internalError("expected function signature to default expressions")
+			cx.internalError("expected function signature to default expressions", pos)
+			return nil, args
 		}
 		return hoistAndAddDefaultInvocations(cx, args, sig, pos)
 	}
@@ -695,8 +606,7 @@ func walkCallArgs(cx *functionContext, args []ast.BLangExpression, pos diagnosti
 	walkedArgs := make([]ast.BLangExpression, len(args))
 	for i, arg := range args {
 		result := walkExpression(cx, arg)
-		initStmts = append(initStmts, result.initStmts...)
-		walkedArgs[i] = result.replacementNode.(ast.BLangExpression)
+		walkedArgs[i] = result.(ast.BLangExpression)
 	}
 	return initStmts, walkedArgs
 }
@@ -731,14 +641,12 @@ func hoistAndAddDefaultInvocations(cx *functionContext, args []ast.BLangExpressi
 			defaultCall.SetDeterminedType(cx.getSymbol(defaultClosureSym).(model.FunctionSymbol).TypedSignature().ReturnType)
 			setPositionIfMissing(defaultCall, pos)
 			result := walkExpression(cx, defaultCall)
-			hoistInit = append(hoistInit, result.initStmts...)
-			varDef, varRef := assignToLocal(cx, result.replacementNode.(ast.BLangExpression), pos)
+			varDef, varRef := assignToLocal(cx, result.(ast.BLangExpression), pos)
 			hoistInit = append(hoistInit, varDef)
 			hoistedArgs[i] = varRef
 		} else {
 			result := walkExpression(cx, arg)
-			hoistInit = append(hoistInit, result.initStmts...)
-			varDef, varRef := assignToLocal(cx, result.replacementNode.(ast.BLangExpression), arg.GetPosition())
+			varDef, varRef := assignToLocal(cx, result.(ast.BLangExpression), arg.GetPosition())
 			hoistInit = append(hoistInit, varDef)
 			hoistedArgs[i] = varRef
 		}
@@ -746,14 +654,13 @@ func hoistAndAddDefaultInvocations(cx *functionContext, args []ast.BLangExpressi
 	for i := fixedCount; i < len(args); i++ {
 		arg := args[i]
 		result := walkExpression(cx, arg)
-		hoistInit = append(hoistInit, result.initStmts...)
-		hoistedArgs[i] = result.replacementNode.(ast.BLangExpression)
+		hoistedArgs[i] = result.(ast.BLangExpression)
 	}
 
 	return hoistInit, hoistedArgs
 }
 
-func invocationSymbol(expr invocable) (model.SymbolRef, bool) {
+func invocationSymbol(cx *functionContext, expr invocable) (model.SymbolRef, bool) {
 	switch e := expr.(type) {
 	case *ast.BLangInvocation:
 		if e.RawSymbol == nil {
@@ -766,7 +673,8 @@ func invocationSymbol(expr invocable) (model.SymbolRef, bool) {
 		}
 		return e.ResolvedSymbol(), true
 	default:
-		panic("unexpected")
+		cx.internalError(fmt.Sprintf("unexpected invocation type: %T", expr), expr.GetPosition())
+		return model.SymbolRef{}, false
 	}
 }
 
@@ -783,7 +691,7 @@ func synthesizeInferredTypedescArg(cx *functionContext, tdTy semtypes.SemType, p
 
 func assignToLocal(cx *functionContext, initExpr ast.BLangExpression, pos diagnostics.Location) (ast.StatementNode, *ast.BLangVarRef) {
 	ty := initExpr.GetDeterminedType()
-	tempName, tempSymRef := cx.addDesugardSymbol(ty, model.SymbolKindVariable, false, pos)
+	tempName, tempSymRef := cx.addDesugardSymbol(ty, model.SymbolKindVariable, pos)
 	tempVar := &ast.BLangVariable{Name: newIdentifier(tempName)}
 	tempVar.Name.SetDeterminedType(semtypes.Never)
 	tempVar.SetDeterminedType(semtypes.Never)
@@ -802,22 +710,16 @@ func assignToLocal(cx *functionContext, initExpr ast.BLangExpression, pos diagno
 }
 
 func walkListConstructorExpr(cx *functionContext, expr *ast.BLangListConstructorExpr) desugaredNode[ast.BLangActionOrExpression] {
-	var initStmts []ast.StatementNode
-
 	for i := range expr.Exprs {
 		result := walkExpression(cx, expr.Exprs[i])
-		initStmts = append(initStmts, result.initStmts...)
-		expr.Exprs[i] = result.replacementNode.(ast.BLangExpression)
+		expr.Exprs[i] = result.(ast.BLangExpression)
 	}
 
 	if expr.HasSpreadMembers() {
-		return desugarListConstructorWithSpread(cx, expr, initStmts)
+		return desugarListConstructorWithSpread(cx, expr, nil)
 	}
 
-	return desugaredNode[ast.BLangActionOrExpression]{
-		initStmts:       initStmts,
-		replacementNode: expr,
-	}
+	return desugaredNode[ast.BLangActionOrExpression]{replacementNode: expr}
 }
 
 func desugarListConstructorWithSpread(
@@ -907,8 +809,6 @@ func appendSpreadListPushStmts(
 }
 
 func walkErrorConstructorExpr(cx *functionContext, expr *ast.BLangErrorConstructorExpr) desugaredNode[ast.BLangActionOrExpression] {
-	var initStmts []ast.StatementNode
-
 	//nolint:staticcheck // TODO
 	if expr.ErrorTypeRef != nil {
 		// ErrorTypeRef is a type descriptor, not an expression, so we don't walk it
@@ -916,49 +816,37 @@ func walkErrorConstructorExpr(cx *functionContext, expr *ast.BLangErrorConstruct
 
 	for i := range expr.PositionalArgs {
 		result := walkExpression(cx, expr.PositionalArgs[i])
-		initStmts = append(initStmts, result.initStmts...)
-		expr.PositionalArgs[i] = result.replacementNode.(ast.BLangExpression)
+		expr.PositionalArgs[i] = result.(ast.BLangExpression)
 	}
 
 	for i := range expr.NamedArgs {
 		result := walkExpression(cx, expr.NamedArgs[i].Expr)
-		initStmts = append(initStmts, result.initStmts...)
-		expr.NamedArgs[i].Expr = result.replacementNode.(ast.BLangExpression)
+		expr.NamedArgs[i].Expr = result.(ast.BLangExpression)
 	}
 
-	return desugaredNode[ast.BLangActionOrExpression]{
-		initStmts:       initStmts,
-		replacementNode: expr,
-	}
+	return desugaredNode[ast.BLangActionOrExpression]{replacementNode: expr}
 }
 
 func walkCheckedExpr(cx *functionContext, expr *ast.BLangCheckedExpr) desugaredNode[ast.BLangActionOrExpression] {
 	result := walkExpression(cx, expr.Expr)
-	expr.Expr = result.replacementNode
+	expr.Expr = result
 	return desugaredNode[ast.BLangActionOrExpression]{
-		initStmts:       result.initStmts,
 		replacementNode: expr,
 	}
 }
 
 func walkCheckPanickedExpr(cx *functionContext, expr *ast.BLangCheckPanickedExpr) desugaredNode[ast.BLangActionOrExpression] {
 	result := walkExpression(cx, expr.Expr)
-	expr.Expr = result.replacementNode
+	expr.Expr = result
 	return desugaredNode[ast.BLangActionOrExpression]{
-		initStmts:       result.initStmts,
 		replacementNode: expr,
 	}
 }
 
 func walkTrapExpr(cx *functionContext, expr *ast.BLangTrapExpr) desugaredNode[ast.BLangActionOrExpression] {
 	result := walkExpression(cx, expr.Expr)
-	if len(result.initStmts) > 0 {
-		// I don't think this can ever happen but if it does we need to think about how to add these statements in to the
-		// trap region in BIR gen
-		cx.internalError("Init statements will be hoisted outside of trap region")
-	}
-	expr.Expr = result.replacementNode.(ast.BLangExpression)
-	return desugaredNode[ast.BLangActionOrExpression]{initStmts: nil, replacementNode: expr}
+	expr.Expr = result
+	return desugaredNode[ast.BLangActionOrExpression]{replacementNode: expr}
 }
 
 func walkLambdaFunction(cx *functionContext, expr *ast.BLangLambdaFunction) desugaredNode[ast.BLangActionOrExpression] {
@@ -983,8 +871,7 @@ func walkTypeConversionExpr(cx *functionContext, expr *ast.BLangTypeConversionEx
 
 	if expr.Expression != nil {
 		result := walkExpression(cx, expr.Expression)
-		initStmts = append(initStmts, result.initStmts...)
-		expr.Expression = result.replacementNode.(ast.BLangExpression)
+		expr.Expression = result.(ast.BLangExpression)
 	}
 	if fnType, ok := expr.TypeDescriptor.(*ast.BLangFunctionType); ok {
 		result := desugarFunctionTypeDesc(cx, fnType, cx.currentScope())
@@ -1005,8 +892,7 @@ func walkTypeTestExpr(cx *functionContext, expr *ast.BLangTypeTestExpr) desugare
 
 	if expr.Expr != nil {
 		result := walkExpression(cx, expr.Expr)
-		initStmts = append(initStmts, result.initStmts...)
-		expr.Expr = result.replacementNode.(ast.BLangExpression)
+		expr.Expr = result.(ast.BLangExpression)
 	}
 	if fnType, ok := expr.Type.TypeDescriptor.(*ast.BLangFunctionType); ok {
 		result := desugarFunctionTypeDesc(cx, fnType, cx.currentScope())
@@ -1023,26 +909,18 @@ func walkTypeTestExpr(cx *functionContext, expr *ast.BLangTypeTestExpr) desugare
 }
 
 func walkAnnotAccessExpr(cx *functionContext, expr *ast.BLangAnnotAccessExpr) desugaredNode[ast.BLangActionOrExpression] {
-	var initStmts []ast.StatementNode
-
 	if expr.Expr != nil {
 		result := walkExpression(cx, expr.Expr)
-		initStmts = append(initStmts, result.initStmts...)
-		expr.Expr = result.replacementNode.(ast.BLangExpression)
+		expr.Expr = result.(ast.BLangExpression)
 	}
 
-	return desugaredNode[ast.BLangActionOrExpression]{
-		initStmts:       initStmts,
-		replacementNode: expr,
-	}
+	return desugaredNode[ast.BLangActionOrExpression]{replacementNode: expr}
 }
 
 func walkArrowFunction(cx *functionContext, expr *ast.BLangArrowFunction) desugaredNode[ast.BLangActionOrExpression] {
-	// Arrow functions have a body that may need desugaring
 	if expr.Body != nil {
 		result := walkExpression(cx, expr.Body.Expr.(ast.BLangActionOrExpression))
-		expr.Body.Expr = result.replacementNode.(ast.BLangExpression)
-		// Handle initStmts if needed - arrow functions may need special handling
+		expr.Body.Expr = result.(ast.BLangExpression)
 	}
 
 	return desugaredNode[ast.BLangActionOrExpression]{
@@ -1081,8 +959,6 @@ func initFunctionSymbol(cx *functionContext, expr *ast.BLangNewExpression) (mode
 }
 
 func walkMappingConstructorExpr(cx *functionContext, expr *ast.BLangMappingConstructorExpr) desugaredNode[ast.BLangActionOrExpression] {
-	var initStmts []ast.StatementNode
-
 	for _, field := range expr.Fields {
 		kv := field.(*ast.BLangMappingKeyValueField)
 
@@ -1100,40 +976,14 @@ func walkMappingConstructorExpr(cx *functionContext, expr *ast.BLangMappingConst
 		}
 
 		result := walkExpression(cx, kv.ValueExpr)
-		initStmts = append(initStmts, result.initStmts...)
-		kv.ValueExpr = result.replacementNode.(ast.BLangExpression)
+		kv.ValueExpr = result.(ast.BLangExpression)
 	}
 
-	return desugaredNode[ast.BLangActionOrExpression]{
-		initStmts:       initStmts,
-		replacementNode: expr,
-	}
-}
-
-func isNilLiftableBinaryOp(op model.OperatorKind) bool {
-	switch op {
-	case model.OperatorKind_ADD, model.OperatorKind_SUB,
-		model.OperatorKind_MUL, model.OperatorKind_DIV, model.OperatorKind_MOD,
-		model.OperatorKind_BITWISE_LEFT_SHIFT, model.OperatorKind_BITWISE_RIGHT_SHIFT,
-		model.OperatorKind_BITWISE_UNSIGNED_RIGHT_SHIFT,
-		model.OperatorKind_BITWISE_AND, model.OperatorKind_BITWISE_OR, model.OperatorKind_BITWISE_XOR:
-		return true
-	default:
-		return false
-	}
-}
-
-func isNilLiftableUnaryOp(op model.OperatorKind) bool {
-	switch op {
-	case model.OperatorKind_ADD, model.OperatorKind_SUB, model.OperatorKind_BITWISE_COMPLEMENT:
-		return true
-	default:
-		return false
-	}
+	return desugaredNode[ast.BLangActionOrExpression]{replacementNode: expr}
 }
 
 func createOperandTempVar(cx *functionContext, ty semtypes.SemType, initExpr ast.BLangExpression, pos diagnostics.Location, initStmts []ast.StatementNode) (*ast.BLangIdentifier, model.SymbolRef, []ast.StatementNode) {
-	name, symbol := cx.addDesugardSymbol(ty, model.SymbolKindVariable, false, pos)
+	name, symbol := cx.addDesugardSymbol(ty, model.SymbolKindVariable, pos)
 	varName := newIdentifier(name)
 	tempVar := &ast.BLangVariable{Name: varName}
 	tempVar.Name.SetDeterminedType(semtypes.Never)
@@ -1146,27 +996,18 @@ func createOperandTempVar(cx *functionContext, ty semtypes.SemType, initExpr ast
 	return varName, symbol, append(initStmts, varDef)
 }
 
-func createNilResultVar(cx *functionContext, ty semtypes.SemType, pos diagnostics.Location, initStmts []ast.StatementNode) (*ast.BLangIdentifier, model.SymbolRef, []ast.StatementNode) {
-	nilLit := &ast.BLangLiteral{Value: nil}
-	nilLit.SetDeterminedType(semtypes.Nil)
-	setPositionIfMissing(nilLit, pos)
-
-	name, symbol := cx.addDesugardSymbol(ty, model.SymbolKindVariable, false, pos)
-	varName := newIdentifier(name)
-	tempVar := &ast.BLangVariable{Name: varName}
-	tempVar.Name.SetDeterminedType(semtypes.Never)
-	tempVar.SetDeterminedType(semtypes.Never)
-	tempVar.SetInitialExpression(nilLit)
-	tempVar.SetSymbol(symbol)
-	varDef := &ast.BLangVariableDef{Var: tempVar}
-	varDef.SetDeterminedType(semtypes.Never)
-	setPositionIfMissing(varDef, pos)
-	return varName, symbol, append(initStmts, varDef)
+func createResultAssignment(resultVarName ast.IdentifierNode, resultSymbol model.SymbolRef, resultTy semtypes.SemType, valueExpr ast.BLangActionOrExpression, pos diagnostics.Location) *ast.BLangAssignment {
+	varRef := createVarRef(resultVarName, resultSymbol, resultTy)
+	assign := &ast.BLangAssignment{VarRef: varRef, Expr: valueExpr}
+	assign.SetDeterminedType(semtypes.Never)
+	setPositionIfMissing(assign, pos)
+	return assign
 }
 
-func createNilTypeTest(varName *ast.BLangIdentifier, symbol model.SymbolRef, ty semtypes.SemType, pos diagnostics.Location) *ast.BLangTypeTestExpr {
+func createErrorTypeTest(varName *ast.BLangIdentifier, symbol model.SymbolRef, ty semtypes.SemType, pos diagnostics.Location) *ast.BLangTypeTestExpr {
 	ref := createVarRef(varName, symbol, ty)
-	typeTest := ast.NewBLangTypeTestExpr(pos, ref, ast.TypeData{Type: semtypes.Nil}, false)
+	setPositionIfMissing(ref, pos)
+	typeTest := ast.NewBLangTypeTestExpr(pos, ref, ast.TypeData{Type: semtypes.Error}, false)
 	typeTest.SetDeterminedType(semtypes.Boolean)
 	return typeTest
 }
@@ -1176,15 +1017,4 @@ func createVarRef(varName ast.IdentifierNode, symbol model.SymbolRef, ty semtype
 	ref.SetSymbol(symbol)
 	ref.SetDeterminedType(ty)
 	return ref
-}
-
-func createResultAssignment(resultVarName ast.IdentifierNode, resultSymbol model.SymbolRef, resultTy semtypes.SemType, valueExpr ast.BLangActionOrExpression, pos diagnostics.Location) *ast.BLangAssignment {
-	varRef := createVarRef(resultVarName, resultSymbol, resultTy)
-	assign := &ast.BLangAssignment{
-		VarRef: varRef,
-		Expr:   valueExpr,
-	}
-	assign.SetDeterminedType(semtypes.Never)
-	setPositionIfMissing(assign, pos)
-	return assign
 }

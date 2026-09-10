@@ -46,12 +46,12 @@ main() -> nil|error{
     %23 = ConstantLoad /tmp/bal_io_bad_json.json
     badJson = %23;
     $desugar$0 = badJson;
-    %26 = ConstantLoad {not valid json}
-    $desugar$1 = %26;
-    %28 = $default$1($desugar$0,$desugar$1) -> bb11;
+    %27 = ConstantLoad {not valid json}
+    $desugar$1 = %27;
+    %29 = $default$1($desugar$0,$desugar$1) -> bb11;
   }
   bb11 {
-    $desugar$2 = %28;
+    $desugar$2 = %29;
     %31 = fileWriteString($desugar$0,$desugar$1,$desugar$2) -> bb12;
   }
   bb12 {
@@ -63,7 +63,7 @@ main() -> nil|error{
     return;
   }
   bb14 {
-    %30 = %31;
+    %25 = %31;
     GOTO bb15;
   }
   bb15 {
@@ -78,12 +78,12 @@ main() -> nil|error{
     %37 = ConstantLoad /tmp/bal_io_trailing_json.json
     trailingJson = %37;
     $desugar$3 = trailingJson;
-    %40 = ConstantLoad {"k": 1} extra
-    $desugar$4 = %40;
-    %42 = $default$1($desugar$3,$desugar$4) -> bb18;
+    %41 = ConstantLoad {"k": 1} extra
+    $desugar$4 = %41;
+    %43 = $default$1($desugar$3,$desugar$4) -> bb18;
   }
   bb18 {
-    $desugar$5 = %42;
+    $desugar$5 = %43;
     %45 = fileWriteString($desugar$3,$desugar$4,$desugar$5) -> bb19;
   }
   bb19 {
@@ -95,7 +95,7 @@ main() -> nil|error{
     return;
   }
   bb21 {
-    %44 = %45;
+    %39 = %45;
     GOTO bb22;
   }
   bb22 {

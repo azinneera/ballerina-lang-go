@@ -94,13 +94,13 @@ Eubczj1asLiR3WmG1u2v/ntgx3FESVPFlpEMX66jA4DTWUF8aSNSNZIhKoIorIVZ
     %11 = ConstantLoad 4
     %12 = newArray [int:Unsigned8...][%11]{%7, %8, %9, %10}
     data = %12;
-    %14 = ConstantLoad /tmp/bal_crypto_content.pem
-    $desugar$0 = %14;
+    %15 = ConstantLoad /tmp/bal_crypto_content.pem
+    $desugar$0 = %15;
     $desugar$1 = certPem;
-    %17 = $default$1($desugar$0,$desugar$1) -> bb1;
+    %18 = $default$1($desugar$0,$desugar$1) -> bb1;
   }
   bb1 {
-    $desugar$2 = %17;
+    $desugar$2 = %18;
     %20 = fileWriteString($desugar$0,$desugar$1,$desugar$2) -> bb2;
   }
   bb2 {
@@ -112,7 +112,7 @@ Eubczj1asLiR3WmG1u2v/ntgx3FESVPFlpEMX66jA4DTWUF8aSNSNZIhKoIorIVZ
     return;
   }
   bb4 {
-    %19 = %20;
+    %14 = %20;
     GOTO bb5;
   }
   bb5 {
@@ -151,10 +151,10 @@ Eubczj1asLiR3WmG1u2v/ntgx3FESVPFlpEMX66jA4DTWUF8aSNSNZIhKoIorIVZ
     pub = %27;
     $desugar$3 = data;
     $desugar$4 = pub;
-    %33 = $default$17($desugar$3,$desugar$4) -> bb14;
+    %35 = $default$17($desugar$3,$desugar$4) -> bb14;
   }
   bb14 {
-    $desugar$5 = %33;
+    $desugar$5 = %35;
     %37 = encryptRsaEcb($desugar$3,$desugar$4,$desugar$5) -> bb15;
   }
   bb15 {
@@ -166,28 +166,28 @@ Eubczj1asLiR3WmG1u2v/ntgx3FESVPFlpEMX66jA4DTWUF8aSNSNZIhKoIorIVZ
     return;
   }
   bb17 {
-    %36 = %37;
+    %32 = %37;
     GOTO bb18;
   }
   bb18 {
-    %39 = length(%36) -> bb19;
+    %39 = length(%32) -> bb19;
   }
   bb19 {
     %40 = %39;
     %41 = ConstantLoad 0
     %42 = %41;
-    %35 = > %40 %42;
-    %43 = %35;
+    %31 = > %40 %42;
+    %43 = %31;
     %44 = println(%43) -> bb20;
   }
   bb20 {
-    %45 = ConstantLoad /tmp/bal_crypto_content.pem
-    $desugar$6 = %45;
+    %46 = ConstantLoad /tmp/bal_crypto_content.pem
+    $desugar$6 = %46;
     $desugar$7 = keyPem;
-    %48 = $default$1($desugar$6,$desugar$7) -> bb21;
+    %49 = $default$1($desugar$6,$desugar$7) -> bb21;
   }
   bb21 {
-    $desugar$8 = %48;
+    $desugar$8 = %49;
     %51 = fileWriteString($desugar$6,$desugar$7,$desugar$8) -> bb22;
   }
   bb22 {
@@ -199,7 +199,7 @@ Eubczj1asLiR3WmG1u2v/ntgx3FESVPFlpEMX66jA4DTWUF8aSNSNZIhKoIorIVZ
     return;
   }
   bb24 {
-    %50 = %51;
+    %45 = %51;
     GOTO bb25;
   }
   bb25 {
@@ -221,10 +221,10 @@ Eubczj1asLiR3WmG1u2v/ntgx3FESVPFlpEMX66jA4DTWUF8aSNSNZIhKoIorIVZ
   bb29 {
     keyBytes = %53;
     $desugar$9 = keyBytes;
-    %59 = $default$1($desugar$9) -> bb30;
+    %60 = $default$1($desugar$9) -> bb30;
   }
   bb30 {
-    $desugar$10 = %59;
+    $desugar$10 = %60;
     %62 = decodeRsaPrivateKeyFromContent($desugar$9,$desugar$10) -> bb31;
   }
   bb31 {
@@ -236,11 +236,11 @@ Eubczj1asLiR3WmG1u2v/ntgx3FESVPFlpEMX66jA4DTWUF8aSNSNZIhKoIorIVZ
     return;
   }
   bb33 {
-    %61 = %62;
+    %58 = %62;
     GOTO bb34;
   }
   bb34 {
-    pk = %61;
+    pk = %58;
     %67 = signRsaSha256(data,pk) -> bb35;
   }
   bb35 {
@@ -267,13 +267,13 @@ Eubczj1asLiR3WmG1u2v/ntgx3FESVPFlpEMX66jA4DTWUF8aSNSNZIhKoIorIVZ
     %74 = println(%73) -> bb40;
   }
   bb40 {
-    %75 = ConstantLoad /tmp/bal_crypto_content.pem
-    $desugar$11 = %75;
+    %76 = ConstantLoad /tmp/bal_crypto_content.pem
+    $desugar$11 = %76;
     $desugar$12 = encKeyPem;
-    %78 = $default$1($desugar$11,$desugar$12) -> bb41;
+    %79 = $default$1($desugar$11,$desugar$12) -> bb41;
   }
   bb41 {
-    $desugar$13 = %78;
+    $desugar$13 = %79;
     %81 = fileWriteString($desugar$11,$desugar$12,$desugar$13) -> bb42;
   }
   bb42 {
@@ -285,7 +285,7 @@ Eubczj1asLiR3WmG1u2v/ntgx3FESVPFlpEMX66jA4DTWUF8aSNSNZIhKoIorIVZ
     return;
   }
   bb44 {
-    %80 = %81;
+    %75 = %81;
     GOTO bb45;
   }
   bb45 {
@@ -384,10 +384,10 @@ Eubczj1asLiR3WmG1u2v/ntgx3FESVPFlpEMX66jA4DTWUF8aSNSNZIhKoIorIVZ
     built = %114;
     $desugar$14 = data;
     $desugar$15 = built;
-    %122 = $default$17($desugar$14,$desugar$15) -> bb66;
+    %124 = $default$17($desugar$14,$desugar$15) -> bb66;
   }
   bb66 {
-    $desugar$16 = %122;
+    $desugar$16 = %124;
     %126 = encryptRsaEcb($desugar$14,$desugar$15,$desugar$16) -> bb67;
   }
   bb67 {
@@ -399,18 +399,18 @@ Eubczj1asLiR3WmG1u2v/ntgx3FESVPFlpEMX66jA4DTWUF8aSNSNZIhKoIorIVZ
     return;
   }
   bb69 {
-    %125 = %126;
+    %121 = %126;
     GOTO bb70;
   }
   bb70 {
-    %128 = length(%125) -> bb71;
+    %128 = length(%121) -> bb71;
   }
   bb71 {
     %129 = %128;
     %130 = ConstantLoad 0
     %131 = %130;
-    %124 = > %129 %131;
-    %132 = %124;
+    %120 = > %129 %131;
+    %132 = %120;
     %133 = println(%132) -> bb72;
   }
   bb72 {

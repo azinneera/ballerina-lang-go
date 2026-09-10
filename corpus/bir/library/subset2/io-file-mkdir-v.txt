@@ -4,12 +4,12 @@ main() -> nil|error{
     %1 = ConstantLoad /tmp/bal_io_mkdir_xyz/string/a/b/string.txt
     stringPath = %1;
     $desugar$0 = stringPath;
-    %4 = ConstantLoad hello
-    $desugar$1 = %4;
-    %6 = $default$1($desugar$0,$desugar$1) -> bb1;
+    %5 = ConstantLoad hello
+    $desugar$1 = %5;
+    %7 = $default$1($desugar$0,$desugar$1) -> bb1;
   }
   bb1 {
-    $desugar$2 = %6;
+    $desugar$2 = %7;
     %9 = fileWriteString($desugar$0,$desugar$1,$desugar$2) -> bb2;
   }
   bb2 {
@@ -21,7 +21,7 @@ main() -> nil|error{
     return;
   }
   bb4 {
-    %8 = %9;
+    %3 = %9;
     GOTO bb5;
   }
   bb5 {
@@ -46,15 +46,15 @@ main() -> nil|error{
     %15 = ConstantLoad /tmp/bal_io_mkdir_xyz/lines/a/b/lines.txt
     linesPath = %15;
     $desugar$3 = linesPath;
-    %18 = ConstantLoad one
-    %19 = ConstantLoad two
-    %20 = ConstantLoad 2
-    %21 = newArray [string...][%20]{%18, %19}
-    $desugar$4 = %21;
-    %23 = $default$2($desugar$3,$desugar$4) -> bb11;
+    %19 = ConstantLoad one
+    %20 = ConstantLoad two
+    %21 = ConstantLoad 2
+    %22 = newArray [string...][%21]{%19, %20}
+    $desugar$4 = %22;
+    %24 = $default$2($desugar$3,$desugar$4) -> bb11;
   }
   bb11 {
-    $desugar$5 = %23;
+    $desugar$5 = %24;
     %26 = fileWriteLines($desugar$3,$desugar$4,$desugar$5) -> bb12;
   }
   bb12 {
@@ -66,7 +66,7 @@ main() -> nil|error{
     return;
   }
   bb14 {
-    %25 = %26;
+    %17 = %26;
     GOTO bb15;
   }
   bb15 {
@@ -91,16 +91,16 @@ main() -> nil|error{
     %32 = ConstantLoad /tmp/bal_io_mkdir_xyz/bytes/a/b/bytes.dat
     bytesPath = %32;
     $desugar$6 = bytesPath;
-    %35 = ConstantLoad 1
-    %36 = ConstantLoad 2
-    %37 = ConstantLoad 3
+    %36 = ConstantLoad 1
+    %37 = ConstantLoad 2
     %38 = ConstantLoad 3
-    %39 = newArray [int:Unsigned8...][%38]{%35, %36, %37}
-    $desugar$7 = %39;
-    %41 = $default$4($desugar$6,$desugar$7) -> bb21;
+    %39 = ConstantLoad 3
+    %40 = newArray [int:Unsigned8...][%39]{%36, %37, %38}
+    $desugar$7 = %40;
+    %42 = $default$4($desugar$6,$desugar$7) -> bb21;
   }
   bb21 {
-    $desugar$8 = %41;
+    $desugar$8 = %42;
     %44 = fileWriteBytes($desugar$6,$desugar$7,$desugar$8) -> bb22;
   }
   bb22 {
@@ -112,7 +112,7 @@ main() -> nil|error{
     return;
   }
   bb24 {
-    %43 = %44;
+    %34 = %44;
     GOTO bb25;
   }
   bb25 {
@@ -175,13 +175,13 @@ main() -> nil|error{
     %62 = ConstantLoad /tmp/bal_io_mkdir_xyz/xml/a/b/data.xml
     xmlPath = %62;
     $desugar$9 = xmlPath;
-    %65 = ConstantLoad a
-    %66 = newXMLElement(%65, ())
-    $desugar$10 = %66;
-    %68 = $default$6($desugar$9,$desugar$10) -> bb40;
+    %66 = ConstantLoad a
+    %67 = newXMLElement(%66, ())
+    $desugar$10 = %67;
+    %69 = $default$6($desugar$9,$desugar$10) -> bb40;
   }
   bb40 {
-    $desugar$11 = %68;
+    $desugar$11 = %69;
     %71 = fileWriteXml($desugar$9,$desugar$10,$desugar$11) -> bb41;
   }
   bb41 {
@@ -193,7 +193,7 @@ main() -> nil|error{
     return;
   }
   bb43 {
-    %70 = %71;
+    %64 = %71;
     GOTO bb44;
   }
   bb44 {
@@ -218,12 +218,12 @@ main() -> nil|error{
     %77 = ConstantLoad /tmp/bal_io_mkdir_xyz/append/c/d/append.txt
     appendPath = %77;
     $desugar$12 = appendPath;
-    %80 = ConstantLoad First
-    $desugar$13 = %80;
-    %82 = $default$1($desugar$12,$desugar$13) -> bb50;
+    %81 = ConstantLoad First
+    $desugar$13 = %81;
+    %83 = $default$1($desugar$12,$desugar$13) -> bb50;
   }
   bb50 {
-    $desugar$14 = %82;
+    $desugar$14 = %83;
     %85 = fileWriteString($desugar$12,$desugar$13,$desugar$14) -> bb51;
   }
   bb51 {
@@ -235,7 +235,7 @@ main() -> nil|error{
     return;
   }
   bb53 {
-    %84 = %85;
+    %79 = %85;
     GOTO bb54;
   }
   bb54 {

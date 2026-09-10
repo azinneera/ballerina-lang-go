@@ -31,13 +31,6 @@ import (
 
 var updateCFG = flag.Bool("update", false, "update expected CFG text files")
 
-// cfgGenerationSkipList is the CFG-stage *additional* skip list, on top of
-// the shared test_util.UnsupportedTests baseline.
-var cfgGenerationSkipList = []string{
-	// https://github.com/ballerina-nutcracker/ballerina/issues/417
-	"subset8/08-xml/namespace12-v.bal",
-}
-
 func TestCFGGeneration(t *testing.T) {
 	flag.Parse()
 
@@ -53,7 +46,7 @@ func TestCFGGeneration(t *testing.T) {
 
 // testCFGGeneration tests CFG generation for a single .bal file.
 func testCFGGeneration(t *testing.T, testPair test_util.TestCase) {
-	if test_util.IsUnsupported(testPair.InputPath) || test_util.MatchesSkip(testPair.InputPath, cfgGenerationSkipList) {
+	if test_util.IsUnsupported(testPair.InputPath) {
 		t.Skipf("Skipping CFG generation test for %s", testPair.InputPath)
 		return
 	}

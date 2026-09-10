@@ -33,6 +33,7 @@ import (
 	"github.com/ballerina-nutcracker/ballerina/nodebuilder"
 	"github.com/ballerina-nutcracker/ballerina/parser"
 	"github.com/ballerina-nutcracker/ballerina/semantics"
+	"github.com/ballerina-nutcracker/ballerina/tools/diagnostics"
 	"github.com/ballerina-nutcracker/ballerina/tools/text"
 )
 
@@ -167,7 +168,7 @@ var bundledStdlibs = []bundledLib{
 		org:       "ballerina",
 		nameComps: []string{"io"},
 		srcFS:     stdlibs.FS,
-		balPath:   "ballerina/io/0.0.1/go1.26/io.bal",
+		balPath:   "ballerina/io/0.0.1/go1.27/io.bal",
 		version:   "0.0.1",
 	},
 }
@@ -213,29 +214,6 @@ func Build(cx *context.CompilerContext, publicSymbols map[semantics.PackageIdent
 	return &Symbols{ImplicitImports: implicitImports, PublicSymbols: publicSymbols}, nil
 }
 
-func ImplicitImports(cx *context.CompilerContext) (map[string]model.ExportedSymbolSpace, error) {
-	symbols, err := Build(cx, nil)
-	if err != nil {
-		return nil, err
-	}
-	return symbols.ImplicitImports, nil
-}
-
-// SeedPublicSymbols compiles bundled libraries into cx and registers them in
-// publicSymbols keyed by package identifier, so a hand-rolled driver resolves
-// them like any other dependency when the user code imports them. This includes
-// implicitly-used langlibs (e.g. lang.array) so user code which also imports
-// them explicitly resolves, plus bundled stdlibs that corpus tests import
-// directly (e.g. ballerina/io). A nil publicSymbols map is initialized and
-// returned.
-func SeedPublicSymbols(cx *context.CompilerContext, publicSymbols map[semantics.PackageIdentifier]model.ExportedSymbolSpace) (map[semantics.PackageIdentifier]model.ExportedSymbolSpace, error) {
-	symbols, err := Build(cx, publicSymbols)
-	if err != nil {
-		return nil, err
-	}
-	return symbols.PublicSymbols, nil
-}
-
 // compileBundledLib compiles a single bundled library's source into cx and
 // returns its exported symbol space, reusing a previous compilation in the same
 // build if present.
@@ -249,13 +227,18 @@ func compileBundledLib(cx *context.CompilerContext, cache map[string]model.Expor
 	}
 
 	cx.DiagnosticEnv().RegisterFile(lib.balPath, text.NewStringTextDocument(string(content)))
+	parseDiagnosticBaseline := len(cx.Diagnostics())
 	syntaxTree, err := parser.GetSyntaxTree(cx, lib.balPath, string(content))
 	if err != nil {
-		return model.ExportedSymbolSpace{}, fmt.Errorf("langlib: parse %s: %w", lib.implicitID, err)
+		return model.ExportedSymbolSpace{}, fmt.Errorf("langlib: parse %s: %w", lib.balPath, err)
 	}
+	if len(cx.Diagnostics()) > parseDiagnosticBaseline {
+		return model.ExportedSymbolSpace{}, fmt.Errorf("langlib: parse %s produced diagnostics", lib.balPath)
+	}
+	assemblyDiagnosticBaseline := len(cx.Diagnostics())
 	cu := nodebuilder.GetCompilationUnit(cx, syntaxTree)
 	if cu == nil {
-		return model.ExportedSymbolSpace{}, fmt.Errorf("langlib: AST generation failed for %s", lib.implicitID)
+		return model.ExportedSymbolSpace{}, fmt.Errorf("langlib: AST generation failed for %s", lib.balPath)
 	}
 	nameComps := make([]model.Name, len(lib.nameComps))
 	for i, c := range lib.nameComps {
@@ -274,11 +257,24 @@ func compileBundledLib(cx *context.CompilerContext, cache map[string]model.Expor
 		make(map[semantics.PackageIdentifier]model.ExportedSymbolSpace),
 		lib.org,
 	)
-	pkg := nodebuilder.ToPackageFromCompilationUnits(compilationUnits)
+	pkg := nodebuilder.ToPackageFromCompilationUnits(cx, compilationUnits)
+	if hasErrorDiagnostics(cx.Diagnostics()[assemblyDiagnosticBaseline:]) {
+		return model.ExportedSymbolSpace{}, fmt.Errorf("langlib: package assembly failed for %s", lib.balPath)
+	}
 	pkg.PackageID = pkgID
 	pkg.Scope = pkgScope
 	pkg.Imports = nil
 	semantics.ResolvePublicNodeTypes(cx, pkg, imported)
 	cache[lib.balPath] = exported
 	return exported, nil
+}
+
+func hasErrorDiagnostics(diags []diagnostics.Diagnostic) bool {
+	for _, diag := range diags {
+		switch diag.DiagnosticInfo().Severity() {
+		case diagnostics.Error, diagnostics.Fatal:
+			return true
+		}
+	}
+	return false
 }

@@ -101,7 +101,7 @@ func execNewObject(ctx *extern.Context, newObject *bir.NewObject, frame *Frame) 
 	tmpl := ctx.Env.Registry.(*modules.Registry).GetClassTemplate(newObject.ClassDefRef)
 	fieldValues := make(map[string]values.BalValue, tmpl.FieldCount)
 	objType := newObject.GetLhsOperand().VariableDcl.GetType()
-	obj := values.NewObject(objType, fieldValues, tmpl.MethodKeys, tmpl.RTable)
+	obj := values.NewObject(objType, fieldValues, tmpl.MethodKeys, tmpl.RTable, tmpl.Annotations)
 	setOperandValue(ctx, newObject.GetLhsOperand(), frame, obj)
 }
 

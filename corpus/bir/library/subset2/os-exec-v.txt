@@ -45,10 +45,10 @@ main() -> nil|error{
     %18 = println(%17) -> bb9;
   }
   bb9 {
-    %19 = $default$0() -> bb10;
+    %20 = $default$0() -> bb10;
   }
   bb10 {
-    $desugar$0 = %19;
+    $desugar$0 = %20;
     %22 = $desugar$0;
     %23 = output(p,%22) -> bb11;
   }
@@ -61,11 +61,11 @@ main() -> nil|error{
     return;
   }
   bb13 {
-    %21 = %23;
+    %19 = %23;
     GOTO bb14;
   }
   bb14 {
-    out = %21;
+    out = %19;
     %27 = length(out) -> bb15;
   }
   bb15 {

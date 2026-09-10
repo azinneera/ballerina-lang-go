@@ -112,14 +112,15 @@ func mapQuerySelectExpectedTypeWithValue(env semtypes.Env, valueTy semtypes.SemT
 	return ld.Define(env, []semtypes.SemType{semtypes.String, valueTy})
 }
 
-func MappingKeyName(key *ast.BLangMappingKey) string {
+func MappingKeyName(ctx *context.CompilerContext, key *ast.BLangMappingKey) (string, bool) {
 	switch expr := key.Expr.(type) {
 	case *ast.BLangLiteral:
-		return expr.Value.(string)
+		return expr.Value.(string), true
 	case *ast.BLangVarRef:
-		return expr.VariableName.GetValue()
+		return expr.VariableName.GetValue(), true
 	default:
-		panic(fmt.Sprintf("unexpected record key expression type: %T", key.Expr))
+		ctx.InternalError(fmt.Sprintf("unexpected record key expression type: %T", key.Expr), key.GetPosition())
+		return "", false
 	}
 }
 
@@ -134,4 +135,54 @@ func XMLTemplateInsertionAllowedTypes(kind ast.XMLTemplateInsertionKind) semtype
 		return semtypes.Union(TemplateInsertionAllowedTypes, semtypes.XML)
 	}
 	return TemplateInsertionAllowedTypes
+}
+
+func ValidateConstantExpr(ctx *context.CompilerContext, expr ast.BLangExpression, onNonConst func(ast.BLangExpression)) {
+	switch e := expr.(type) {
+	case *ast.BLangLiteral, *ast.BLangNumericLiteral, *ast.BLangConstRef:
+	case *ast.BLangVarRef:
+		sym := ctx.GetSymbol(e.Symbol())
+		if vs, ok := sym.(model.ValueSymbol); ok && vs.IsConst() {
+			return
+		}
+		onNonConst(expr)
+	case *ast.BLangUnaryExpr:
+		ValidateConstantExpr(ctx, e.Expr, onNonConst)
+	case *ast.BLangTypeConversionExpr:
+		ValidateConstantExpr(ctx, e.Expression, onNonConst)
+	case *ast.BLangGroupExpr:
+		ValidateConstantExpr(ctx, e.Expression, onNonConst)
+	case *ast.BLangBinaryExpr:
+		ValidateConstantExpr(ctx, e.LhsExpr, onNonConst)
+		ValidateConstantExpr(ctx, e.RhsExpr, onNonConst)
+	case *ast.BLangTernaryExpr:
+		ValidateConstantExpr(ctx, e.Condition, onNonConst)
+		ValidateConstantExpr(ctx, e.ThenExpr, onNonConst)
+		ValidateConstantExpr(ctx, e.ElseExpr, onNonConst)
+	case *ast.BLangNilConditionalExpr:
+		ValidateConstantExpr(ctx, e.LhsExpr, onNonConst)
+		ValidateConstantExpr(ctx, e.RhsExpr, onNonConst)
+	case *ast.BLangListConstructorExpr:
+		for _, member := range e.Exprs {
+			ValidateConstantExpr(ctx, member, onNonConst)
+		}
+	case *ast.BLangMappingConstructorExpr:
+		for _, field := range e.Fields {
+			if kv, ok := field.(*ast.BLangMappingKeyValueField); ok {
+				ValidateConstantExpr(ctx, kv.ValueExpr, onNonConst)
+			}
+		}
+	case *ast.BLangTemplateExpr:
+		for _, ins := range e.Insertions {
+			ValidateConstantExpr(ctx, ins, onNonConst)
+		}
+	case *ast.BLangAnnotAccessExpr:
+		ValidateConstantExpr(ctx, e.Expr, onNonConst)
+	case *ast.BLangXMLTemplateExpr:
+		for _, ins := range e.Insertions {
+			ValidateConstantExpr(ctx, ins, onNonConst)
+		}
+	default:
+		onNonConst(expr)
+	}
 }

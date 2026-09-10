@@ -153,14 +153,17 @@ type LiteralNode interface {
 	SetIsConstant(isConstant bool)
 }
 
-type ElvisExpressionNode interface {
-	GetLeftExpression() BLangExpression
-	GetRightExpression() BLangExpression
-}
-
 type MappingField interface {
 	Node
 	IsKeyValueField() bool
+}
+
+// Invocable represents a function, method, remote method, or client resource call.
+type Invocable interface {
+	BLangActionOrExpression
+	ResolvedSymbol() model.SymbolRef
+	Receiver() BLangExpression
+	CallArgs() []BLangExpression
 }
 
 type GroupExpressionNode interface {
@@ -226,19 +229,14 @@ type InputClauseNode interface {
 	IsDeclaredWithVar() bool
 }
 
-type FromClauseNode interface {
-	InputClauseNode
-}
+type FromClauseNode = InputClauseNode
 
 type SelectClauseNode interface {
 	Node
 	GetExpression() BLangExpression
 }
 
-type CollectClauseNode interface {
-	Node
-	GetExpression() BLangExpression
-}
+type CollectClauseNode = SelectClauseNode
 
 type DoClauseNode interface {
 	Node

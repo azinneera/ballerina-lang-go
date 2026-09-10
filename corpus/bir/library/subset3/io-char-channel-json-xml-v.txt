@@ -4,10 +4,10 @@ main() -> nil|error{
     %1 = ConstantLoad /tmp/bal_io_char_json.json
     jpath = %1;
     $desugar$0 = jpath;
-    %4 = $default$11($desugar$0) -> bb1;
+    %5 = $default$11($desugar$0) -> bb1;
   }
   bb1 {
-    $desugar$1 = %4;
+    $desugar$1 = %5;
     %7 = openWritableFile($desugar$0,$desugar$1) -> bb2;
   }
   bb2 {
@@ -19,11 +19,11 @@ main() -> nil|error{
     return;
   }
   bb4 {
-    %6 = %7;
+    %3 = %7;
     GOTO bb5;
   }
   bb5 {
-    wjb = %6;
+    wjb = %3;
     %10 = newObject ballerina/io:WritableCharacterChannel
     %11 = ConstantLoad UTF-8
     %12 = init(%10,wjb,%11) -> bb6;
@@ -157,12 +157,12 @@ main() -> nil|error{
     %52 = ConstantLoad /tmp/bal_io_char_json_bad.json
     bpath = %52;
     $desugar$2 = bpath;
-    %55 = ConstantLoad {oops
-    $desugar$3 = %55;
-    %57 = $default$1($desugar$2,$desugar$3) -> bb36;
+    %56 = ConstantLoad {oops
+    $desugar$3 = %56;
+    %58 = $default$1($desugar$2,$desugar$3) -> bb36;
   }
   bb36 {
-    $desugar$4 = %57;
+    $desugar$4 = %58;
     %60 = fileWriteString($desugar$2,$desugar$3,$desugar$4) -> bb37;
   }
   bb37 {
@@ -174,7 +174,7 @@ main() -> nil|error{
     return;
   }
   bb39 {
-    %59 = %60;
+    %54 = %60;
     GOTO bb40;
   }
   bb40 {
@@ -246,10 +246,10 @@ main() -> nil|error{
     %87 = ConstantLoad /tmp/bal_io_char_xml.xml
     xpath = %87;
     $desugar$5 = xpath;
-    %90 = $default$11($desugar$5) -> bb55;
+    %91 = $default$11($desugar$5) -> bb55;
   }
   bb55 {
-    $desugar$6 = %90;
+    $desugar$6 = %91;
     %93 = openWritableFile($desugar$5,$desugar$6) -> bb56;
   }
   bb56 {
@@ -261,11 +261,11 @@ main() -> nil|error{
     return;
   }
   bb58 {
-    %92 = %93;
+    %89 = %93;
     GOTO bb59;
   }
   bb59 {
-    wxb1 = %92;
+    wxb1 = %89;
     %96 = newObject ballerina/io:WritableCharacterChannel
     %97 = ConstantLoad UTF-8
     %98 = init(%96,wxb1,%97) -> bb60;
@@ -336,10 +336,10 @@ main() -> nil|error{
   }
   bb76 {
     $desugar$7 = xpath;
-    %116 = $default$11($desugar$7) -> bb77;
+    %117 = $default$11($desugar$7) -> bb77;
   }
   bb77 {
-    $desugar$8 = %116;
+    $desugar$8 = %117;
     %119 = openWritableFile($desugar$7,$desugar$8) -> bb78;
   }
   bb78 {
@@ -351,11 +351,11 @@ main() -> nil|error{
     return;
   }
   bb80 {
-    %118 = %119;
+    %115 = %119;
     GOTO bb81;
   }
   bb81 {
-    wxb2 = %118;
+    wxb2 = %115;
     %122 = newObject ballerina/io:WritableCharacterChannel
     %123 = ConstantLoad UTF-8
     %124 = init(%122,wxb2,%123) -> bb82;
@@ -428,10 +428,10 @@ main() -> nil|error{
   }
   bb98 {
     $desugar$9 = xpath;
-    %144 = $default$11($desugar$9) -> bb99;
+    %145 = $default$11($desugar$9) -> bb99;
   }
   bb99 {
-    $desugar$10 = %144;
+    $desugar$10 = %145;
     %147 = openWritableFile($desugar$9,$desugar$10) -> bb100;
   }
   bb100 {
@@ -443,11 +443,11 @@ main() -> nil|error{
     return;
   }
   bb102 {
-    %146 = %147;
+    %143 = %147;
     GOTO bb103;
   }
   bb103 {
-    wxb3 = %146;
+    wxb3 = %143;
     %150 = newObject ballerina/io:WritableCharacterChannel
     %151 = ConstantLoad UTF-8
     %152 = init(%150,wxb3,%151) -> bb104;
@@ -518,10 +518,10 @@ main() -> nil|error{
   }
   bb120 {
     $desugar$11 = xpath;
-    %170 = $default$11($desugar$11) -> bb121;
+    %171 = $default$11($desugar$11) -> bb121;
   }
   bb121 {
-    $desugar$12 = %170;
+    $desugar$12 = %171;
     %173 = openWritableFile($desugar$11,$desugar$12) -> bb122;
   }
   bb122 {
@@ -533,11 +533,11 @@ main() -> nil|error{
     return;
   }
   bb124 {
-    %172 = %173;
+    %169 = %173;
     GOTO bb125;
   }
   bb125 {
-    wxb4 = %172;
+    wxb4 = %169;
     %176 = newObject ballerina/io:WritableCharacterChannel
     %177 = ConstantLoad UTF-8
     %178 = init(%176,wxb4,%177) -> bb126;
@@ -557,10 +557,10 @@ main() -> nil|error{
   bb129 {
     wxc4 = %179;
     $desugar$13 = note;
-    %183 = $default$8($desugar$13) -> bb130;
+    %184 = $default$8($desugar$13) -> bb130;
   }
   bb130 {
-    $desugar$14 = %183;
+    $desugar$14 = %184;
     %186 = writeXml(wxc4,$desugar$13,$desugar$14) -> bb131;
   }
   bb131 {
@@ -572,7 +572,7 @@ main() -> nil|error{
     return;
   }
   bb133 {
-    %185 = %186;
+    %182 = %186;
     GOTO bb134;
   }
   bb134 {

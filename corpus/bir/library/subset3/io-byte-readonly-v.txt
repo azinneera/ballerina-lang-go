@@ -4,18 +4,18 @@ main() -> nil|error{
     %1 = ConstantLoad /tmp/bal_io_byte_readonly.bin
     path = %1;
     $desugar$0 = path;
-    %4 = ConstantLoad 1
-    %5 = ConstantLoad 2
-    %6 = ConstantLoad 3
-    %7 = ConstantLoad 4
-    %8 = ConstantLoad 5
+    %5 = ConstantLoad 1
+    %6 = ConstantLoad 2
+    %7 = ConstantLoad 3
+    %8 = ConstantLoad 4
     %9 = ConstantLoad 5
-    %10 = newArray [int:Unsigned8...][%9]{%4, %5, %6, %7, %8}
-    $desugar$1 = %10;
-    %12 = $default$4($desugar$0,$desugar$1) -> bb1;
+    %10 = ConstantLoad 5
+    %11 = newArray [int:Unsigned8...][%10]{%5, %6, %7, %8, %9}
+    $desugar$1 = %11;
+    %13 = $default$4($desugar$0,$desugar$1) -> bb1;
   }
   bb1 {
-    $desugar$2 = %12;
+    $desugar$2 = %13;
     %15 = fileWriteBytes($desugar$0,$desugar$1,$desugar$2) -> bb2;
   }
   bb2 {
@@ -27,7 +27,7 @@ main() -> nil|error{
     return;
   }
   bb4 {
-    %14 = %15;
+    %3 = %15;
     GOTO bb5;
   }
   bb5 {

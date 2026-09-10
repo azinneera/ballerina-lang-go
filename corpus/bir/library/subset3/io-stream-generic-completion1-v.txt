@@ -6,18 +6,18 @@ main() -> nil|error{
     %3 = ConstantLoad /tmp/bal_io_stream_generic_out.txt
     outPath = %3;
     $desugar$0 = inPath;
-    %6 = ConstantLoad 72
-    %7 = ConstantLoad 101
-    %8 = ConstantLoad 108
+    %7 = ConstantLoad 72
+    %8 = ConstantLoad 101
     %9 = ConstantLoad 108
-    %10 = ConstantLoad 111
-    %11 = ConstantLoad 5
-    %12 = newArray [int:Unsigned8...][%11]{%6, %7, %8, %9, %10}
-    $desugar$1 = %12;
-    %14 = $default$4($desugar$0,$desugar$1) -> bb1;
+    %10 = ConstantLoad 108
+    %11 = ConstantLoad 111
+    %12 = ConstantLoad 5
+    %13 = newArray [int:Unsigned8...][%12]{%7, %8, %9, %10, %11}
+    $desugar$1 = %13;
+    %15 = $default$4($desugar$0,$desugar$1) -> bb1;
   }
   bb1 {
-    $desugar$2 = %14;
+    $desugar$2 = %15;
     %17 = fileWriteBytes($desugar$0,$desugar$1,$desugar$2) -> bb2;
   }
   bb2 {
@@ -29,7 +29,7 @@ main() -> nil|error{
     return;
   }
   bb4 {
-    %16 = %17;
+    %5 = %17;
     GOTO bb5;
   }
   bb5 {
@@ -53,10 +53,10 @@ main() -> nil|error{
     blocks = %19;
     $desugar$3 = outPath;
     $desugar$4 = blocks;
-    %27 = $default$5($desugar$3,$desugar$4) -> bb10;
+    %28 = $default$5($desugar$3,$desugar$4) -> bb10;
   }
   bb10 {
-    $desugar$5 = %27;
+    $desugar$5 = %28;
     %30 = fileWriteBlocksFromStream($desugar$3,$desugar$4,$desugar$5) -> bb11;
   }
   bb11 {
@@ -68,7 +68,7 @@ main() -> nil|error{
     return;
   }
   bb13 {
-    %29 = %30;
+    %25 = %30;
     GOTO bb14;
   }
   bb14 {
@@ -96,15 +96,15 @@ main() -> nil|error{
   }
   bb20 {
     $desugar$6 = inPath;
-    %40 = ConstantLoad Alpha
-    %41 = ConstantLoad Beta
-    %42 = ConstantLoad 2
-    %43 = newArray [string...][%42]{%40, %41}
-    $desugar$7 = %43;
-    %45 = $default$2($desugar$6,$desugar$7) -> bb21;
+    %41 = ConstantLoad Alpha
+    %42 = ConstantLoad Beta
+    %43 = ConstantLoad 2
+    %44 = newArray [string...][%43]{%41, %42}
+    $desugar$7 = %44;
+    %46 = $default$2($desugar$6,$desugar$7) -> bb21;
   }
   bb21 {
-    $desugar$8 = %45;
+    $desugar$8 = %46;
     %48 = fileWriteLines($desugar$6,$desugar$7,$desugar$8) -> bb22;
   }
   bb22 {
@@ -116,7 +116,7 @@ main() -> nil|error{
     return;
   }
   bb24 {
-    %47 = %48;
+    %39 = %48;
     GOTO bb25;
   }
   bb25 {
@@ -138,10 +138,10 @@ main() -> nil|error{
     lines = %50;
     $desugar$9 = outPath;
     $desugar$10 = lines;
-    %56 = $default$3($desugar$9,$desugar$10) -> bb30;
+    %57 = $default$3($desugar$9,$desugar$10) -> bb30;
   }
   bb30 {
-    $desugar$11 = %56;
+    $desugar$11 = %57;
     %59 = fileWriteLinesFromStream($desugar$9,$desugar$10,$desugar$11) -> bb31;
   }
   bb31 {
@@ -153,7 +153,7 @@ main() -> nil|error{
     return;
   }
   bb33 {
-    %58 = %59;
+    %54 = %59;
     GOTO bb34;
   }
   bb34 {

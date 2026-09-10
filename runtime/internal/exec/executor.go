@@ -20,7 +20,6 @@ import (
 	"fmt"
 
 	"github.com/ballerina-nutcracker/ballerina/bir"
-	"github.com/ballerina-nutcracker/ballerina/model"
 	"github.com/ballerina-nutcracker/ballerina/runtime/extern"
 	runtimeframe "github.com/ballerina-nutcracker/ballerina/runtime/internal/frame"
 	"github.com/ballerina-nutcracker/ballerina/semtypes"
@@ -75,19 +74,22 @@ func createFunctionFrame(ctx *extern.Context, birFunc *bir.BIRFunction, args []v
 func initLocalsForFunction(ctx *extern.Context, birFunc *bir.BIRFunction, args []values.BalValue, frame *Frame) {
 	frame.SetLocal(0, nil)
 	localVars := &birFunc.LocalVars
-	argOffset := 0
-	if birFunc.Flags.Has(model.FlagAttached) {
-		frame.SetLocal(1, args[0])
-		argOffset = 1
-	}
+	paramLocalOffset := birFunc.ParamLocalVarOffset()
+	argOffset := paramLocalOffset - 1
 	requiredCount := len(birFunc.RequiredParams)
+	if len(args) < requiredCount+argOffset {
+		panic(values.NewErrorWithMessage("not enough arguments"))
+	}
+	if argOffset != 0 {
+		frame.SetLocal(1, args[0])
+	}
 	for i := range requiredCount {
-		frame.SetLocal(i+1+argOffset, args[i+argOffset])
+		frame.SetLocal(i+paramLocalOffset, args[i+argOffset])
 	}
 
 	if birFunc.RestParams != nil {
 		restArgs := args[requiredCount+argOffset:]
-		restParamIdx := requiredCount + 1 + argOffset
+		restParamIdx := requiredCount + paramLocalOffset
 		restParamType := (*localVars)[restParamIdx].GetType()
 		atomic := semtypes.ToListAtomicType(ctx.TypeEnv(), restParamType)
 		if atomic == nil {
@@ -108,7 +110,7 @@ func executeFunctionWithTrap(ctx *extern.Context, birFunc *bir.BIRFunction, bb *
 	currentFrame := frame
 	for {
 		curBBNumber := bb.Number
-		nextBB, nextFrame, recovered := executeBasicBlockWithTrap(ctx, bb, frame, currentFrame)
+		nextBB, nextFrame, recovered := executeBasicBlockWithTrap(ctx, bb, currentFrame)
 
 		if recovered != nil {
 			// Resolve the innermost error-table entry covering the current block and
@@ -136,7 +138,7 @@ func executeFunctionNoTrap(ctx *extern.Context, bb *bir.BIRBasicBlock, frame *Fr
 	currentFrame := frame
 	for {
 		var nextBB *bir.BIRBasicBlock
-		nextBB, currentFrame = executeBasicBlock(ctx, bb, frame, currentFrame)
+		nextBB, currentFrame = executeBasicBlock(ctx, bb, currentFrame)
 		bb = nextBB
 		if bb == nil {
 			break
@@ -144,7 +146,7 @@ func executeFunctionNoTrap(ctx *extern.Context, bb *bir.BIRBasicBlock, frame *Fr
 	}
 }
 
-func executeBasicBlockWithTrap(ctx *extern.Context, bb *bir.BIRBasicBlock, frame *Frame, currentFrame *Frame) (nextBB *bir.BIRBasicBlock, nextFrame *Frame, recovered any) {
+func executeBasicBlockWithTrap(ctx *extern.Context, bb *bir.BIRBasicBlock, currentFrame *Frame) (nextBB *bir.BIRBasicBlock, nextFrame *Frame, recovered any) {
 	defer func() {
 		if r := recover(); r != nil {
 			nextFrame = currentFrame
@@ -159,7 +161,7 @@ func executeBasicBlockWithTrap(ctx *extern.Context, bb *bir.BIRBasicBlock, frame
 	return execTerminator(ctx, bb.Terminator, currentFrame), currentFrame, nil
 }
 
-func executeBasicBlock(ctx *extern.Context, bb *bir.BIRBasicBlock, frame *Frame, currentFrame *Frame) (*bir.BIRBasicBlock, *Frame) {
+func executeBasicBlock(ctx *extern.Context, bb *bir.BIRBasicBlock, currentFrame *Frame) (*bir.BIRBasicBlock, *Frame) {
 	for _, inst := range bb.Instructions {
 		getCallStack(ctx).SetCurrentLocation(inst.GetPos())
 		currentFrame = execInstruction(ctx, inst, currentFrame)
@@ -307,6 +309,14 @@ func execTerminator(ctx *extern.Context, term bir.BIRTerminator, frame *Frame) *
 		return execBranch(ctx, v, frame)
 	case *bir.Panic:
 		return execPanic(ctx, v, frame)
+	case *bir.StartAction:
+		return execStartAction(ctx, v, frame)
+	case *bir.SingleWaitAction:
+		return execSingleWaitAction(ctx, v, frame)
+	case *bir.AlternateWaitAction:
+		return execAlternateWaitAction(ctx, v, frame)
+	case *bir.MultipleWaitAction:
+		return execMultipleWaitAction(ctx, v, frame)
 	case *bir.Call:
 		switch v.GetKind() {
 		case bir.InstructionKindCall:
@@ -333,6 +343,7 @@ func execTerminator(ctx *extern.Context, term bir.BIRTerminator, frame *Frame) *
 }
 
 func panicValueToErrorValue(r any) values.BalValue {
+	r = originalPanicValue(r)
 	// `trap` expects runtime failures to be raised as `*values.Error`.
 	// If this isn't the case, treat it as an unrecoverable interpreter issue.
 	if err, ok := r.(*values.Error); ok {
@@ -344,7 +355,7 @@ func panicValueToErrorValue(r any) values.BalValue {
 func setRecoveredError(ctx *extern.Context, op *bir.BIROperand, currentFrame *Frame, errVal values.BalValue) *Frame {
 	if gv, ok := op.VariableDcl.(*bir.BIRGlobalVariableDcl); ok {
 		module := getModule(ctx, gv.PkgID)
-		module.Globals[gv.GlobalVarLookupKey] = errVal
+		module.SetGlobal(gv.GlobalVarLookupKey, errVal)
 		return currentFrame
 	}
 	targetFrame := resolveFrame(currentFrame, op.Address)

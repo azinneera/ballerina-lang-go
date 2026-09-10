@@ -93,31 +93,39 @@ func (p *PrettyPrinter) Print(tyCtx semtypes.Context, node BIRPackage) string {
 	return p.sb.String()
 }
 
-func (p *PrettyPrinter) PrintFunction(function BIRFunction) {
-	p.write(function.Name.Value())
-	p.write("(")
-	paramStart := 1
-	if function.Flags.Has(model.FlagAttached) {
-		paramStart = 2
+// printFunctionParams prints the parameter list of function. Native dependently
+// typed functions carry no local variables because their signature is only known
+// at each call site, so there is nothing to print for them.
+func (p *PrettyPrinter) printFunctionParams(function BIRFunction) {
+	paramStart := function.ParamLocalVarOffset()
+	if len(function.LocalVars) <= paramStart {
+		return
 	}
 	for i, v := range function.LocalVars[paramStart:] {
-		if i < len(function.RequiredParams) {
-			if i > 0 {
-				p.write(",")
-			}
-			p.write(p.PrintSemType(v.Type))
-		} else {
+		if i >= len(function.RequiredParams) {
 			break
 		}
+		if i > 0 {
+			p.write(",")
+		}
+		p.printAnnotations(function.RequiredParams[i].Annotations)
+		p.write(p.PrintSemType(v.Type))
 	}
 	if function.RestParams != nil {
 		variableIndex := paramStart + len(function.RequiredParams)
 		if variableIndex != paramStart {
 			p.write(",")
 		}
+		p.printAnnotations(function.RestParams.Annotations)
 		p.write(p.PrintSemType(function.LocalVars[variableIndex].Type))
 		p.write("...")
 	}
+}
+
+func (p *PrettyPrinter) PrintFunction(function BIRFunction) {
+	p.write(function.Name.Value())
+	p.write("(")
+	p.printFunctionParams(function)
 	p.write(")")
 	if function.ReturnVariable != nil && !semtypes.IsZero(function.ReturnVariable.Type) {
 		p.write(" -> ")
@@ -141,6 +149,21 @@ func (p *PrettyPrinter) PrintFunction(function BIRFunction) {
 	p.decreaseIndent()
 	p.writeIndent()
 	p.write("}")
+}
+
+func (p *PrettyPrinter) printAnnotations(annotations values.AnnotationValues) {
+	keys := make([]string, 0, len(annotations))
+	for key := range annotations {
+		keys = append(keys, key)
+	}
+	sort.Strings(keys)
+	for _, key := range keys {
+		p.write("@")
+		p.write(key)
+		p.write("(")
+		p.write(formatConstantValue(annotations[key]))
+		p.write(") ")
+	}
 }
 
 func (p *PrettyPrinter) PrintBasicBlock(basicBlock BIRBasicBlock) {
@@ -194,6 +217,14 @@ func (p *PrettyPrinter) PrintInstruction(instruction BIRInstruction) string {
 		return p.PrintLockEnd(instruction)
 	case *ResourceFunctionCall:
 		return p.PrintResourceFunctionCall(instruction)
+	case *StartAction:
+		return p.PrintStartAction(instruction)
+	case *SingleWaitAction:
+		return p.PrintSingleWaitAction(instruction)
+	case *AlternateWaitAction:
+		return p.PrintAlternateWaitAction(instruction)
+	case *MultipleWaitAction:
+		return p.PrintMultipleWaitAction(instruction)
 	case *NewObject:
 		return p.PrintNewObject(instruction)
 	case *NewStream:
@@ -331,6 +362,7 @@ func (p *PrettyPrinter) PrintStreamClose(n *StreamClose) string {
 }
 
 func (p *PrettyPrinter) PrintClassDef(classDef BIRClassDef) {
+	p.printAnnotations(classDef.Annotations)
 	p.write("class ")
 	p.write(classDef.Name.Value())
 	p.write(" {\n")
@@ -420,32 +452,73 @@ func (p *PrettyPrinter) PrintGoto(g *Goto) string {
 }
 
 func (p *PrettyPrinter) PrintResourceFunctionCall(call *ResourceFunctionCall) string {
-	segs := strings.Builder{}
-	for i, seg := range call.PathSegments {
+	return fmt.Sprintf("%s = %s -> %s;", p.PrintOperand(*call.LhsOp), p.printCallSite(call.CallSite), call.ThenBB.ID.Value())
+}
+
+func (p *PrettyPrinter) PrintStartAction(action *StartAction) string {
+	return fmt.Sprintf("%s = start %s isolated=%t -> %s;", p.PrintOperand(*action.LhsOp), p.printCallSite(action.Call), action.IsIsolated, action.ThenBB.ID.Value())
+}
+
+func (p *PrettyPrinter) PrintSingleWaitAction(action *SingleWaitAction) string {
+	return fmt.Sprintf("%s = wait %s -> %s;", p.PrintOperand(*action.LhsOp), p.PrintOperand(action.Future), action.ThenBB.ID.Value())
+}
+
+func (p *PrettyPrinter) PrintAlternateWaitAction(action *AlternateWaitAction) string {
+	futures := strings.Builder{}
+	for i, future := range action.Futures {
 		if i > 0 {
-			segs.WriteString(",")
+			futures.WriteString(" | ")
 		}
-		segs.WriteString(p.PrintOperand(seg))
+		futures.WriteString(p.PrintOperand(future))
 	}
-	args := strings.Builder{}
-	for i, arg := range call.Args {
+	return fmt.Sprintf("%s = wait %s -> %s;", p.PrintOperand(*action.LhsOp), futures.String(), action.ThenBB.ID.Value())
+}
+
+func (p *PrettyPrinter) PrintMultipleWaitAction(action *MultipleWaitAction) string {
+	fields := strings.Builder{}
+	for i, future := range action.Futures {
 		if i > 0 {
-			args.WriteString(",")
+			fields.WriteString(", ")
 		}
-		args.WriteString(p.PrintOperand(arg))
+		fields.WriteString(action.FieldNames[i])
+		fields.WriteString(": ")
+		fields.WriteString(p.PrintOperand(future))
 	}
-	return fmt.Sprintf("%s = %s->[%s].%s(%s) -> %s;", p.PrintOperand(*call.LhsOp), p.PrintOperand(call.Receiver), segs.String(), call.MethodName, args.String(), call.ThenBB.ID.Value())
+	return fmt.Sprintf("%s = wait {%s} -> %s;", p.PrintOperand(*action.LhsOp), fields.String(), action.ThenBB.ID.Value())
 }
 
 func (p *PrettyPrinter) PrintCall(call *Call) string {
-	args := strings.Builder{}
-	for i, arg := range call.Args {
-		if i > 0 {
-			args.WriteString(",")
+	return fmt.Sprintf("%s = %s -> %s;", p.PrintOperand(*call.LhsOp), p.printCallSite(call.CallSite), call.ThenBB.ID.Value())
+}
+
+func (p *PrettyPrinter) printCallSite(call CallSite) string {
+	switch call.Kind {
+	case CallKindFunction:
+		return fmt.Sprintf("%s(%s)", call.Name.Value(), p.printOperands(call.Args))
+	case CallKindFunctionPointer:
+		name := call.Name.Value()
+		if call.FpOperand != nil {
+			name = p.PrintOperand(*call.FpOperand)
 		}
-		args.WriteString(p.PrintOperand(arg))
+		return fmt.Sprintf("%s(%s)", name, p.printOperands(call.Args))
+	case CallKindMethod:
+		return fmt.Sprintf("%s.%s(%s)", p.PrintOperand(*call.Receiver), call.Name.Value(), p.printOperands(call.Args[1:]))
+	case CallKindResource:
+		return fmt.Sprintf("%s->[%s].%s(%s)", p.PrintOperand(*call.Receiver), p.printOperands(call.PathSegments), call.MethodName, p.printOperands(call.Args))
+	default:
+		panic(fmt.Sprintf("unexpected call kind: %d", call.Kind))
 	}
-	return fmt.Sprintf("%s = %s(%s) -> %s;", p.PrintOperand(*call.LhsOp), call.Name.Value(), args.String(), call.ThenBB.ID.Value())
+}
+
+func (p *PrettyPrinter) printOperands(operands []BIROperand) string {
+	result := strings.Builder{}
+	for i, operand := range operands {
+		if i > 0 {
+			result.WriteString(",")
+		}
+		result.WriteString(p.PrintOperand(operand))
+	}
+	return result.String()
 }
 
 func (p *PrettyPrinter) PrintOperand(operand BIROperand) string {
@@ -469,6 +542,9 @@ func formatConstantValue(v any) string {
 	switch v.(type) {
 	case *values.List, *values.Map, *values.Error, *values.Function, *values.Object, *values.TypeDesc:
 		return values.String(v, map[uintptr]bool{})
+	}
+	if ref, ok := v.(*values.RuntimeAnnotationValueRef); ok {
+		return fmt.Sprintf("runtime-ref(%s/%s:%s)", ref.Organization, ref.Module, ref.GlobalName)
 	}
 	return fmt.Sprintf("%v", v)
 }

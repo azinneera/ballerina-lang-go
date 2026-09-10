@@ -68,17 +68,13 @@ type symbolResolver interface {
 	TypeContext() semtypes.Context
 	GetTypeDefns() map[model.SymbolRef]*ast.BLangTypeDefinition
 	GetClassDefns() map[model.SymbolRef]*ast.BLangClassDefinition
+	nextDefaultSymbolName() string
 }
 
 type (
 	compilationUnitImportsWithSymbols struct {
 		compilationUnit *ast.BLangCompilationUnit
 		imports         map[string]model.ExportedSymbolSpace
-	}
-
-	defaultSymbolAllocator interface {
-		GetCtx() *context.CompilerContext
-		nextDefaultSymbolName() string
 	}
 
 	prevPos struct {
@@ -114,6 +110,7 @@ type (
 		prevPos        map[string]prevPos
 		prevAnnotPos   map[string]prevPos
 		defaultCounter int
+		serviceCounter int
 		moduleNodes    moduleAstNodeHolder
 	}
 
@@ -334,6 +331,12 @@ func (ms *moduleSymbolResolver) nextDefaultSymbolName() string {
 	return name
 }
 
+func (ms *moduleSymbolResolver) nextServiceSymbolName() string {
+	name := fmt.Sprintf("$service$%d", ms.serviceCounter)
+	ms.serviceCounter++
+	return name
+}
+
 func (ms *compilationUnitSymbolResolver) nextDefaultSymbolName() string {
 	return ms.moduleResolver.nextDefaultSymbolName()
 }
@@ -379,11 +382,7 @@ func (bs *blockSymbolResolver) GetCtx() *context.CompilerContext {
 }
 
 func (bs *blockSymbolResolver) nextDefaultSymbolName() string {
-	if alloc, ok := bs.parent.(defaultSymbolAllocator); ok {
-		return alloc.nextDefaultSymbolName()
-	}
-	bs.GetCtx().InternalError("default symbol allocator not found", diagnostics.Location{})
-	return "$default$error"
+	return bs.parent.nextDefaultSymbolName()
 }
 
 func (bs *blockSymbolResolver) TypeContext() semtypes.Context {
@@ -520,13 +519,13 @@ func (ms *compilationUnitSymbolResolver) allocateFunctionSymbolInner(fn *ast.BLa
 
 // isDependentlyTyped reports whether a function's return type references one of its typedesc
 // parameters by name.
-func (ms *compilationUnitSymbolResolver) isDependentlyTyped(fn *ast.BLangFunction) bool {
+func (ms *compilationUnitSymbolResolver) isDependentlyTyped(fn ast.InvokableNode) bool {
 	retTd := fn.GetReturnTypeDescriptor()
 	if retTd == nil {
 		return false
 	}
 	typedescParams := make(map[string]struct{})
-	for _, param := range fn.RequiredParams {
+	for _, param := range fn.GetParameters() {
 		if param.Name == nil {
 			continue
 		}
@@ -908,7 +907,7 @@ func fillinOpaqueSymbol(sym model.Symbol, space *model.SymbolSpace) {
 	fn.Lookup, fn.Store = newMonomorphizationCache()
 }
 
-func newMonomorphizationCache() (func(...semtypes.SemType) (model.SymbolRef, bool), func(model.SymbolRef, ...semtypes.SemType)) {
+func newMonomorphizationCache() (func(semtypes.SemType, ...semtypes.SemType) (model.SymbolRef, bool), func(model.SymbolRef, semtypes.SemType, ...semtypes.SemType)) {
 	type cacheNode struct {
 		children map[semtypes.InternHandle]*cacheNode
 		ref      model.SymbolRef
@@ -918,38 +917,38 @@ func newMonomorphizationCache() (func(...semtypes.SemType) (model.SymbolRef, boo
 	var mu sync.Mutex
 	interner := semtypes.NewSemtypeInterner()
 	root := cacheNode{children: make(map[semtypes.InternHandle]*cacheNode)}
-	nodeFor := func(keys []semtypes.SemType, create bool) *cacheNode {
-		if len(keys) == 0 {
-			panic("monomorphization cache requires at least one key type")
+	nextNode := func(node *cacheNode, key semtypes.SemType, create bool) *cacheNode {
+		handle := interner.Intern(key)
+		next := node.children[handle]
+		if next == nil && create {
+			next = &cacheNode{children: make(map[semtypes.InternHandle]*cacheNode)}
+			node.children[handle] = next
 		}
-		node := &root
-		for _, key := range keys {
-			handle := interner.Intern(key)
-			next := node.children[handle]
-			if next == nil {
-				if !create {
-					return nil
-				}
-				next = &cacheNode{children: make(map[semtypes.InternHandle]*cacheNode)}
-				node.children[handle] = next
+		return next
+	}
+	nodeFor := func(cacheKey semtypes.SemType, cacheKeyRest []semtypes.SemType, create bool) *cacheNode {
+		node := nextNode(&root, cacheKey, create)
+		for _, key := range cacheKeyRest {
+			if node == nil {
+				return nil
 			}
-			node = next
+			node = nextNode(node, key, create)
 		}
 		return node
 	}
-	lookup := func(keys ...semtypes.SemType) (model.SymbolRef, bool) {
+	lookup := func(cacheKey semtypes.SemType, cacheKeyRest ...semtypes.SemType) (model.SymbolRef, bool) {
 		mu.Lock()
 		defer mu.Unlock()
-		node := nodeFor(keys, false)
+		node := nodeFor(cacheKey, cacheKeyRest, false)
 		if node == nil || !node.stored {
 			return model.SymbolRef{}, false
 		}
 		return node.ref, true
 	}
-	store := func(ref model.SymbolRef, keys ...semtypes.SemType) {
+	store := func(ref model.SymbolRef, cacheKey semtypes.SemType, cacheKeyRest ...semtypes.SemType) {
 		mu.Lock()
 		defer mu.Unlock()
-		node := nodeFor(keys, true)
+		node := nodeFor(cacheKey, cacheKeyRest, true)
 		node.ref = ref
 		node.stored = true
 	}
@@ -998,7 +997,7 @@ func isExternalFunctionBody(body ast.FunctionBodyNode) bool {
 	return ok
 }
 
-func ensureFunctionTypeSignature(alloc defaultSymbolAllocator, targetScope model.Scope, fnType *ast.BLangFunctionType) (model.FunctionSignatureRef, bool) {
+func ensureFunctionTypeSignature(resolver symbolResolver, targetScope model.Scope, fnType *ast.BLangFunctionType) (model.FunctionSignatureRef, bool) {
 	if fnType.IsAnyFunction() {
 		return 0, false
 	}
@@ -1006,8 +1005,8 @@ func ensureFunctionTypeSignature(alloc defaultSymbolAllocator, targetScope model
 		// Already set
 		return ref, true
 	}
-	params := signatureParams(alloc, targetScope, fnType)
-	ref := alloc.GetCtx().AllocateFunctionSignature(params, fnType.RestParameter() != nil)
+	params := signatureParams(resolver, targetScope, fnType)
+	ref := resolver.GetCtx().AllocateFunctionSignature(params, fnType.RestParameter() != nil)
 	fnType.SetSignatureRef(ref)
 	return ref, true
 }
@@ -1025,17 +1024,24 @@ func associateFunctionSignatureFromTypeDescriptor[T symbolResolver](resolver T, 
 
 func functionSignatureRefFromTypeDescriptor[T symbolResolver](resolver T, typeNode any, pos diagnostics.Location) (model.FunctionSignatureRef, bool) {
 	switch ty := typeNode.(type) {
+	case *ast.BLangReturnTypeDescriptor:
+		return functionSignatureRefFromTypeDescriptor(resolver, ty.TypeDescriptor, pos)
 	case *ast.BLangFunctionType:
-		alloc, ok := any(resolver).(defaultSymbolAllocator)
-		if !ok {
-			internalError(resolver, "default symbol allocator not found", pos)
-			return 0, false
-		}
-		return ensureFunctionTypeSignature(alloc, resolver.GetScope(), ty)
+		return ensureFunctionTypeSignature(resolver, resolver.GetScope(), ty)
 	case *ast.BLangUserDefinedType:
 		return resolver.GetCtx().FunctionSignatureRef(ty.Symbol())
 	default:
 		return 0, false
+	}
+}
+
+func associateReturnFunctionSignature[T symbolResolver](resolver T, source model.FunctionSignatureRef, returnType any, pos diagnostics.Location) {
+	target, found := functionSignatureRefFromTypeDescriptor(resolver, returnType, pos)
+	if !found {
+		return
+	}
+	if !resolver.GetCtx().AssociateReturnFunctionSignature(source, target) {
+		internalError(resolver, "function return signature already set", pos)
 	}
 }
 
@@ -1044,22 +1050,23 @@ type symbolFunctionSignature interface {
 	Symbol() model.SymbolRef
 }
 
-func allocateSymbols(alloc defaultSymbolAllocator, targetScope model.Scope, sig symbolFunctionSignature, pos diagnostics.Location) (model.FunctionSignatureRef, bool) {
+func allocateSymbols(alloc symbolResolver, targetScope model.Scope, sig symbolFunctionSignature, pos diagnostics.Location) {
 	cx := alloc.GetCtx()
 	owner := sig.Symbol()
 	if owner.IsEmpty() {
-		return 0, false
+		return
 	}
 	if ref, ok := cx.FunctionSignatureRef(owner); ok {
-		return ref, true
+		associateReturnFunctionSignature(alloc, ref, sig.ReturnType(), pos)
+		return
 	}
 	params := signatureParams(alloc, targetScope, sig)
 	ref := cx.AllocateFunctionSignature(params, sig.RestParameter() != nil)
 	associateFunctionSignatureRef(cx, owner, ref, pos)
-	return ref, true
+	associateReturnFunctionSignature(alloc, ref, sig.ReturnType(), pos)
 }
 
-func signatureParams(alloc defaultSymbolAllocator, targetScope model.Scope, sig ast.FunctionSignature) []model.Param {
+func signatureParams(alloc symbolResolver, targetScope model.Scope, sig ast.FunctionSignature) []model.Param {
 	requiredParams := sig.Parameters()
 	params := make([]model.Param, 0, len(requiredParams)+1)
 	for _, param := range requiredParams {
@@ -1193,6 +1200,9 @@ func (bs *blockSymbolResolver) Visit(node ast.BLangNode) ast.Visitor {
 		return nil
 	case *ast.BLangXMLNS:
 		processBlockXMLNS(bs, n)
+		if uriExpr := n.GetNamespaceURI(); uriExpr != nil {
+			ast.Walk(bs, uriExpr)
+		}
 		return nil
 	case *ast.BLangFunction:
 		// This happens because we visit from the top in [resolveFunction]
@@ -1255,12 +1265,7 @@ func walkSimpleVariableChildren[T symbolResolver](resolver T, variable *ast.BLan
 }
 
 func resolveFunctionTypeSymbols[T symbolResolver](resolver T, fnType *ast.BLangFunctionType) {
-	alloc, ok := any(resolver).(defaultSymbolAllocator)
-	if !ok {
-		internalError(resolver, "default symbol allocator not found", fnType.GetPosition())
-		return
-	}
-	ensureFunctionTypeSignature(alloc, resolver.GetScope(), fnType)
+	ensureFunctionTypeSignature(resolver, resolver.GetScope(), fnType)
 	paramScope := resolver.GetCtx().NewBlockScope(resolver.GetScope(), resolver.GetPkgID())
 	paramResolver := &blockSymbolResolver{parent: resolver, scope: paramScope, node: fnType}
 	for i := range fnType.RequiredParams {
@@ -1298,6 +1303,9 @@ func resolveFunctionTypeSymbols[T symbolResolver](resolver T, fnType *ast.BLangF
 	}
 	if fnType.ReturnTypeDescriptor != nil {
 		ast.Walk(resolver, fnType.ReturnTypeDescriptor.(ast.BLangNode))
+	}
+	if ref := fnType.SignatureRef(); ref != 0 {
+		associateReturnFunctionSignature(resolver, ref, fnType.ReturnTypeDescriptor, fnType.GetPosition())
 	}
 }
 
@@ -1871,9 +1879,18 @@ func resolveServiceDefinition(ms *compilationUnitSymbolResolver, svc *ast.BLangS
 	svcResolver := newBlockSymbolResolverWithBlockScope(ms, svc)
 	svc.SetScope(svcResolver.scope)
 
-	allocateServiceResourceMethodSymbols(svcResolver, svc.ResourceMethods)
+	allocateServiceResourceMethodSymbols(ms, svcResolver, svc.ResourceMethods)
 
 	finishResolveClassDefinition(ms, svcResolver, svc.Fields, svc.Methods, svc.ResourceMethods, svc.InitFunction, nil, svcResolver.scope, serviceMethodSymbolName, resourceMethodsAreNetworkClass)
+
+	serviceSymbolName := ms.moduleResolver.nextServiceSymbolName()
+	serviceSymbol := model.NewTypeSymbol(serviceSymbolName, false, svc.GetPosition())
+	svcResolver.AddSymbol(serviceSymbolName, &serviceSymbol)
+	serviceSymbolRef, _, _ := svcResolver.GetSymbol(serviceSymbolName)
+	svc.SetSymbol(serviceSymbolRef)
+	for i := range svc.AnnAttachments {
+		ast.Walk(svcResolver, &svc.AnnAttachments[i])
+	}
 }
 
 func resolveClassDefinition(ms *compilationUnitSymbolResolver, classDef *ast.BLangClassDefinition) {
@@ -1988,20 +2005,31 @@ func allocateObjectResourceMethodSymbols(ms *compilationUnitSymbolResolver, bloc
 			continue
 		}
 		mangledName := className + "." + mangledResourceMethodName(rm.Name.GetValue(), idx)
-		symRef := allocateResourceMethodSymbol(ms.scope, rm, mangledName, classDef.IsPublic() && rm.IsPublic())
+		symRef := ms.allocateResourceMethodSymbol(ms.scope, rm, mangledName, classDef.IsPublic() && rm.IsPublic())
 		networkClassSym.AddResourceMethod(symRef)
 	}
 }
 
-func allocateServiceResourceMethodSymbols(blockRes *blockSymbolResolver, resourceMethods []*ast.BLangResourceMethod) {
+func allocateServiceResourceMethodSymbols(ms *compilationUnitSymbolResolver, blockRes *blockSymbolResolver, resourceMethods []*ast.BLangResourceMethod) {
 	for idx, rm := range resourceMethods {
 		key := mangledResourceMethodName(rm.Name.GetValue(), idx)
-		allocateResourceMethodSymbol(blockRes.scope, rm, key, rm.IsPublic())
+		ms.allocateResourceMethodSymbol(blockRes.scope, rm, key, rm.IsPublic())
 	}
 }
 
-func allocateResourceMethodSymbol(targetScope methodSymbolTargetScope, rm *ast.BLangResourceMethod, symbolName string, isPublic bool) model.SymbolRef {
-	symbol := model.NewResourceMethodSymbol(symbolName, rm.Name.GetValue(), isPublic, symbolLocationForNode(rm))
+func (ms *compilationUnitSymbolResolver) allocateResourceMethodSymbol(targetScope methodSymbolTargetScope, rm *ast.BLangResourceMethod, symbolName string, isPublic bool) model.SymbolRef {
+	var symbol model.ResourceMethodSymbol
+	if ms.isDependentlyTyped(rm) {
+		if rm.GetRestParam() != nil {
+			ms.moduleResolver.ctx.Unimplemented("rest parameters are not supported on dependently-typed functions", rm.GetPosition())
+		}
+		if _, isExtern := rm.GetBody().(*ast.BLangExternFunctionBody); !isExtern {
+			ms.moduleResolver.ctx.SemanticError("dependently typed function must be external", rm.GetPosition())
+		}
+		symbol = model.NewDependentlyTypedResourceMethodSymbol(symbolName, rm.Name.GetValue(), rm.FuncSymbolFlags(), isPublic, symbolLocationForNode(rm))
+	} else {
+		symbol = model.NewResourceMethodSymbol(symbolName, rm.Name.GetValue(), isPublic, symbolLocationForNode(rm))
+	}
 	targetScope.AddSymbol(symbolName, symbol)
 	symRef, _ := targetScope.MainSpace().GetSymbol(symbolName)
 	rm.SetSymbol(symRef)

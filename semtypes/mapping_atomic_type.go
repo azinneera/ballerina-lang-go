@@ -26,7 +26,7 @@ type MappingAtomicType struct {
 	rest  SemType
 }
 
-var _ atomicType = &MappingAtomicType{}
+var _ AtomicType = &MappingAtomicType{}
 
 func mappingAtomicTypeFrom(names []string, types []SemType, rest SemType) MappingAtomicType {
 	return MappingAtomicType{
@@ -68,6 +68,18 @@ const (
 	matchAny matchQuantifier = iota
 	matchAll
 )
+
+func AllMapConstraintTypesMatch(cx Context, ty SemType, predicate func(SemType) bool) bool {
+	return mappingAtomsMatch(cx, ty, matchAll, func(cx Context, atom *MappingAtomicType) bool {
+		for i, name := range atom.names {
+			if atom.IsOptional(cx, name) && IsNever(cellInnerVal(atom.types[i])) {
+				continue
+			}
+			return false
+		}
+		return predicate(cellInnerVal(atom.rest))
+	})
+}
 
 func AnyMappingAtomHasFieldByName(cx Context, ty SemType, key string) bool {
 	return mappingAtomsMatch(cx, ty, matchAny, func(_ Context, atom *MappingAtomicType) bool {

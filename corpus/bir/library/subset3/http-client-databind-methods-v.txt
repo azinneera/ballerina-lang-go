@@ -1,12 +1,12 @@
 module $anon.. v 0.0.0;
 main() -> nil|error{
   bb0 {
-    %1 = ConstantLoad https://example.com
-    $desugar$0 = %1;
-    %3 = $default$15($desugar$0) -> bb1;
+    %2 = ConstantLoad https://example.com
+    $desugar$0 = %2;
+    %4 = $default$15($desugar$0) -> bb1;
   }
   bb1 {
-    $desugar$1 = %3;
+    $desugar$1 = %4;
     %6 = newObject ballerina/http:Client
     %7 = init(%6,$desugar$0,$desugar$1) -> bb2;
   }
@@ -31,25 +31,25 @@ main() -> nil|error{
     return;
   }
   bb7 {
-    %5 = %8;
+    %1 = %8;
     GOTO bb8;
   }
   bb8 {
-    c = %5;
-    %12 = ConstantLoad /path
-    $desugar$2 = %12;
-    %14 = ConstantLoad req
-    $desugar$3 = %14;
-    %16 = $default$26($desugar$2,$desugar$3) -> bb9;
+    c = %1;
+    %13 = ConstantLoad /path
+    $desugar$2 = %13;
+    %15 = ConstantLoad req
+    $desugar$3 = %15;
+    %17 = $default$26($desugar$2,$desugar$3) -> bb9;
   }
   bb9 {
-    $desugar$4 = %16;
-    %18 = $default$27($desugar$2,$desugar$3,$desugar$4) -> bb10;
+    $desugar$4 = %17;
+    %19 = $default$27($desugar$2,$desugar$3,$desugar$4) -> bb10;
   }
   bb10 {
-    $desugar$5 = %18;
-    %20 = ConstantLoad typedesc
-    $desugar$6 = %20;
+    $desugar$5 = %19;
+    %21 = ConstantLoad typedesc
+    $desugar$6 = %21;
     %23 = $remote$post(c,$desugar$2,$desugar$3,$desugar$4,$desugar$5,$desugar$6) -> bb11;
   }
   bb11 {
@@ -61,28 +61,28 @@ main() -> nil|error{
     return;
   }
   bb13 {
-    %22 = %23;
+    %12 = %23;
     GOTO bb14;
   }
   bb14 {
-    postBody = %22;
+    postBody = %12;
     %26 = println(postBody) -> bb15;
   }
   bb15 {
-    %27 = ConstantLoad /path
-    $desugar$7 = %27;
-    %29 = ConstantLoad req
-    $desugar$8 = %29;
-    %31 = $default$28($desugar$7,$desugar$8) -> bb16;
+    %28 = ConstantLoad /path
+    $desugar$7 = %28;
+    %30 = ConstantLoad req
+    $desugar$8 = %30;
+    %32 = $default$28($desugar$7,$desugar$8) -> bb16;
   }
   bb16 {
-    $desugar$9 = %31;
-    %33 = $default$29($desugar$7,$desugar$8,$desugar$9) -> bb17;
+    $desugar$9 = %32;
+    %34 = $default$29($desugar$7,$desugar$8,$desugar$9) -> bb17;
   }
   bb17 {
-    $desugar$10 = %33;
-    %35 = ConstantLoad typedesc
-    $desugar$11 = %35;
+    $desugar$10 = %34;
+    %36 = ConstantLoad typedesc
+    $desugar$11 = %36;
     %38 = $remote$put(c,$desugar$7,$desugar$8,$desugar$9,$desugar$10,$desugar$11) -> bb18;
   }
   bb18 {
@@ -94,28 +94,28 @@ main() -> nil|error{
     return;
   }
   bb20 {
-    %37 = %38;
+    %27 = %38;
     GOTO bb21;
   }
   bb21 {
-    putBody = %37;
+    putBody = %27;
     %41 = println(putBody) -> bb22;
   }
   bb22 {
-    %42 = ConstantLoad /path
-    $desugar$12 = %42;
-    %44 = ConstantLoad req
-    $desugar$13 = %44;
-    %46 = $default$24($desugar$12,$desugar$13) -> bb23;
+    %43 = ConstantLoad /path
+    $desugar$12 = %43;
+    %45 = ConstantLoad req
+    $desugar$13 = %45;
+    %47 = $default$24($desugar$12,$desugar$13) -> bb23;
   }
   bb23 {
-    $desugar$14 = %46;
-    %48 = $default$25($desugar$12,$desugar$13,$desugar$14) -> bb24;
+    $desugar$14 = %47;
+    %49 = $default$25($desugar$12,$desugar$13,$desugar$14) -> bb24;
   }
   bb24 {
-    $desugar$15 = %48;
-    %50 = ConstantLoad typedesc
-    $desugar$16 = %50;
+    $desugar$15 = %49;
+    %51 = ConstantLoad typedesc
+    $desugar$16 = %51;
     %53 = $remote$patch(c,$desugar$12,$desugar$13,$desugar$14,$desugar$15,$desugar$16) -> bb25;
   }
   bb25 {
@@ -127,30 +127,30 @@ main() -> nil|error{
     return;
   }
   bb27 {
-    %52 = %53;
+    %42 = %53;
     GOTO bb28;
   }
   bb28 {
-    patchBody = %52;
+    patchBody = %42;
     %56 = println(patchBody) -> bb29;
   }
   bb29 {
-    %57 = ConstantLoad /path
-    $desugar$17 = %57;
-    %59 = $default$16($desugar$17) -> bb30;
+    %58 = ConstantLoad /path
+    $desugar$17 = %58;
+    %60 = $default$16($desugar$17) -> bb30;
   }
   bb30 {
-    $desugar$18 = %59;
-    %61 = $default$17($desugar$17,$desugar$18) -> bb31;
+    $desugar$18 = %60;
+    %62 = $default$17($desugar$17,$desugar$18) -> bb31;
   }
   bb31 {
-    $desugar$19 = %61;
-    %63 = $default$18($desugar$17,$desugar$18,$desugar$19) -> bb32;
+    $desugar$19 = %62;
+    %64 = $default$18($desugar$17,$desugar$18,$desugar$19) -> bb32;
   }
   bb32 {
-    $desugar$20 = %63;
-    %65 = ConstantLoad typedesc
-    $desugar$21 = %65;
+    $desugar$20 = %64;
+    %66 = ConstantLoad typedesc
+    $desugar$21 = %66;
     %68 = $remote$delete(c,$desugar$17,$desugar$18,$desugar$19,$desugar$20,$desugar$21) -> bb33;
   }
   bb33 {
@@ -162,22 +162,22 @@ main() -> nil|error{
     return;
   }
   bb35 {
-    %67 = %68;
+    %57 = %68;
     GOTO bb36;
   }
   bb36 {
-    deleteBody = %67;
+    deleteBody = %57;
     %71 = println(deleteBody) -> bb37;
   }
   bb37 {
-    %72 = ConstantLoad /path
-    $desugar$22 = %72;
-    %74 = $default$23($desugar$22) -> bb38;
+    %73 = ConstantLoad /path
+    $desugar$22 = %73;
+    %75 = $default$23($desugar$22) -> bb38;
   }
   bb38 {
-    $desugar$23 = %74;
-    %76 = ConstantLoad typedesc
-    $desugar$24 = %76;
+    $desugar$23 = %75;
+    %77 = ConstantLoad typedesc
+    $desugar$24 = %77;
     %79 = $remote$options(c,$desugar$22,$desugar$23,$desugar$24) -> bb39;
   }
   bb39 {
@@ -189,30 +189,30 @@ main() -> nil|error{
     return;
   }
   bb41 {
-    %78 = %79;
+    %72 = %79;
     GOTO bb42;
   }
   bb42 {
-    optionsBody = %78;
+    optionsBody = %72;
     %82 = println(optionsBody) -> bb43;
   }
   bb43 {
-    %83 = ConstantLoad PATCH
-    $desugar$25 = %83;
-    %85 = ConstantLoad /path
-    $desugar$26 = %85;
-    %87 = ConstantLoad req
-    $desugar$27 = %87;
-    %89 = $default$19($desugar$25,$desugar$26,$desugar$27) -> bb44;
+    %84 = ConstantLoad PATCH
+    $desugar$25 = %84;
+    %86 = ConstantLoad /path
+    $desugar$26 = %86;
+    %88 = ConstantLoad req
+    $desugar$27 = %88;
+    %90 = $default$19($desugar$25,$desugar$26,$desugar$27) -> bb44;
   }
   bb44 {
-    $desugar$28 = %89;
-    %91 = $default$20($desugar$25,$desugar$26,$desugar$27,$desugar$28) -> bb45;
+    $desugar$28 = %90;
+    %92 = $default$20($desugar$25,$desugar$26,$desugar$27,$desugar$28) -> bb45;
   }
   bb45 {
-    $desugar$29 = %91;
-    %93 = ConstantLoad typedesc
-    $desugar$30 = %93;
+    $desugar$29 = %92;
+    %94 = ConstantLoad typedesc
+    $desugar$30 = %94;
     %96 = $remote$execute(c,$desugar$25,$desugar$26,$desugar$27,$desugar$28,$desugar$29,$desugar$30) -> bb46;
   }
   bb46 {
@@ -224,11 +224,11 @@ main() -> nil|error{
     return;
   }
   bb48 {
-    %95 = %96;
+    %83 = %96;
     GOTO bb49;
   }
   bb49 {
-    execBody = %95;
+    execBody = %83;
     %99 = println(execBody) -> bb50;
   }
   bb50 {
@@ -279,12 +279,12 @@ main() -> nil|error{
     %116 = println(forwardBody) -> bb61;
   }
   bb61 {
-    %117 = ConstantLoad /path
-    $desugar$33 = %117;
-    %119 = $default$22($desugar$33) -> bb62;
+    %118 = ConstantLoad /path
+    $desugar$33 = %118;
+    %120 = $default$22($desugar$33) -> bb62;
   }
   bb62 {
-    $desugar$34 = %119;
+    $desugar$34 = %120;
     %122 = $remote$head(c,$desugar$33,$desugar$34) -> bb63;
   }
   bb63 {
@@ -296,11 +296,11 @@ main() -> nil|error{
     return;
   }
   bb65 {
-    %121 = %122;
+    %117 = %122;
     GOTO bb66;
   }
   bb66 {
-    headResp = %121;
+    headResp = %117;
     %126 = ConstantLoad statusCode
     %125 = headResp[%126];
     %127 = %125;

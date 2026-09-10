@@ -124,6 +124,7 @@ type (
 		bLangNodeBase
 		unresolvedInclusionsBase
 		scope                           model.Scope
+		symbol                          model.SymbolRef
 		AnnAttachments                  []BLangAnnotationAttachment
 		MarkdownDocumentationAttachment *BLangMarkdownDocumentation
 		InitFunction                    *BLangFunction
@@ -140,8 +141,7 @@ type (
 
 	BLangClassDefinition struct {
 		classDefnBase
-		Name   IdentifierNode
-		symbol model.SymbolRef
+		Name IdentifierNode
 	}
 
 	BLangService struct {
@@ -181,6 +181,7 @@ type (
 	}
 	BLangXMLNS struct {
 		bLangNodeBase
+		symbol       model.SymbolRef
 		namespaceURI BLangExpression
 		prefix       *BLangIdentifier
 	}
@@ -303,6 +304,9 @@ func (b *bLangInvokableNodeBase) RestParameter() Param {
 }
 
 func (b *bLangInvokableNodeBase) ReturnType() TypeDescriptor {
+	if b.returnTypeDescriptor == nil {
+		return nil
+	}
 	return b.returnTypeDescriptor
 }
 
@@ -360,11 +364,19 @@ func (b *bLangNodeBase) SetPosition(pos diagnostics.Location) {
 	b.pos = pos
 }
 
-func (n *BLangClassDefinition) Symbol() model.SymbolRef {
+func (n *BLangXMLNS) Symbol() model.SymbolRef {
 	return n.symbol
 }
 
-func (n *BLangClassDefinition) SetSymbol(symbolRef model.SymbolRef) {
+func (n *BLangXMLNS) SetSymbol(symbolRef model.SymbolRef) {
+	n.symbol = symbolRef
+}
+
+func (n *classDefnBase) Symbol() model.SymbolRef {
+	return n.symbol
+}
+
+func (n *classDefnBase) SetSymbol(symbolRef model.SymbolRef) {
 	n.symbol = symbolRef
 }
 
@@ -442,6 +454,7 @@ func (n *BLangAnnotationAttachment) SetSymbol(symbolRef model.SymbolRef) {
 var (
 	_ BNodeWithSymbol   = &BLangAnnotation{}
 	_ BNodeWithSymbol   = &BLangAnnotationAttachment{}
+	_ BNodeWithSymbol   = &BLangXMLNS{}
 	_ NodeWithScope     = &BLangClassDefinition{}
 	_ FunctionBodyNode  = &BLangExternFunctionBody{}
 	_ FunctionSignature = &BLangFunction{}
@@ -480,6 +493,7 @@ var (
 var (
 	// Assert that concrete types with symbols implement BNodeWithSymbol
 	_ BNodeWithSymbol = &BLangClassDefinition{}
+	_ BNodeWithSymbol = &BLangService{}
 	_ BNodeWithSymbol = &BLangVariable{}
 	_ BNodeWithSymbol = &BLangFunction{}
 	_ BNodeWithSymbol = &BLangTypeDefinition{}

@@ -24,20 +24,6 @@ import (
 	"github.com/ballerina-nutcracker/ballerina/tools/diagnostics"
 )
 
-func extractXMLNSURI[T symbolResolver](resolver T, uriExpr ast.BLangExpression, pos diagnostics.Location) (string, bool) {
-	lit, ok := uriExpr.(*ast.BLangLiteral)
-	if !ok {
-		semanticError(resolver, "xmlns URI must be a string literal", pos)
-		return "", false
-	}
-	val, ok := lit.GetValue().(string)
-	if !ok {
-		semanticError(resolver, "xmlns URI must be a string", pos)
-		return "", false
-	}
-	return val, true
-}
-
 func xmlnsPrefixName(prefix string) string {
 	if prefix == "" {
 		return model.DefaultXMLNSSymbolName
@@ -46,11 +32,15 @@ func xmlnsPrefixName(prefix string) string {
 }
 
 func defineXMLNS[T symbolResolver](resolver T, scope model.Scope, prefix, uri string, pos diagnostics.Location) (model.SymbolRef, bool) {
-	ensurePrefixMap(resolver, scope)
 	if uri == "" {
 		semanticError(resolver, "XML namespace URI cannot be empty", pos)
 		return model.SymbolRef{}, false
 	}
+	return declareXMLNS(resolver, scope, prefix, uri, pos)
+}
+
+func declareXMLNS[T symbolResolver](resolver T, scope model.Scope, prefix, uri string, pos diagnostics.Location) (model.SymbolRef, bool) {
+	ensurePrefixMap(resolver, scope)
 	name := xmlnsPrefixName(prefix)
 	if localXMLNSPrefixExists(scope, name) {
 		switch prefix {
@@ -181,20 +171,18 @@ func processBlockXMLNS(resolver *blockSymbolResolver, decl *ast.BLangXMLNS) {
 }
 
 func processXMLNSDecl[T symbolResolver](resolver T, scope model.Scope, decl *ast.BLangXMLNS) {
-	uriExpr := decl.GetNamespaceURI()
-	if uriExpr == nil {
+	if decl.GetNamespaceURI() == nil {
 		semanticError(resolver, "xmlns declaration missing URI", decl.GetPosition())
-		return
-	}
-	uri, ok := extractXMLNSURI(resolver, uriExpr, decl.GetPosition())
-	if !ok {
 		return
 	}
 	prefix := ""
 	if p := decl.GetPrefix(); p != nil {
 		prefix = p.GetValue()
 	}
-	defineXMLNS(resolver, scope, prefix, uri, decl.GetPosition())
+	ref, ok := declareXMLNS(resolver, scope, prefix, "", decl.GetPosition())
+	if ok {
+		decl.SetSymbol(ref)
+	}
 }
 
 func splitXMLName(name string) (prefix, local string) {

@@ -127,16 +127,16 @@ main() -> nil|error{
     %15 = ConstantLoad /tmp/bal_io_stream_blocksize_check.bin
     existing = %15;
     $desugar$2 = existing;
-    %18 = ConstantLoad 1
-    %19 = ConstantLoad 2
-    %20 = ConstantLoad 3
+    %19 = ConstantLoad 1
+    %20 = ConstantLoad 2
     %21 = ConstantLoad 3
-    %22 = newArray [int:Unsigned8...][%21]{%18, %19, %20}
-    $desugar$3 = %22;
-    %24 = $default$4($desugar$2,$desugar$3) -> bb6;
+    %22 = ConstantLoad 3
+    %23 = newArray [int:Unsigned8...][%22]{%19, %20, %21}
+    $desugar$3 = %23;
+    %25 = $default$4($desugar$2,$desugar$3) -> bb6;
   }
   bb6 {
-    $desugar$4 = %24;
+    $desugar$4 = %25;
     %27 = fileWriteBytes($desugar$2,$desugar$3,$desugar$4) -> bb7;
   }
   bb7 {
@@ -148,7 +148,7 @@ main() -> nil|error{
     return;
   }
   bb9 {
-    %26 = %27;
+    %17 = %27;
     GOTO bb10;
   }
   bb10 {

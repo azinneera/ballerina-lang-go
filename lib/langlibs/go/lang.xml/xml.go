@@ -41,7 +41,7 @@ func xmlIterator(_ *extern.Context, args []values.BalValue) (values.BalValue, er
 		"idx":   int64(0),
 	}, map[string]string{
 		"next": orgName + "/" + moduleName + ":" + nextMethodName,
-	}, nil), nil
+	}, nil, nil), nil
 }
 
 func xmlIteratorNext(ctx *extern.Context, args []values.BalValue) (values.BalValue, error) {

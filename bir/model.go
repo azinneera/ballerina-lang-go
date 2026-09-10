@@ -22,6 +22,7 @@ import (
 
 	"github.com/ballerina-nutcracker/ballerina/model"
 	"github.com/ballerina-nutcracker/ballerina/semtypes"
+	"github.com/ballerina-nutcracker/ballerina/values"
 )
 
 type ConstValue struct {
@@ -78,11 +79,12 @@ type (
 	}
 
 	BIRClassDef struct {
-		Name      model.Name
-		LookupKey string
-		Fields    []ObjectField
-		VTable    map[string]*BIRFunction
-		RTable    map[string][]BIRResourceMethod
+		Name        model.Name
+		LookupKey   string
+		Annotations values.AnnotationValues
+		Fields      []ObjectField
+		VTable      map[string]*BIRFunction
+		RTable      map[string][]BIRResourceMethod
 	}
 
 	BIRResourceMethod struct {
@@ -147,8 +149,9 @@ type (
 
 	BIRParameter struct {
 		BIRNodeBase
-		Name  model.Name
-		Flags model.Flag
+		Name        model.Name
+		Flags       model.Flag
+		Annotations values.AnnotationValues
 	}
 
 	BIRFunctionParameter struct {
@@ -163,6 +166,16 @@ type (
 		Address     Address
 	}
 )
+
+// ParamLocalVarOffset returns the local-variable index of a function's first
+// declared parameter. Local slot zero is the return value and attached
+// functions additionally reserve slot one for self.
+func (f *BIRFunction) ParamLocalVarOffset() int {
+	if f.Flags.Has(model.FlagAttached) {
+		return 2
+	}
+	return 1
+}
 
 type Address struct {
 	Mode       AddressingMode
@@ -228,10 +241,13 @@ const (
 	InstructionKindCall
 	InstructionKindBranch
 	InstructionKindReturn
+	InstructionKindAsyncCall
+	InstructionKindWait
 	InstructionKindFPCall
 	InstructionKindLock
 	InstructionKindUnlock
 	InstructionKindResourceCall
+	InstructionKindAlternateWait
 	InstructionKindMove
 	InstructionKindConstLoad
 	InstructionKindNewStructure
@@ -286,6 +302,7 @@ const (
 	InstructionKindBitwiseComplement
 	InstructionKindPushScope
 	InstructionKindPopScope
+	InstructionKindWaitAll
 )
 
 func BB(number int) BIRBasicBlock {

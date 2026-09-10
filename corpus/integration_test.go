@@ -50,6 +50,8 @@ import (
 )
 
 const (
+	corpusLibBaseDir = "../corpus/lib"
+
 	corpusProjectBaseDir            = "../corpus/project"
 	corpusProjectIntegrationBaseDir = "../corpus/integration/project"
 
@@ -85,8 +87,6 @@ var (
 		// panic or a compile-time `fatal[...]` bailout, so it does not satisfy
 		// the future-test contract yet. Tracked separately.
 		"subset8/08-future/fieldlvalue1-fp.bal",
-		// https://github.com/ballerina-nutcracker/ballerina/issues/417
-		"subset8/08-xml/namespace12-v.bal",
 		// https://github.com/ballerina-nutcracker/ballerina/issues/533
 		"subset9/09-template-expr/template-query-xml-sequence-fv.bal",
 		// https://github.com/ballerina-nutcracker/ballerina/issues/538
@@ -124,6 +124,21 @@ type testResult struct {
 
 func TestIntegration(t *testing.T) {
 	cases, err := testharness.GetSingleFileTestCases("../corpus/bal", test_util.Integration, test_util.SuffixAny)
+	if err != nil {
+		t.Fatalf("discovery: %v", err)
+	}
+	for _, tc := range cases {
+		t.Run(tc.Name, func(t *testing.T) {
+			t.Parallel()
+			runHarnessCase(t, tc)
+		})
+	}
+}
+
+// TestLibIntegration runs the standard-library corpus end-to-end. These tests
+// carry no per-stage goldens, so this is the only place their output is pinned.
+func TestLibIntegration(t *testing.T) {
+	cases, err := testharness.GetNestedSingleFileTestCases(corpusLibBaseDir, test_util.Integration, test_util.SuffixAny)
 	if err != nil {
 		t.Fatalf("discovery: %v", err)
 	}
@@ -616,6 +631,9 @@ func compileModuleFromSource(env *context.CompilerEnvironment, project projects.
 		if err != nil {
 			return nil, fmt.Errorf("parsing %s: %v", relPath, err)
 		}
+		if cx.HasDiagnostics() {
+			return nil, fmt.Errorf("parsing %s produced diagnostics", relPath)
+		}
 		cu := nodebuilder.GetCompilationUnit(cx, st)
 		syntaxTrees = append(syntaxTrees, cu)
 	}
@@ -653,7 +671,10 @@ func compileModuleFromSource(env *context.CompilerEnvironment, project projects.
 	if cx.HasDiagnostics() {
 		return nil, fmt.Errorf("symbol resolution failed")
 	}
-	pkg := nodebuilder.ToPackageFromCompilationUnits(syntaxTrees)
+	pkg := nodebuilder.ToPackageFromCompilationUnits(cx, syntaxTrees)
+	if cx.HasDiagnostics() {
+		return nil, fmt.Errorf("package assembly failed")
+	}
 	pkg.Imports = nil
 	pkg.PackageID = pkgID
 	pkg.Scope = pkgScope
@@ -683,8 +704,15 @@ func compileModuleFromSource(env *context.CompilerEnvironment, project projects.
 	}
 
 	pkg = desugar.DesugarPackage(cx, pkg, importedSymbols)
+	if cx.HasDiagnostics() {
+		return nil, fmt.Errorf("desugaring failed")
+	}
 
-	return birgen.GenBir(cx, pkg), nil
+	birPkg := birgen.GenBir(cx, pkg)
+	if birPkg == nil {
+		return nil, fmt.Errorf("BIR generation failed")
+	}
+	return birPkg, nil
 }
 
 func BenchmarkIntegration(b *testing.B) {

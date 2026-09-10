@@ -32,14 +32,14 @@ main() -> nil|error{
   }
   bb7 {
     c1 = %1;
-    %10 = ConstantLoad /path
-    $desugar$0 = %10;
-    %12 = $default$21($desugar$0) -> bb8;
+    %11 = ConstantLoad /path
+    $desugar$0 = %11;
+    %13 = $default$21($desugar$0) -> bb8;
   }
   bb8 {
-    $desugar$1 = %12;
-    %14 = ConstantLoad typedesc
-    $desugar$2 = %14;
+    $desugar$1 = %13;
+    %15 = ConstantLoad typedesc
+    $desugar$2 = %15;
     %17 = $remote$get(c1,$desugar$0,$desugar$1,$desugar$2) -> bb9;
   }
   bb9 {
@@ -51,11 +51,11 @@ main() -> nil|error{
     return;
   }
   bb11 {
-    %16 = %17;
+    %10 = %17;
     GOTO bb12;
   }
   bb12 {
-    r1 = %16;
+    r1 = %10;
     %21 = ConstantLoad statusCode
     %20 = r1[%21];
     %22 = %20;
@@ -99,14 +99,14 @@ main() -> nil|error{
   }
   bb20 {
     c2 = %24;
-    %39 = ConstantLoad /path
-    $desugar$3 = %39;
-    %41 = $default$21($desugar$3) -> bb21;
+    %40 = ConstantLoad /path
+    $desugar$3 = %40;
+    %42 = $default$21($desugar$3) -> bb21;
   }
   bb21 {
-    $desugar$4 = %41;
-    %43 = ConstantLoad typedesc
-    $desugar$5 = %43;
+    $desugar$4 = %42;
+    %44 = ConstantLoad typedesc
+    $desugar$5 = %44;
     %46 = $remote$get(c2,$desugar$3,$desugar$4,$desugar$5) -> bb22;
   }
   bb22 {
@@ -118,11 +118,11 @@ main() -> nil|error{
     return;
   }
   bb24 {
-    %45 = %46;
+    %39 = %46;
     GOTO bb25;
   }
   bb25 {
-    r2 = %45;
+    r2 = %39;
     %50 = ConstantLoad statusCode
     %49 = r2[%50];
     %51 = %49;
@@ -147,12 +147,12 @@ main() -> nil|error{
     %56 = println(%53) -> bb31;
   }
   bb31 {
-    %57 = ConstantLoad https://example.com
-    $desugar$6 = %57;
-    %59 = $default$15($desugar$6) -> bb32;
+    %58 = ConstantLoad https://example.com
+    $desugar$6 = %58;
+    %60 = $default$15($desugar$6) -> bb32;
   }
   bb32 {
-    $desugar$7 = %59;
+    $desugar$7 = %60;
     %62 = newObject ballerina/http:Client
     %63 = init(%62,$desugar$6,$desugar$7) -> bb33;
   }
@@ -177,19 +177,19 @@ main() -> nil|error{
     return;
   }
   bb38 {
-    %61 = %64;
+    %57 = %64;
     GOTO bb39;
   }
   bb39 {
-    c3 = %61;
-    %68 = ConstantLoad /path
-    $desugar$8 = %68;
-    %70 = $default$21($desugar$8) -> bb40;
+    c3 = %57;
+    %69 = ConstantLoad /path
+    $desugar$8 = %69;
+    %71 = $default$21($desugar$8) -> bb40;
   }
   bb40 {
-    $desugar$9 = %70;
-    %72 = ConstantLoad typedesc
-    $desugar$10 = %72;
+    $desugar$9 = %71;
+    %73 = ConstantLoad typedesc
+    $desugar$10 = %73;
     %75 = $remote$get(c3,$desugar$8,$desugar$9,$desugar$10) -> bb41;
   }
   bb41 {
@@ -201,23 +201,23 @@ main() -> nil|error{
     return;
   }
   bb43 {
-    %74 = %75;
+    %68 = %75;
     GOTO bb44;
   }
   bb44 {
-    r3 = %74;
+    r3 = %68;
     %79 = ConstantLoad statusCode
     %78 = r3[%79];
     %80 = %78;
     %81 = println(%80) -> bb45;
   }
   bb45 {
-    %82 = ConstantLoad https://example.com
-    $desugar$11 = %82;
-    %84 = $default$15($desugar$11) -> bb46;
+    %83 = ConstantLoad https://example.com
+    $desugar$11 = %83;
+    %85 = $default$15($desugar$11) -> bb46;
   }
   bb46 {
-    $desugar$12 = %84;
+    $desugar$12 = %85;
     %87 = newObject ballerina/http:Client
     %88 = init(%87,$desugar$11,$desugar$12) -> bb47;
   }
@@ -242,11 +242,11 @@ main() -> nil|error{
     return;
   }
   bb52 {
-    %86 = %89;
+    %82 = %89;
     GOTO bb53;
   }
   bb53 {
-    c4 = %86;
+    c4 = %82;
     %94 = ConstantLoad /path
     %95 = ConstantLoad X-Custom
     %96 = ConstantLoad value
@@ -307,14 +307,14 @@ main() -> nil|error{
   }
   bb65 {
     c5 = %106;
-    %117 = ConstantLoad /path
-    $desugar$13 = %117;
-    %119 = $default$21($desugar$13) -> bb66;
+    %118 = ConstantLoad /path
+    $desugar$13 = %118;
+    %120 = $default$21($desugar$13) -> bb66;
   }
   bb66 {
-    $desugar$14 = %119;
-    %121 = ConstantLoad typedesc
-    $desugar$15 = %121;
+    $desugar$14 = %120;
+    %122 = ConstantLoad typedesc
+    $desugar$15 = %122;
     %124 = $remote$get(c5,$desugar$13,$desugar$14,$desugar$15) -> bb67;
   }
   bb67 {
@@ -326,11 +326,11 @@ main() -> nil|error{
     return;
   }
   bb69 {
-    %123 = %124;
+    %117 = %124;
     GOTO bb70;
   }
   bb70 {
-    r5 = %123;
+    r5 = %117;
     %128 = ConstantLoad statusCode
     %127 = r5[%128];
     %129 = %127;
@@ -370,14 +370,14 @@ main() -> nil|error{
   }
   bb78 {
     c6 = %131;
-    %142 = ConstantLoad /path
-    $desugar$16 = %142;
-    %144 = $default$21($desugar$16) -> bb79;
+    %143 = ConstantLoad /path
+    $desugar$16 = %143;
+    %145 = $default$21($desugar$16) -> bb79;
   }
   bb79 {
-    $desugar$17 = %144;
-    %146 = ConstantLoad typedesc
-    $desugar$18 = %146;
+    $desugar$17 = %145;
+    %147 = ConstantLoad typedesc
+    $desugar$18 = %147;
     %149 = $remote$get(c6,$desugar$16,$desugar$17,$desugar$18) -> bb80;
   }
   bb80 {
@@ -389,11 +389,11 @@ main() -> nil|error{
     return;
   }
   bb82 {
-    %148 = %149;
+    %142 = %149;
     GOTO bb83;
   }
   bb83 {
-    r6 = %148;
+    r6 = %142;
     %153 = ConstantLoad statusCode
     %152 = r6[%153];
     %154 = %152;

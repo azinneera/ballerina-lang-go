@@ -105,13 +105,13 @@ O7ekKjOszIhNsvlgkHI=
     %11 = ConstantLoad 4
     %12 = newArray [int:Unsigned8...][%11]{%7, %8, %9, %10}
     data = %12;
-    %14 = ConstantLoad /tmp/bal_crypto_enc.pem
-    $desugar$0 = %14;
+    %15 = ConstantLoad /tmp/bal_crypto_enc.pem
+    $desugar$0 = %15;
     $desugar$1 = pbes2;
-    %17 = $default$1($desugar$0,$desugar$1) -> bb1;
+    %18 = $default$1($desugar$0,$desugar$1) -> bb1;
   }
   bb1 {
-    $desugar$2 = %17;
+    $desugar$2 = %18;
     %20 = fileWriteString($desugar$0,$desugar$1,$desugar$2) -> bb2;
   }
   bb2 {
@@ -123,7 +123,7 @@ O7ekKjOszIhNsvlgkHI=
     return;
   }
   bb4 {
-    %19 = %20;
+    %14 = %20;
     GOTO bb5;
   }
   bb5 {
@@ -171,13 +171,13 @@ O7ekKjOszIhNsvlgkHI=
     %37 = println(%36) -> bb15;
   }
   bb15 {
-    %38 = ConstantLoad /tmp/bal_crypto_enc.pem
-    $desugar$3 = %38;
+    %39 = ConstantLoad /tmp/bal_crypto_enc.pem
+    $desugar$3 = %39;
     $desugar$4 = pbe3des;
-    %41 = $default$1($desugar$3,$desugar$4) -> bb16;
+    %42 = $default$1($desugar$3,$desugar$4) -> bb16;
   }
   bb16 {
-    $desugar$5 = %41;
+    $desugar$5 = %42;
     %44 = fileWriteString($desugar$3,$desugar$4,$desugar$5) -> bb17;
   }
   bb17 {
@@ -189,7 +189,7 @@ O7ekKjOszIhNsvlgkHI=
     return;
   }
   bb19 {
-    %43 = %44;
+    %38 = %44;
     GOTO bb20;
   }
   bb20 {
@@ -237,13 +237,13 @@ O7ekKjOszIhNsvlgkHI=
     %61 = println(%60) -> bb30;
   }
   bb30 {
-    %62 = ConstantLoad /tmp/bal_crypto_enc.pem
-    $desugar$6 = %62;
+    %63 = ConstantLoad /tmp/bal_crypto_enc.pem
+    $desugar$6 = %63;
     $desugar$7 = pbeRc2;
-    %65 = $default$1($desugar$6,$desugar$7) -> bb31;
+    %66 = $default$1($desugar$6,$desugar$7) -> bb31;
   }
   bb31 {
-    $desugar$8 = %65;
+    $desugar$8 = %66;
     %68 = fileWriteString($desugar$6,$desugar$7,$desugar$8) -> bb32;
   }
   bb32 {
@@ -255,7 +255,7 @@ O7ekKjOszIhNsvlgkHI=
     return;
   }
   bb34 {
-    %67 = %68;
+    %62 = %68;
     GOTO bb35;
   }
   bb35 {
@@ -303,13 +303,13 @@ O7ekKjOszIhNsvlgkHI=
     %85 = println(%84) -> bb45;
   }
   bb45 {
-    %86 = ConstantLoad /tmp/bal_crypto_enc.pem
-    $desugar$9 = %86;
+    %87 = ConstantLoad /tmp/bal_crypto_enc.pem
+    $desugar$9 = %87;
     $desugar$10 = pbes2;
-    %89 = $default$1($desugar$9,$desugar$10) -> bb46;
+    %90 = $default$1($desugar$9,$desugar$10) -> bb46;
   }
   bb46 {
-    $desugar$11 = %89;
+    $desugar$11 = %90;
     %92 = fileWriteString($desugar$9,$desugar$10,$desugar$11) -> bb47;
   }
   bb47 {
@@ -321,7 +321,7 @@ O7ekKjOszIhNsvlgkHI=
     return;
   }
   bb49 {
-    %91 = %92;
+    %86 = %92;
     GOTO bb50;
   }
   bb50 {

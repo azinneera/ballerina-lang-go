@@ -27,13 +27,6 @@ import (
 	"github.com/ballerina-nutcracker/ballerina/test_util/testphases"
 )
 
-// semanticAnalysisSkipList is the semantic-analysis *additional* skip list,
-// on top of the shared test_util.UnsupportedTests baseline.
-var semanticAnalysisSkipList = []string{
-	// https://github.com/ballerina-nutcracker/ballerina/issues/417
-	"subset8/08-xml/namespace12-v.bal",
-}
-
 func TestSemanticAnalysis(t *testing.T) {
 	flag.Parse()
 
@@ -48,7 +41,7 @@ func TestSemanticAnalysis(t *testing.T) {
 }
 
 func testSemanticAnalysis(t *testing.T, testCase test_util.TestCase) {
-	if test_util.IsUnsupported(testCase.InputPath) || test_util.MatchesSkip(testCase.InputPath, semanticAnalysisSkipList) {
+	if test_util.IsUnsupported(testCase.InputPath) {
 		t.Skipf("Skipping semantic analysis test for %s", testCase.InputPath)
 		return
 	}

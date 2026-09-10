@@ -1,12 +1,12 @@
 module $anon.. v 0.0.0;
 main() -> nil|error{
   bb0 {
-    %1 = ConstantLoad https://example.com
-    $desugar$0 = %1;
-    %3 = $default$15($desugar$0) -> bb1;
+    %2 = ConstantLoad https://example.com
+    $desugar$0 = %2;
+    %4 = $default$15($desugar$0) -> bb1;
   }
   bb1 {
-    $desugar$1 = %3;
+    $desugar$1 = %4;
     %6 = newObject ballerina/http:Client
     %7 = init(%6,$desugar$0,$desugar$1) -> bb2;
   }
@@ -31,19 +31,19 @@ main() -> nil|error{
     return;
   }
   bb7 {
-    %5 = %8;
+    %1 = %8;
     GOTO bb8;
   }
   bb8 {
-    c = %5;
-    %12 = ConstantLoad /path
-    $desugar$2 = %12;
-    %14 = $default$21($desugar$2) -> bb9;
+    c = %1;
+    %13 = ConstantLoad /path
+    $desugar$2 = %13;
+    %15 = $default$21($desugar$2) -> bb9;
   }
   bb9 {
-    $desugar$3 = %14;
-    %16 = ConstantLoad typedesc
-    $desugar$4 = %16;
+    $desugar$3 = %15;
+    %17 = ConstantLoad typedesc
+    $desugar$4 = %17;
     %19 = $remote$get(c,$desugar$2,$desugar$3,$desugar$4) -> bb10;
   }
   bb10 {
@@ -55,25 +55,25 @@ main() -> nil|error{
     return;
   }
   bb12 {
-    %18 = %19;
+    %12 = %19;
     GOTO bb13;
   }
   bb13 {
-    r = %18;
+    r = %12;
     %23 = ConstantLoad statusCode
     %22 = r[%23];
     %24 = %22;
     %25 = println(%24) -> bb14;
   }
   bb14 {
-    %26 = ConstantLoad /path
-    $desugar$5 = %26;
-    %28 = $default$21($desugar$5) -> bb15;
+    %27 = ConstantLoad /path
+    $desugar$5 = %27;
+    %29 = $default$21($desugar$5) -> bb15;
   }
   bb15 {
-    $desugar$6 = %28;
-    %30 = ConstantLoad typedesc
-    $desugar$7 = %30;
+    $desugar$6 = %29;
+    %31 = ConstantLoad typedesc
+    $desugar$7 = %31;
     %33 = $remote$get(c,$desugar$5,$desugar$6,$desugar$7) -> bb16;
   }
   bb16 {
@@ -85,24 +85,24 @@ main() -> nil|error{
     return;
   }
   bb18 {
-    %32 = %33;
+    %26 = %33;
     GOTO bb19;
   }
   bb19 {
-    ru = %32;
+    ru = %26;
     %36 = ru is string
     %37 = %36;
     %38 = println(%37) -> bb20;
   }
   bb20 {
-    %39 = ConstantLoad /path
-    $desugar$8 = %39;
-    %41 = $default$21($desugar$8) -> bb21;
+    %40 = ConstantLoad /path
+    $desugar$8 = %40;
+    %42 = $default$21($desugar$8) -> bb21;
   }
   bb21 {
-    $desugar$9 = %41;
-    %43 = ConstantLoad typedesc
-    $desugar$10 = %43;
+    $desugar$9 = %42;
+    %44 = ConstantLoad typedesc
+    $desugar$10 = %44;
     %46 = $remote$get(c,$desugar$8,$desugar$9,$desugar$10) -> bb22;
   }
   bb22 {
@@ -114,22 +114,22 @@ main() -> nil|error{
     return;
   }
   bb24 {
-    %45 = %46;
+    %39 = %46;
     GOTO bb25;
   }
   bb25 {
-    text = %45;
+    text = %39;
     %49 = println(text) -> bb26;
   }
   bb26 {
-    %50 = ConstantLoad /path
-    $desugar$11 = %50;
-    %52 = $default$21($desugar$11) -> bb27;
+    %51 = ConstantLoad /path
+    $desugar$11 = %51;
+    %53 = $default$21($desugar$11) -> bb27;
   }
   bb27 {
-    $desugar$12 = %52;
-    %54 = ConstantLoad typedesc
-    $desugar$13 = %54;
+    $desugar$12 = %53;
+    %55 = ConstantLoad typedesc
+    $desugar$13 = %55;
     %57 = $remote$get(c,$desugar$11,$desugar$12,$desugar$13) -> bb28;
   }
   bb28 {
@@ -141,22 +141,22 @@ main() -> nil|error{
     return;
   }
   bb30 {
-    %56 = %57;
+    %50 = %57;
     GOTO bb31;
   }
   bb31 {
-    optText = %56;
+    optText = %50;
     %60 = println(optText) -> bb32;
   }
   bb32 {
-    %61 = ConstantLoad /path
-    $desugar$14 = %61;
-    %63 = $default$21($desugar$14) -> bb33;
+    %62 = ConstantLoad /path
+    $desugar$14 = %62;
+    %64 = $default$21($desugar$14) -> bb33;
   }
   bb33 {
-    $desugar$15 = %63;
-    %65 = ConstantLoad typedesc
-    $desugar$16 = %65;
+    $desugar$15 = %64;
+    %66 = ConstantLoad typedesc
+    $desugar$16 = %66;
     %68 = $remote$get(c,$desugar$14,$desugar$15,$desugar$16) -> bb34;
   }
   bb34 {
@@ -168,11 +168,11 @@ main() -> nil|error{
     return;
   }
   bb36 {
-    %67 = %68;
+    %61 = %68;
     GOTO bb37;
   }
   bb37 {
-    bytes = %67;
+    bytes = %61;
     %71 = length(bytes) -> bb38;
   }
   bb38 {
@@ -180,14 +180,14 @@ main() -> nil|error{
     %73 = println(%72) -> bb39;
   }
   bb39 {
-    %74 = ConstantLoad /path
-    $desugar$17 = %74;
-    %76 = $default$21($desugar$17) -> bb40;
+    %75 = ConstantLoad /path
+    $desugar$17 = %75;
+    %77 = $default$21($desugar$17) -> bb40;
   }
   bb40 {
-    $desugar$18 = %76;
-    %78 = ConstantLoad typedesc
-    $desugar$19 = %78;
+    $desugar$18 = %77;
+    %79 = ConstantLoad typedesc
+    $desugar$19 = %79;
     %81 = $remote$get(c,$desugar$17,$desugar$18,$desugar$19) -> bb41;
   }
   bb41 {
@@ -199,24 +199,24 @@ main() -> nil|error{
     return;
   }
   bb43 {
-    %80 = %81;
+    %74 = %81;
     GOTO bb44;
   }
   bb44 {
-    optBytes = %80;
+    optBytes = %74;
     %84 = optBytes is [int:Unsigned8...]
     %85 = %84;
     %86 = println(%85) -> bb45;
   }
   bb45 {
-    %87 = ConstantLoad /path
-    $desugar$20 = %87;
-    %89 = $default$21($desugar$20) -> bb46;
+    %88 = ConstantLoad /path
+    $desugar$20 = %88;
+    %90 = $default$21($desugar$20) -> bb46;
   }
   bb46 {
-    $desugar$21 = %89;
-    %91 = ConstantLoad typedesc
-    $desugar$22 = %91;
+    $desugar$21 = %90;
+    %92 = ConstantLoad typedesc
+    $desugar$22 = %92;
     %94 = $remote$get(c,$desugar$20,$desugar$21,$desugar$22) -> bb47;
   }
   bb47 {
@@ -228,23 +228,23 @@ main() -> nil|error{
     return;
   }
   bb49 {
-    %93 = %94;
+    %87 = %94;
     GOTO bb50;
   }
   bb50 {
-    nothing = %93;
+    nothing = %87;
     %97 = nothing;
     %98 = println(%97) -> bb51;
   }
   bb51 {
-    %99 = ConstantLoad /path
-    $desugar$23 = %99;
-    %101 = $default$21($desugar$23) -> bb52;
+    %100 = ConstantLoad /path
+    $desugar$23 = %100;
+    %102 = $default$21($desugar$23) -> bb52;
   }
   bb52 {
-    $desugar$24 = %101;
-    %103 = ConstantLoad typedesc
-    $desugar$25 = %103;
+    $desugar$24 = %102;
+    %104 = ConstantLoad typedesc
+    $desugar$25 = %104;
     %106 = $remote$get(c,$desugar$23,$desugar$24,$desugar$25) -> bb53;
   }
   bb53 {
@@ -256,11 +256,11 @@ main() -> nil|error{
     return;
   }
   bb55 {
-    %105 = %106;
+    %99 = %106;
     GOTO bb56;
   }
   bb56 {
-    explicitText = %105;
+    explicitText = %99;
     %109 = println(explicitText) -> bb57;
   }
   bb57 {

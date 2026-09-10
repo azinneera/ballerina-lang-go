@@ -247,7 +247,7 @@ func resolveTypesAndSymbols(moduleCtx *moduleContext) {
 		moduleCtx.testDocContextMap,
 	)
 
-	if len(syntaxTrees) == 0 {
+	if compilerCtx.HasDiagnostics() || len(syntaxTrees) == 0 {
 		return
 	}
 
@@ -280,7 +280,7 @@ func resolveTypesAndSymbols(moduleCtx *moduleContext) {
 		moduleCtx.moduleDescriptor.Org().value,
 	)
 	moduleCtx.importedSymbols = importedSymbols
-	pkgNode := nodebuilder.ToPackageFromCompilationUnits(compilationUnits)
+	pkgNode := nodebuilder.ToPackageFromCompilationUnits(compilerCtx, compilationUnits)
 	pkgNode.Imports = nil
 	pkgNode.PackageID = pkgID
 	pkgNode.Scope = pkgScope
@@ -370,6 +370,9 @@ func analyzeAndDesugar(moduleCtx *moduleContext) {
 	compilerCtx.StartStage(context.StageDesugaring)
 	moduleCtx.bLangPkg = desugar.DesugarPackage(moduleCtx.compilerCtx, moduleCtx.bLangPkg, moduleCtx.importedSymbols)
 	compilerCtx.EndStage()
+	if compilerCtx.HasDiagnostics() {
+		return
+	}
 
 	moduleCtx.compilationState = moduleCompilationStateCompiled
 }
@@ -483,13 +486,14 @@ func createModelPackageID(compilerCtx *context.CompilerContext, desc ModuleDescr
 
 // generateCodeInternal generates BIR for this module from the compiled BLangPackage.
 // -> CompilerPhaseRunner.performBirGenPhases(bLangPackage)
-func generateCodeInternal(moduleCtx *moduleContext) {
+func generateCodeInternal(moduleCtx *moduleContext) bool {
 	if moduleCtx.bLangPkg == nil || moduleCtx.compilerCtx == nil {
-		return
+		return false
 	}
 	moduleCtx.compilerCtx.StartStage(context.StageBIRGeneration)
 	moduleCtx.birPkg = birgen.GenBir(moduleCtx.compilerCtx, moduleCtx.bLangPkg)
 	moduleCtx.compilerCtx.EndStage()
+	return moduleCtx.birPkg != nil
 }
 
 // getBLangPackage returns the compiled BLangPackage.

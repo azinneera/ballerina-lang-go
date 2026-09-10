@@ -28,7 +28,7 @@ import (
 // platform they run normally. Entries are corpus-relative path suffixes.
 var WindowsUnsupportedTests = []string{
 	// os:exec runs a real `echo` subprocess, which is not an executable on Windows.
-	"library/subset2/os-exec-v.bal",
+	"lib/subset2/os-exec-v.bal",
 }
 
 // WASMUnsupportedTests lists corpus tests that cannot run under GOOS=js (the
@@ -36,7 +36,7 @@ var WindowsUnsupportedTests = []string{
 // Entries are corpus-relative path suffixes.
 var WASMUnsupportedTests = []string{
 	// os:exec requires spawning a subprocess; no executables exist in the WASM sandbox.
-	"library/subset2/os-exec-v.bal",
+	"lib/subset2/os-exec-v.bal",
 }
 
 // UnsupportedTests is the single authoritative list of corpus tests that pi
@@ -179,6 +179,12 @@ var UnsupportedTests = []string{
 
 	// rest param not supported in dependently typed functions
 	"subset8/08-function/dependent-fn-5-e.bal",
+
+	// Named arguments on langlib functions backed by opaque symbols. Opaque
+	// symbols carry no function signature of their own, so the parameter names
+	// jBallerina exposes cannot be resolved for them. Attaching untyped
+	// signatures to opaque symbols is the proper fix.
+	"subset10/10-langlibs/langlib-opaque-named-args-v.bal",
 }
 
 // IsUnsupported reports whether the given corpus test path is in

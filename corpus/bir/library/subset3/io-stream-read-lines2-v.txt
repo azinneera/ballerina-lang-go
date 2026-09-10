@@ -4,19 +4,19 @@ main() -> nil|error{
     %1 = ConstantLoad /tmp/bal_io_stream_read_lines2.txt
     path = %1;
     $desugar$0 = path;
-    %4 = ConstantLoad 97
-    %5 = ConstantLoad 13
-    %6 = ConstantLoad 10
-    %7 = ConstantLoad 98
-    %8 = ConstantLoad 13
-    %9 = ConstantLoad 99
-    %10 = ConstantLoad 6
-    %11 = newArray [int:Unsigned8...][%10]{%4, %5, %6, %7, %8, %9}
-    $desugar$1 = %11;
-    %13 = $default$4($desugar$0,$desugar$1) -> bb1;
+    %5 = ConstantLoad 97
+    %6 = ConstantLoad 13
+    %7 = ConstantLoad 10
+    %8 = ConstantLoad 98
+    %9 = ConstantLoad 13
+    %10 = ConstantLoad 99
+    %11 = ConstantLoad 6
+    %12 = newArray [int:Unsigned8...][%11]{%5, %6, %7, %8, %9, %10}
+    $desugar$1 = %12;
+    %14 = $default$4($desugar$0,$desugar$1) -> bb1;
   }
   bb1 {
-    $desugar$2 = %13;
+    $desugar$2 = %14;
     %16 = fileWriteBytes($desugar$0,$desugar$1,$desugar$2) -> bb2;
   }
   bb2 {
@@ -28,7 +28,7 @@ main() -> nil|error{
     return;
   }
   bb4 {
-    %15 = %16;
+    %3 = %16;
     GOTO bb5;
   }
   bb5 {

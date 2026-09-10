@@ -111,6 +111,10 @@ func (l *loopTypeResolver) functionSignatureRef(owner model.SymbolRef) (model.Fu
 	return l.parentResolver.functionSignatureRef(owner)
 }
 
+func (l *loopTypeResolver) returnFunctionSignatureRef(source model.FunctionSignatureRef) (model.FunctionSignatureRef, bool) {
+	return l.parentResolver.returnFunctionSignatureRef(source)
+}
+
 func (l *loopTypeResolver) updateFunctionSignatureIncludedRecords(ref model.FunctionSignatureRef, includedRecords []*model.IncludedRecordMetadata) {
 	l.parentResolver.updateFunctionSignatureIncludedRecords(ref, includedRecords)
 }
@@ -155,20 +159,12 @@ func (l *loopTypeResolver) ensureResolved(ref model.SymbolRef, depth int) bool {
 	return l.parentResolver.ensureResolved(ref, depth)
 }
 
-func (l *loopTypeResolver) setMappingAtomBType(mat *semtypes.MappingAtomicType, bType ast.BType) {
-	l.parentResolver.setMappingAtomBType(mat, bType)
+func (l *loopTypeResolver) setMappingDefaults(atom *semtypes.MappingAtomicType, defaults []model.FieldDefault) {
+	l.parentResolver.setMappingDefaults(atom, defaults)
 }
 
-func (l *loopTypeResolver) getMappingAtomBType(mat *semtypes.MappingAtomicType) (ast.BType, bool) {
-	return l.parentResolver.getMappingAtomBType(mat)
-}
-
-func (l *loopTypeResolver) setMappingAtomSymRef(mat *semtypes.MappingAtomicType, ref model.SymbolRef) {
-	l.parentResolver.setMappingAtomSymRef(mat, ref)
-}
-
-func (l *loopTypeResolver) getMappingAtomSymRef(mat *semtypes.MappingAtomicType) (model.SymbolRef, bool) {
-	return l.parentResolver.getMappingAtomSymRef(mat)
+func (l *loopTypeResolver) mappingDefaults(atom *semtypes.MappingAtomicType) ([]model.FieldDefault, bool) {
+	return l.parentResolver.mappingDefaults(atom)
 }
 
 func (l *loopTypeResolver) setClassAtomSymbol(mat *semtypes.MappingAtomicType, symbol model.SymbolRef) {
