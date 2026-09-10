@@ -182,28 +182,27 @@ func createModule(modulePath, moduleName, sourceContent string) error {
 // the same order: character set, length, then underscore placement, then
 // leading digit. Module names follow the same identifier rules as package
 // names, so this reuses the regexes already defined for that in
-// name_utils.go. The messages below intentionally keep Java's exact
-// punctuation (including trailing periods), hence the staticcheck ST1005
-// suppressions.
+// name_utils.go. Wording otherwise mirrors Java, but drops its trailing
+// periods to satisfy staticcheck's ST1005.
 // Java source: io.ballerina.projects.util.ProjectUtils
 func validateModuleName(name string) error {
 	if !validPackageNamePattern.MatchString(name) || allDotsPattern.MatchString(name) {
-		return fmt.Errorf("invalid module name : '%s' :\nModule name can only contain alphanumerics, underscores and periods.", name) //nolint:staticcheck // mirrors Java's exact ProjectUtils wording
+		return fmt.Errorf("invalid module name : '%s' :\nModule name can only contain alphanumerics, underscores and periods", name)
 	}
 	if len(name) > maxNameLength {
-		return fmt.Errorf("invalid module name : '%s' :\nMaximum length of module name is 256 characters.", name) //nolint:staticcheck // mirrors Java's exact ProjectUtils wording
+		return fmt.Errorf("invalid module name : '%s' :\nMaximum length of module name is 256 characters", name)
 	}
 	if strings.HasPrefix(name, "_") {
-		return fmt.Errorf("invalid module name : '%s' :\nModule name cannot have initial underscore characters.", name) //nolint:staticcheck // mirrors Java's exact ProjectUtils wording
+		return fmt.Errorf("invalid module name : '%s' :\nModule name cannot have initial underscore characters", name)
 	}
 	if strings.HasSuffix(name, "_") {
-		return fmt.Errorf("invalid module name : '%s' :\nModule name cannot have trailing underscore characters.", name) //nolint:staticcheck // mirrors Java's exact ProjectUtils wording
+		return fmt.Errorf("invalid module name : '%s' :\nModule name cannot have trailing underscore characters", name)
 	}
 	if consecutiveUnderscoresPattern.MatchString(name) {
-		return fmt.Errorf("invalid module name : '%s' :\nModule name cannot have consecutive underscore characters.", name) //nolint:staticcheck // mirrors Java's exact ProjectUtils wording
+		return fmt.Errorf("invalid module name : '%s' :\nModule name cannot have consecutive underscore characters", name)
 	}
 	if startsWithDigitPattern.MatchString(name) {
-		return fmt.Errorf("invalid module name : '%s' :\nModule name cannot have initial numeric characters.", name) //nolint:staticcheck // mirrors Java's exact ProjectUtils wording
+		return fmt.Errorf("invalid module name : '%s' :\nModule name cannot have initial numeric characters", name)
 	}
 	return nil
 }
