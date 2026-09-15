@@ -16,7 +16,7 @@
       (expression-stmt
         (invocation io println (
           (simple-var-ref node))))))
-  (function $desugar$0 () ()
+  (function $default$0 () ()
     (block-function-body
       (return
         (list-constructor-expr)))))

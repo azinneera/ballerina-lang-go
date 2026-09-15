@@ -108,7 +108,6 @@ type typeResolver interface {
 	getClassAtomSymbol(mat *semtypes.MappingAtomicType) (model.SymbolRef, bool)
 	currentScope() model.Scope
 	setCurrentScope(scope model.Scope)
-	nextDefaultFnName() string
 	nextMonoFnName(origName string) string
 
 	lookupClassMethodSymbol(receiverTy semtypes.SemType, methodName string) (model.SymbolRef, bool)
@@ -184,7 +183,6 @@ type packageTypeResolver struct {
 	functionNodes         map[model.SymbolRef]*ast.BLangFunction
 	typeDefnNodes         map[model.SymbolRef]*ast.BLangTypeDefinition
 	classDefnNodes        map[model.SymbolRef]*ast.BLangClassDefinition
-	defaultFnSymbolCount  int
 	monoCounters          map[string]int
 	annotationGlobalCount int
 	scope                 model.Scope
@@ -330,12 +328,6 @@ func (t *packageTypeResolver) getClassAtomSymbol(mat *semtypes.MappingAtomicType
 func (t *packageTypeResolver) currentScope() model.Scope     { return t.scope }
 func (t *packageTypeResolver) setCurrentScope(s model.Scope) { t.scope = s }
 
-func (t *packageTypeResolver) nextDefaultFnName() string {
-	name := fmt.Sprintf("$desugar$%d", t.defaultFnSymbolCount)
-	t.defaultFnSymbolCount++
-	return name
-}
-
 func (t *packageTypeResolver) nextMonoFnName(origName string) string {
 	idx := t.monoCounters[origName]
 	t.monoCounters[origName] = idx + 1
@@ -394,7 +386,6 @@ type functionTypeResolver struct {
 	implicitImports      map[string]ast.BLangImportPackage
 	capturedNarrowedVars map[model.SymbolRef]bool
 	monoCounters         map[string]int
-	defaultFnSymbolCount int
 	scope                model.Scope
 	isolatedContext      bool
 }
@@ -487,8 +478,21 @@ func (f *functionTypeResolver) lookupClassMethodSymbol(receiverTy semtypes.SemTy
 	return f.parentResolver.lookupClassMethodSymbol(receiverTy, methodName)
 }
 
+// ensureNotEmpty runs the emptiness check on this resolver's own type
+// context. Function bodies are resolved concurrently (see
+// ResolvePrivateNodes), and a semtypes.Context carries unsynchronized memo
+// tables, so the check must never run on the shared parent context. Only the
+// deferral path, which is reachable only while the env is still being built
+// (a sequential phase), goes to the parent.
 func (f *functionTypeResolver) ensureNotEmpty(ty semtypes.SemType, onEmpty func()) bool {
-	return f.parentResolver.ensureNotEmpty(ty, onEmpty)
+	if !f.typeEnv().IsReady() {
+		return f.parentResolver.ensureNotEmpty(ty, onEmpty)
+	}
+	if semtypes.IsEmpty(f.typeContext(), ty) {
+		onEmpty()
+		return false
+	}
+	return true
 }
 
 func (f *functionTypeResolver) lookupImportedSymbols(name string) (model.ExportedSymbolSpace, bool) {
@@ -566,12 +570,6 @@ func setIsolatedContext(t typeResolver, isolated bool) func() {
 		}
 	}
 	return func() {}
-}
-
-func (f *functionTypeResolver) nextDefaultFnName() string {
-	name := fmt.Sprintf("$desugar$%d", f.defaultFnSymbolCount)
-	f.defaultFnSymbolCount++
-	return name
 }
 
 func (f *functionTypeResolver) nextMonoFnName(origName string) string {
@@ -2436,18 +2434,19 @@ func setOtherNodesAsNever(node ast.BLangNode) {
 	ast.Walk(neverVisitor{}, node)
 }
 
-func allocateDefaultFnSymbol(t typeResolver, fieldTy semtypes.SemType, loc diagnostics.Location) model.SymbolRef {
-	fnName := t.nextDefaultFnName()
-	sig := model.TypedFunctionSignature{ReturnType: fieldTy}
-	fnSymbol := model.NewFunctionSymbol(fnName, sig, false, loc)
-	scope := t.currentScope()
-	scope.AddSymbol(fnName, fnSymbol)
-	ref, _ := scope.GetSymbol(fnName)
+// setRecordDefaultFnSignature populates the signature of the record field default function symbol
+// allocated during symbol resolution, now that the field type is known.
+func setRecordDefaultFnSignature(t typeResolver, fnRef model.SymbolRef, fieldTy semtypes.SemType, loc diagnostics.Location) {
+	if fnRef.IsEmpty() {
+		t.internalError("record field default function symbol not allocated", loc)
+		return
+	}
+	fnSymbol := t.getSymbol(fnRef).(model.FunctionSymbol)
+	fnSymbol.SetTypedSignature(model.TypedFunctionSignature{ReturnType: fieldTy})
 	handle := t.allocateFunctionSignature(nil, false)
-	if !t.associateFunctionSignature(ref, handle) {
+	if !t.associateFunctionSignature(fnRef, handle) {
 		t.internalError("function signature already set", loc)
 	}
-	return ref
 }
 
 func resolveTypeDefinition(t typeResolver, defn *ast.BLangTypeDefinition, depth int) bool {
@@ -7647,7 +7646,7 @@ func resolveBTypeInner(t typeResolver, btype ast.BType, depth int) (semtypes.Sem
 				if _, ok := resolveActionOrExpression(t, nil, field.DefaultExpr, fieldTy); !ok {
 					return semtypes.SemType{}, false
 				}
-				field.DefaultFnRef = allocateDefaultFnSymbol(t, fieldTy, field.GetPosition())
+				setRecordDefaultFnSignature(t, field.DefaultFnRef, fieldTy, field.GetPosition())
 			}
 			ro := field.IsReadonly()
 			opt := field.IsOptional()
