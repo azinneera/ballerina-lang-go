@@ -28,25 +28,6 @@ class CaptureCounter {
     }
   }
 }
-$anonFunc$_1() -> int{
-  bb0 {
-    %2 = (2, local);
-    %3 = ConstantLoad 1
-    %4 = %3;
-    %1 = + %2 %4;
-    (2, local) = %1;
-    %5 = ConstantLoad value
-    %6 = (2, self)[%5];
-    %7 = %6;
-    %8 = (2, local);
-    %9 = + %7 %8;
-    (2, self)[%5] = %9;
-    %11 = ConstantLoad value
-    %10 = (2, self)[%11];
-    %0 = %10;
-    return;
-  }
-}
 $anonFunc$_0() -> int{
   bb0 {
     %1 = closure_fp $anon/.:$anonFunc$_1
@@ -102,6 +83,25 @@ $anonFunc$_0() -> int{
     (1, $desugar$3) = %3;
     PopScopeFrame
     GOTO bb5;
+  }
+}
+$anonFunc$_1() -> int{
+  bb0 {
+    %2 = (2, local);
+    %3 = ConstantLoad 1
+    %4 = %3;
+    %1 = + %2 %4;
+    (2, local) = %1;
+    %5 = ConstantLoad value
+    %6 = (2, self)[%5];
+    %7 = %6;
+    %8 = (2, local);
+    %9 = + %7 %8;
+    (2, self)[%5] = %9;
+    %11 = ConstantLoad value
+    %10 = (2, self)[%11];
+    %0 = %10;
+    return;
   }
 }
 panicValues() -> [int...]{
