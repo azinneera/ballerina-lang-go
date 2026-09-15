@@ -5,20 +5,6 @@ $anonFunc$_0(int) -> int{
     return;
   }
 }
-$default$1() -> float{
-  bb0 {
-    %1 = ConstantLoad 30
-    %0 = %1;
-    return;
-  }
-}
-$default$2() -> int{
-  bb0 {
-    %1 = ConstantLoad 20
-    %0 = %1;
-    return;
-  }
-}
 $anonFunc$_1({| left: int, right: int, never... |}) -> int{
   bb0 {
     %4 = ConstantLoad left
@@ -44,9 +30,23 @@ $anonFunc$_3(int) -> int{
     return;
   }
 }
-$default$3() -> int{
+$default$0() -> int{
   bb0 {
-    %1 = ConstantLoad 7
+    %1 = ConstantLoad 5
+    %0 = %1;
+    return;
+  }
+}
+$default$1() -> float{
+  bb0 {
+    %1 = ConstantLoad 30
+    %0 = %1;
+    return;
+  }
+}
+$default$2() -> int{
+  bb0 {
+    %1 = ConstantLoad 20
     %0 = %1;
     return;
   }
@@ -217,9 +217,9 @@ main() -> nil{
     return;
   }
 }
-$default$0() -> int{
+$default$3() -> int{
   bb0 {
-    %1 = ConstantLoad 5
+    %1 = ConstantLoad 7
     %0 = %1;
     return;
   }

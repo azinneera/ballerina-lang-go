@@ -6,6 +6,24 @@ $anonFunc$_0(function(int) returns int,int) -> int{
     return;
   }
 }
+$anonFunc$_1(int) -> int{
+  bb0 {
+    %3 = actual;
+    %4 = ConstantLoad 1
+    %5 = %4;
+    %2 = + %3 %5;
+    %0 = %2;
+    return;
+  }
+}
+$anonFunc$_2({| value: int, never... |}) -> int{
+  bb0 {
+    %3 = ConstantLoad value
+    %2 = input[%3];
+    %0 = %2;
+    return;
+  }
+}
 $default$0(function(int) returns int) -> int{
   bb0 {
     %2 = $default$1() -> bb1;
@@ -24,24 +42,6 @@ $default$1() -> int{
   bb0 {
     %1 = ConstantLoad 10
     %0 = %1;
-    return;
-  }
-}
-$anonFunc$_1(int) -> int{
-  bb0 {
-    %3 = actual;
-    %4 = ConstantLoad 1
-    %5 = %4;
-    %2 = + %3 %5;
-    %0 = %2;
-    return;
-  }
-}
-$anonFunc$_2({| value: int, never... |}) -> int{
-  bb0 {
-    %3 = ConstantLoad value
-    %2 = input[%3];
-    %0 = %2;
     return;
   }
 }

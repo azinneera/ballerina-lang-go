@@ -86,11 +86,38 @@ func (p *PrettyPrinter) Print(tyCtx semtypes.Context, node BIRPackage) string {
 		p.PrintClassDef(classDef)
 		p.write("\n")
 	}
-	for _, function := range node.Functions {
+	for _, function := range functionsInPrintOrder(node.Functions) {
 		p.PrintFunction(function)
 		p.write("\n")
 	}
 	return p.sb.String()
+}
+
+// functionsInPrintOrder sorts the compiler-generated top level functions
+// ($default$N, $anonFunc$_N and friends) among themselves. They are appended to
+// the package while ranging over maps keyed by method name, so their relative
+// order varies between runs even though each function body is identical. Only
+// the slots already holding a generated function are rewritten, leaving the
+// user written functions where the frontend put them so a genuine reordering of
+// those is still visible.
+func functionsInPrintOrder(functions []BIRFunction) []BIRFunction {
+	ordered := make([]BIRFunction, len(functions))
+	copy(ordered, functions)
+	slots := make([]int, 0, len(ordered))
+	generated := make([]BIRFunction, 0, len(ordered))
+	for i := range ordered {
+		if strings.HasPrefix(ordered[i].Name.Value(), "$") {
+			slots = append(slots, i)
+			generated = append(generated, ordered[i])
+		}
+	}
+	sort.Slice(generated, func(i, j int) bool {
+		return generated[i].FunctionLookupKey < generated[j].FunctionLookupKey
+	})
+	for i, slot := range slots {
+		ordered[slot] = generated[i]
+	}
+	return ordered
 }
 
 // printFunctionParams prints the parameter list of function. Native dependently

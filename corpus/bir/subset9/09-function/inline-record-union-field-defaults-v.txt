@@ -15,6 +15,13 @@ main() -> nil{
     return;
   }
 }
+$default$0() -> false|{| absentAsNilableType: boolean, nilAsOptionalField: boolean, anydata... |}{
+  bb0 {
+    %1 = newMap {| absentAsNilableType: boolean, nilAsOptionalField: boolean, anydata... |}{} defaults{nilAsOptionalField=$anon/.:$default$1, absentAsNilableType=$anon/.:$default$2}
+    %0 = %1;
+    return;
+  }
+}
 $default$1() -> boolean{
   bb0 {
     %1 = ConstantLoad false
@@ -25,13 +32,6 @@ $default$1() -> boolean{
 $default$2() -> boolean{
   bb0 {
     %1 = ConstantLoad false
-    %0 = %1;
-    return;
-  }
-}
-$default$0() -> false|{| absentAsNilableType: boolean, nilAsOptionalField: boolean, anydata... |}{
-  bb0 {
-    %1 = newMap {| absentAsNilableType: boolean, nilAsOptionalField: boolean, anydata... |}{} defaults{nilAsOptionalField=$anon/.:$default$1, absentAsNilableType=$anon/.:$default$2}
     %0 = %1;
     return;
   }
