@@ -76,55 +76,6 @@ $default$0(service object) -> nil{
     return;
   }
 }
-$start() -> nil|error{
-  bb0 {
-    $desugar$0 = $moduleListeners;
-    %2 = ConstantLoad 0
-    $desugar$1 = %2;
-    %4 = length($desugar$0) -> bb1;
-  }
-  bb1 {
-    $desugar$2 = %4;
-    GOTO bb2;
-  }
-  bb2 {
-    %7 = $desugar$1;
-    %8 = $desugar$2;
-    %6 = < %7 %8;
-    %6 ? bb3 : bb4;
-  }
-  bb3 {
-    PushScopeFrame 9
-    %0 = (1, $desugar$0)[(1, $desugar$1)];
-    $listener = %0;
-    %3 = $listener.start() -> bb5;
-  }
-  bb4 {
-    return;
-  }
-  bb5 {
-    %4 = %3 is error
-    %4 ? bb6 : bb7;
-  }
-  bb6 {
-    (1, %0) = %3;
-    PopScopeFrame
-    return;
-  }
-  bb7 {
-    %2 = %3;
-    GOTO bb8;
-  }
-  bb8 {
-    %6 = (1, $desugar$1);
-    %7 = ConstantLoad 1
-    %8 = %7;
-    %5 = + %6 %8;
-    (1, $desugar$1) = %5;
-    PopScopeFrame
-    GOTO bb2;
-  }
-}
 $gracefulStop() -> nil|error{
   bb0 {
     $desugar$0 = $moduleListeners;
@@ -196,6 +147,55 @@ $immediateStop() -> nil|error{
     %0 = (1, $desugar$0)[(1, $desugar$1)];
     $listener = %0;
     %3 = $listener.immediateStop() -> bb5;
+  }
+  bb4 {
+    return;
+  }
+  bb5 {
+    %4 = %3 is error
+    %4 ? bb6 : bb7;
+  }
+  bb6 {
+    (1, %0) = %3;
+    PopScopeFrame
+    return;
+  }
+  bb7 {
+    %2 = %3;
+    GOTO bb8;
+  }
+  bb8 {
+    %6 = (1, $desugar$1);
+    %7 = ConstantLoad 1
+    %8 = %7;
+    %5 = + %6 %8;
+    (1, $desugar$1) = %5;
+    PopScopeFrame
+    GOTO bb2;
+  }
+}
+$start() -> nil|error{
+  bb0 {
+    $desugar$0 = $moduleListeners;
+    %2 = ConstantLoad 0
+    $desugar$1 = %2;
+    %4 = length($desugar$0) -> bb1;
+  }
+  bb1 {
+    $desugar$2 = %4;
+    GOTO bb2;
+  }
+  bb2 {
+    %7 = $desugar$1;
+    %8 = $desugar$2;
+    %6 = < %7 %8;
+    %6 ? bb3 : bb4;
+  }
+  bb3 {
+    PushScopeFrame 9
+    %0 = (1, $desugar$0)[(1, $desugar$1)];
+    $listener = %0;
+    %3 = $listener.start() -> bb5;
   }
   bb4 {
     return;

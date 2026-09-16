@@ -1,4 +1,25 @@
 module $anon.. v 0.0.0;
+$anonFunc$_0(int) -> function(int) returns ...|function(int) returns int{
+  bb0 {
+    %2 = closure_fp $anon/.:$anonFunc$_1
+    %0 = %2;
+    return;
+  }
+}
+$anonFunc$_1(int) -> function(int) returns ...|function(int) returns int{
+  bb0 {
+    %2 = closure_fp $anon/.:$anonFunc$_2
+    %0 = %2;
+    return;
+  }
+}
+$anonFunc$_2(int) -> function(int) returns int{
+  bb0 {
+    %2 = closure_fp $anon/.:$anonFunc$_3
+    %0 = %2;
+    return;
+  }
+}
 $anonFunc$_3(int) -> int{
   bb0 {
     %3 = (4, val);
@@ -19,27 +40,6 @@ $anonFunc$_3(int) -> int{
     %17 = p4;
     %6 = + %16 %17;
     %0 = %6;
-    return;
-  }
-}
-$anonFunc$_2(int) -> function(int) returns int{
-  bb0 {
-    %2 = closure_fp $anon/.:$anonFunc$_3
-    %0 = %2;
-    return;
-  }
-}
-$anonFunc$_1(int) -> function(int) returns ...|function(int) returns int{
-  bb0 {
-    %2 = closure_fp $anon/.:$anonFunc$_2
-    %0 = %2;
-    return;
-  }
-}
-$anonFunc$_0(int) -> function(int) returns ...|function(int) returns int{
-  bb0 {
-    %2 = closure_fp $anon/.:$anonFunc$_1
-    %0 = %2;
     return;
   }
 }

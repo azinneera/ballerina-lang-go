@@ -86,11 +86,38 @@ func (p *PrettyPrinter) Print(tyCtx semtypes.Context, node BIRPackage) string {
 		p.PrintClassDef(classDef)
 		p.write("\n")
 	}
-	for _, function := range node.Functions {
+	for _, function := range functionsInPrintOrder(node.Functions) {
 		p.PrintFunction(function)
 		p.write("\n")
 	}
 	return p.sb.String()
+}
+
+// functionsInPrintOrder sorts the compiler-generated top level functions
+// ($default$N, $anonFunc$_N and friends) among themselves. They are appended to
+// the package while ranging over maps keyed by method name, so their relative
+// order varies between runs even though each function body is identical. Only
+// the slots already holding a generated function are rewritten, leaving the
+// user written functions where the frontend put them so a genuine reordering of
+// those is still visible.
+func functionsInPrintOrder(functions []BIRFunction) []BIRFunction {
+	ordered := make([]BIRFunction, len(functions))
+	copy(ordered, functions)
+	slots := make([]int, 0, len(ordered))
+	generated := make([]BIRFunction, 0, len(ordered))
+	for i := range ordered {
+		if strings.HasPrefix(ordered[i].Name.Value(), "$") {
+			slots = append(slots, i)
+			generated = append(generated, ordered[i])
+		}
+	}
+	sort.Slice(generated, func(i, j int) bool {
+		return generated[i].FunctionLookupKey < generated[j].FunctionLookupKey
+	})
+	for i, slot := range slots {
+		ordered[slot] = generated[i]
+	}
+	return ordered
 }
 
 // printFunctionParams prints the parameter list of function. Native dependently
@@ -251,6 +278,8 @@ func (p *PrettyPrinter) PrintInstruction(instruction BIRInstruction) string {
 		return p.PrintNewXMLSequence(instruction)
 	case *EvalTemplateExpr:
 		return p.PrintEvalTemplateExpr(instruction)
+	case *XMLFilter:
+		return p.PrintXMLFilter(instruction)
 	default:
 		panic(fmt.Sprintf("unknown instruction type: %T", instruction))
 	}
@@ -624,6 +653,25 @@ func (p *PrettyPrinter) PrintPackageID(packageID *model.PackageID) string {
 	return fmt.Sprintf("%s.%s v %s", orgName, pkgName, version)
 }
 
+func (p *PrettyPrinter) PrintXMLFilter(n *XMLFilter) string {
+	patterns := make([]string, len(n.Filters))
+	for i, pattern := range n.Filters {
+		switch pattern.Kind {
+		case XMLNamePatternKindWildCard:
+			patterns[i] = "*"
+		case XMLNamePatternKindIdentifier:
+			patterns[i] = fmt.Sprintf("{%q, %q}", "", pattern.Identifier)
+		case XMLNamePatternKindQualifiedIdentifier:
+			patterns[i] = fmt.Sprintf("{%q, %q}", pattern.NamespaceURI, pattern.Identifier)
+		case XMLNamePatternKindPrefix:
+			patterns[i] = fmt.Sprintf("{%q, *}", pattern.NamespaceURI)
+		default:
+			panic("unsupported XML name pattern kind")
+		}
+	}
+	return fmt.Sprintf("%s = xmlFilter(%s, [%s])", p.PrintOperand(*n.LhsOp), p.PrintOperand(*n.Source), strings.Join(patterns, " | "))
+}
+
 func (p *PrettyPrinter) PrintNewXMLElement(n *NewXMLElement) string {
 	children := "()"
 	if n.ChildrenOp != nil {
@@ -633,13 +681,21 @@ func (p *PrettyPrinter) PrintNewXMLElement(n *NewXMLElement) string {
 	if n.AttrsOp != nil {
 		attrs = p.PrintOperand(*n.AttrsOp)
 	}
+	qualifiedName := n.LocalName
+	if n.Prefix != "" {
+		qualifiedName = n.Prefix + ":" + n.LocalName
+	}
+	name := fmt.Sprintf("%q", qualifiedName)
+	if n.NamespaceURI != "" {
+		name = fmt.Sprintf("%s, namespace=%q", name, n.NamespaceURI)
+	}
 	if n.NamespacesOp != nil {
-		return fmt.Sprintf("%s = newXMLElement(%s, %s, %s, %s)", p.PrintOperand(*n.LhsOp), p.PrintOperand(*n.NameOp), children, attrs, p.PrintOperand(*n.NamespacesOp))
+		return fmt.Sprintf("%s = newXMLElement(%s, %s, %s, %s)", p.PrintOperand(*n.LhsOp), name, children, attrs, p.PrintOperand(*n.NamespacesOp))
 	}
 	if n.AttrsOp != nil {
-		return fmt.Sprintf("%s = newXMLElement(%s, %s, %s)", p.PrintOperand(*n.LhsOp), p.PrintOperand(*n.NameOp), children, attrs)
+		return fmt.Sprintf("%s = newXMLElement(%s, %s, %s)", p.PrintOperand(*n.LhsOp), name, children, attrs)
 	}
-	return fmt.Sprintf("%s = newXMLElement(%s, %s)", p.PrintOperand(*n.LhsOp), p.PrintOperand(*n.NameOp), children)
+	return fmt.Sprintf("%s = newXMLElement(%s, %s)", p.PrintOperand(*n.LhsOp), name, children)
 }
 
 func (p *PrettyPrinter) PrintNewXMLPI(n *NewXMLPI) string {

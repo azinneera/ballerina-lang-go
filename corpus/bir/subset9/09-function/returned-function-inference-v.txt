@@ -34,6 +34,12 @@ class RemoteFactory {
     }
   }
 }
+$anonFunc$_0(int) -> int{
+  bb0 {
+    %0 = implementationArg;
+    return;
+  }
+}
 $anonFunc$_1(int) -> int{
   bb0 {
     %0 = implementationArg;
@@ -41,12 +47,6 @@ $anonFunc$_1(int) -> int{
   }
 }
 $anonFunc$_2(int) -> int{
-  bb0 {
-    %0 = implementationArg;
-    return;
-  }
-}
-$anonFunc$_0(int) -> int{
   bb0 {
     %0 = implementationArg;
     return;
@@ -419,13 +419,6 @@ $default$2() -> int{
     return;
   }
 }
-$default$4() -> int{
-  bb0 {
-    %1 = ConstantLoad 2
-    %0 = %1;
-    return;
-  }
-}
 $default$3() -> int{
   bb0 {
     %1 = ConstantLoad 30
@@ -433,9 +426,9 @@ $default$3() -> int{
     return;
   }
 }
-$default$6() -> int{
+$default$4() -> int{
   bb0 {
-    %1 = ConstantLoad 5
+    %1 = ConstantLoad 2
     %0 = %1;
     return;
   }
@@ -443,6 +436,13 @@ $default$6() -> int{
 $default$5() -> int{
   bb0 {
     %1 = ConstantLoad 50
+    %0 = %1;
+    return;
+  }
+}
+$default$6() -> int{
+  bb0 {
+    %1 = ConstantLoad 5
     %0 = %1;
     return;
   }

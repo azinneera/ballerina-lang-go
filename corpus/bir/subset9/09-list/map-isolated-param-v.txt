@@ -109,11 +109,11 @@ mapInsideLock([int...]) -> int{
     return;
   }
 }
-$anonFunc$_2({| value: int, never... |}) -> int{
+$anonFunc$_10(int) -> {| value: int, never... |}{
   bb0 {
-    %3 = ConstantLoad value
-    %2 = value[%3];
-    %0 = %2;
+    %2 = ConstantLoad value
+    %3 = newMap {| value: int, never... |}{%2=value}
+    %0 = %3;
     return;
   }
 }
@@ -124,6 +124,47 @@ mapRecordFields([{| value: int, never... |}...]) -> [int...]{
   }
   bb1 {
     %0 = %3;
+    return;
+  }
+}
+$anonFunc$_11(int|string) -> boolean{
+  bb0 {
+    %2 = value is int
+    %0 = %2;
+    return;
+  }
+}
+mapWithFunctionReference([int...]) -> [int...]{
+  bb0 {
+    %2 = fp $anon/.:$anonFunc$_3
+    %3 = map(values,%2) -> bb1;
+  }
+  bb1 {
+    %0 = %3;
+    return;
+  }
+}
+$anonFunc$_2({| value: int, never... |}) -> int{
+  bb0 {
+    %3 = ConstantLoad value
+    %2 = value[%3];
+    %0 = %2;
+    return;
+  }
+}
+createFactory() -> function() returns object { public function init() returns nil }{
+  bb0 {
+    %1 = fp $anon/.:$anonFunc$_4
+    factory = %1;
+    %0 = factory;
+    return;
+  }
+}
+withMappedDefault([int...]) -> int{
+  bb0 {
+    %3 = ConstantLoad 0
+    %2 = values[%3];
+    %0 = %2;
     return;
   }
 }
@@ -141,13 +182,13 @@ $anonFunc$_3(int) -> int{
     return;
   }
 }
-mapWithFunctionReference([int...]) -> [int...]{
+mapWithCapture([int...],int) -> [int...]{
   bb0 {
-    %2 = fp $anon/.:$anonFunc$_3
-    %3 = map(values,%2) -> bb1;
+    %3 = closure_fp $anon/.:$anonFunc$_6
+    %4 = map(values,%3) -> bb1;
   }
   bb1 {
-    %0 = %3;
+    %0 = %4;
     return;
   }
 }
@@ -170,52 +211,6 @@ $anonFunc$_4() -> object { public function init() returns nil }{
   }
   bb4 {
     %0 = %3;
-    return;
-  }
-}
-createFactory() -> function() returns object { public function init() returns nil }{
-  bb0 {
-    %1 = fp $anon/.:$anonFunc$_4
-    factory = %1;
-    %0 = factory;
-    return;
-  }
-}
-withMappedDefault([int...]) -> int{
-  bb0 {
-    %3 = ConstantLoad 0
-    %2 = values[%3];
-    %0 = %2;
-    return;
-  }
-}
-$anonFunc$_6(int) -> int{
-  bb0 {
-    %3 = value;
-    %4 = (1, offset);
-    %2 = + %3 %4;
-    %0 = %2;
-    return;
-  }
-}
-mapWithCapture([int...],int) -> [int...]{
-  bb0 {
-    %3 = closure_fp $anon/.:$anonFunc$_6
-    %4 = map(values,%3) -> bb1;
-  }
-  bb1 {
-    %0 = %4;
-    return;
-  }
-}
-$anonFunc$_7(int) -> int{
-  bb0 {
-    %3 = value;
-    %5 = ConstantLoad 0
-    %4 = (1, state)[%5];
-    %6 = %4;
-    %2 = + %3 %6;
-    %0 = %2;
     return;
   }
 }
@@ -267,37 +262,42 @@ mapAcrossIsolationContexts([int...]) -> [int...]{
     return;
   }
 }
-$anonFunc$_8(int) -> boolean{
+$anonFunc$_5(int) -> int{
   bb0 {
     %3 = value;
     %4 = ConstantLoad 1
-    %5 = %4;
-    %2 = > %3 %5;
-    %0 = %2;
-    return;
-  }
-}
-$anonFunc$_9(int) -> int{
-  bb0 {
-    %3 = value;
-    %4 = ConstantLoad 2
     %5 = %4;
     %2 = + %3 %5;
     %0 = %2;
     return;
   }
 }
-$anonFunc$_10(int) -> {| value: int, never... |}{
+$anonFunc$_6(int) -> int{
   bb0 {
-    %2 = ConstantLoad value
-    %3 = newMap {| value: int, never... |}{%2=value}
-    %0 = %3;
+    %3 = value;
+    %4 = (1, offset);
+    %2 = + %3 %4;
+    %0 = %2;
     return;
   }
 }
-$anonFunc$_11(int|string) -> boolean{
+$anonFunc$_7(int) -> int{
   bb0 {
-    %2 = value is int
+    %3 = value;
+    %5 = ConstantLoad 0
+    %4 = (1, state)[%5];
+    %6 = %4;
+    %2 = + %3 %6;
+    %0 = %2;
+    return;
+  }
+}
+$anonFunc$_8(int) -> boolean{
+  bb0 {
+    %3 = value;
+    %4 = ConstantLoad 1
+    %5 = %4;
+    %2 = > %3 %5;
     %0 = %2;
     return;
   }
@@ -370,14 +370,14 @@ main() -> nil{
     %32 = println(%31) -> bb17;
   }
   bb17 {
-    %33 = newMap {| values: [int...], never... |}{} defaults{values=$anon/.:$desugar$0}
+    %33 = newMap {| values: [int...], never... |}{} defaults{values=$anon/.:$default$0}
     recordValue = %33;
     %36 = ConstantLoad values
     %35 = recordValue[%36];
     %37 = println(%35) -> bb18;
   }
   bb18 {
-    %38 = $default$0() -> bb19;
+    %38 = $default$1() -> bb19;
   }
   bb19 {
     $desugar$0 = %38;
@@ -478,7 +478,17 @@ main() -> nil{
     return;
   }
 }
-$desugar$0() -> [int...]{
+$anonFunc$_9(int) -> int{
+  bb0 {
+    %3 = value;
+    %4 = ConstantLoad 2
+    %5 = %4;
+    %2 = + %3 %5;
+    %0 = %2;
+    return;
+  }
+}
+$default$0() -> [int...]{
   bb0 {
     %1 = ConstantLoad 1
     %2 = ConstantLoad 2
@@ -492,17 +502,7 @@ $desugar$0() -> [int...]{
     return;
   }
 }
-$anonFunc$_5(int) -> int{
-  bb0 {
-    %3 = value;
-    %4 = ConstantLoad 1
-    %5 = %4;
-    %2 = + %3 %5;
-    %0 = %2;
-    return;
-  }
-}
-$default$0() -> [int...]{
+$default$1() -> [int...]{
   bb0 {
     %1 = ConstantLoad 2
     %2 = ConstantLoad 1
