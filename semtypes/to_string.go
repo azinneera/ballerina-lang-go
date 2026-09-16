@@ -194,9 +194,9 @@ func (s *toStringState) listAtomicTypeToString(atom atom) string {
 	var parts []string
 	for i := 0; i < atomic.members.FixedLength; i++ {
 		member := listMemberAt(atomic.members, atomic.rest, i)
-		parts = append(parts, s.semTypeToString(cellInnerVal(member)))
+		parts = append(parts, s.semTypeToString(CellInnerVal(member)))
 	}
-	restStr := s.semTypeToString(cellInnerVal(atomic.rest))
+	restStr := s.semTypeToString(CellInnerVal(atomic.rest))
 	parts = append(parts, restStr+"...")
 	return "[" + strings.Join(parts, ", ") + "]"
 }
@@ -230,7 +230,30 @@ func (s *toStringState) functionAtomicTypeToString(atom atom) string {
 	atomic := s.cx.FunctionAtomType(atom)
 	paramsStr := s.functionParamsToString(atomic.ParamType)
 	retStr := s.semTypeToString(atomic.RetType)
-	return "function(" + paramsStr + ") returns " + retStr
+	return s.functionQualifiersToString(atomic.Qualifiers) + "function(" + paramsStr + ") returns " + retStr
+}
+
+// functionQualifiersToString renders the function-quals prefix of a function
+// type descriptor, including the trailing space, or "" when there are none.
+// The qualifiers of a function atom are a list of [isolated, transactional]:
+// an isolated function has the singleton `true` as its isolated member, and a
+// transactional function has all of `boolean` as its transactional member.
+func (s *toStringState) functionQualifiersToString(qualifiers SemType) string {
+	atomic := ToListAtomicType(s.cx.Env(), qualifiers)
+	if atomic == nil || atomic.FixedLength() < 2 {
+		return ""
+	}
+	var quals []string
+	if IsSameType(s.cx, atomic.MemberAtInnerVal(0), BooleanConst(true)) {
+		quals = append(quals, "isolated")
+	}
+	if !IsSameType(s.cx, atomic.MemberAtInnerVal(1), BooleanConst(false)) {
+		quals = append(quals, "transactional")
+	}
+	if len(quals) == 0 {
+		return ""
+	}
+	return strings.Join(quals, " ") + " "
 }
 
 func (s *toStringState) functionParamsToString(paramType SemType) string {
@@ -255,9 +278,9 @@ func (s *toStringState) functionParamsToString(paramType SemType) string {
 		var parts []string
 		for i := 0; i < listAtomic.members.FixedLength; i++ {
 			member := listMemberAt(listAtomic.members, listAtomic.rest, i)
-			parts = append(parts, s.semTypeToString(cellInnerVal(member)))
+			parts = append(parts, s.semTypeToString(CellInnerVal(member)))
 		}
-		restInner := cellInnerVal(listAtomic.rest)
+		restInner := CellInnerVal(listAtomic.rest)
 		if !IsNever(restInner) {
 			parts = append(parts, s.semTypeToString(restInner)+"...")
 		}
@@ -305,9 +328,9 @@ func (s *toStringState) mappingAtomicTypeToString(atom atom) string {
 	atomic := s.cx.MappingAtomType(atom)
 	var parts []string
 	for i, name := range atomic.names {
-		parts = append(parts, name+": "+s.semTypeToString(cellInnerVal(atomic.types[i])))
+		parts = append(parts, name+": "+s.semTypeToString(CellInnerVal(atomic.types[i])))
 	}
-	restStr := s.semTypeToString(cellInnerVal(atomic.rest))
+	restStr := s.semTypeToString(CellInnerVal(atomic.rest))
 	parts = append(parts, restStr+"...")
 	return "{| " + strings.Join(parts, ", ") + " |}"
 }
@@ -340,7 +363,7 @@ func (s *toStringState) objectAtomicTypeToString(atom atom) string {
 	var members []string
 	for i, name := range atomic.names {
 		if name == "$qualifiers" {
-			qualTy := cellInnerVal(atomic.types[i])
+			qualTy := CellInnerVal(atomic.types[i])
 			qualAtomic := ToMappingAtomicType(s.cx, qualTy)
 			if qualAtomic != nil {
 				isolatedTy := qualAtomic.FieldInnerVal("isolated")
@@ -356,7 +379,7 @@ func (s *toStringState) objectAtomicTypeToString(atom atom) string {
 			}
 			continue
 		}
-		memberTy := cellInnerVal(atomic.types[i])
+		memberTy := CellInnerVal(atomic.types[i])
 		memberAtomic := ToMappingAtomicType(s.cx, memberTy)
 		if memberAtomic == nil {
 			members = append(members, name+": "+s.semTypeToString(memberTy))
@@ -415,7 +438,8 @@ func (s *toStringState) objectMethodToString(name string, kindTy SemType, fnTy S
 			atomic := s.cx.FunctionAtomType(node.atom())
 			paramsStr := s.functionParamsToString(atomic.ParamType)
 			retStr := s.semTypeToString(atomic.RetType)
-			return methodPrefix + name + "(" + paramsStr + ") returns " + retStr
+			quals := s.functionQualifiersToString(atomic.Qualifiers)
+			return quals + methodPrefix + name + "(" + paramsStr + ") returns " + retStr
 		}
 	}
 	return methodPrefix + name + "()"
