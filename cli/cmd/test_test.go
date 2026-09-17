@@ -803,3 +803,53 @@ function testInSubmod() {
 		}
 	}
 }
+
+// TestTestCommand_GracefullyStopsListeners closes TODO.md bug #23: a package
+// that declares a module-level listener previously had it started (via
+// rt.Listen()) but never gracefully stopped once the suite finished, so a
+// runtime:onGracefulStop handler's side effect was never observed. Confirmed
+// via a real repro before this fix that the handler's print never appeared
+// (the process still exited cleanly — no hang — it just skipped teardown
+// entirely). Fixed via runtime.Runtime.RequestGracefulStop, called from
+// runTestsForModule right after startSuite() returns.
+func TestTestCommand_GracefullyStopsListeners(t *testing.T) {
+	dir := writeTestFixture(t, "listenerstopmod", `import ballerina/test;
+
+@test:Config {}
+function testSomething() {
+    test:assertTrue(true);
+}
+`)
+	mainSource := `import ballerina/http;
+import ballerina/lang.runtime;
+import ballerina/io;
+
+function onStop() returns error? {
+    io:println("GRACEFUL_STOP_HANDLER_RAN");
+}
+
+function init() {
+    runtime:onGracefulStop(onStop);
+}
+
+service /echo on new http:Listener(20292) {
+    resource function get hello() returns string {
+        return "hi";
+    }
+}
+`
+	if err := os.WriteFile(filepath.Join(dir, "main.bal"), []byte(mainSource), 0o644); err != nil {
+		t.Fatalf("overwrite main.bal: %v", err)
+	}
+
+	stdout, _, stderr, err := executeTestCommand(t, dir)
+	if err != nil {
+		t.Fatalf("expected success, got error: %v\nstdout: %s\nstderr: %s", err, stdout, stderr)
+	}
+	if !strings.Contains(stdout, "[pass] testSomething") {
+		t.Errorf("expected the test to run, got: %s", stdout)
+	}
+	if !strings.Contains(stdout, "GRACEFUL_STOP_HANDLER_RAN") {
+		t.Errorf("expected the onGracefulStop handler to run after the suite finished, got: %s", stdout)
+	}
+}

@@ -167,11 +167,17 @@ function isPrefixInCorrectFormat(string packageName, string moduleName, string t
     return includesStr(prefix, packageName) || includesStr(prefix, packageName + DOT + moduleName);
 }
 
+// jballerina's own getFullModuleName concatenates a bare package name and a
+// bare module-name-part (its TestOptions stores them separately). This
+// port's cli/cmd/test.go passes the already-fully-qualified name (e.g.
+// "pkg.submod", via projects.ModuleName.String()) as testOptions'
+// moduleName for every module, default or named — see report.bal's own
+// direct use of getModuleName() as a cache-directory/rerun-json key, which
+// only works because it's already fully qualified. Re-concatenating the
+// package name here would double it up for a named module (confirmed via a
+// real repro: `--tests pkg.submod:testName` failed to match until querying
+// with the doubled `pkg.pkg.submod:testName` instead) — so this just
+// returns the already-correct value.
 function getFullModuleName() returns string {
-    string package = testOptions.getPackageName();
-    string moduleName = testOptions.getModuleName();
-    if package == moduleName {
-        return package;
-    }
-    return package + DOT + moduleName;
+    return testOptions.getModuleName();
 }

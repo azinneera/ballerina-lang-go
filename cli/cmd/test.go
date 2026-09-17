@@ -547,6 +547,15 @@ func runTestsForModule(cmd *cobra.Command, opts *testCmdOptions, stderr io.Write
 	if err != nil {
 		return 1, err
 	}
+	// Gracefully stop any module-level listeners the package under test
+	// declared, now that the suite has finished with them — bal test starts
+	// listeners the same way bal run does, but unlike bal run (meant to run
+	// forever until a signal), it must tear them down itself once done, or
+	// registered runtime:onGracefulStop handlers never run. Matches
+	// jballerina's own generated test-entry-point bytecode, which calls a
+	// module-stop routine directly after the test run, rather than relying
+	// on a shutdown hook (only registered for the non-test bal run path).
+	rt.RequestGracefulStop()
 	exitCode, _ := suiteResult.(int64)
 	return int(exitCode), nil
 }
