@@ -2182,7 +2182,7 @@ func (n *nodeBuilder) transformBinaryExpression(binaryBLangExpression *st.Binary
 }
 
 func (n *nodeBuilder) transformBracedExpression(bracedBLangExpression *st.BracedExpressionNode) ast.BLangNode {
-	return n.createExpression(bracedBLangExpression.Expression())
+	return n.createActionOrExpression(bracedBLangExpression.Expression())
 }
 
 func (n *nodeBuilder) transformCheckExpression(checkBLangExpression *st.CheckExpressionNode) ast.BLangNode {
