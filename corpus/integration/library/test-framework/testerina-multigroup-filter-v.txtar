@@ -1,0 +1,15 @@
+-- stdout --
+		[pass] testFast
+		[pass] testUnit
+
+
+		2 passing
+		0 failing
+		0 skipped
+
+		Test execution time : <DURATION>s
+exitCode: 0
+unitRan: 1
+fastRan: 1
+slowRan: 0
+-- stderr --

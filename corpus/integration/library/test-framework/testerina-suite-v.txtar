@@ -1,0 +1,17 @@
+-- stdout --
+		[pass] testSetup
+		[pass] testMainCase
+
+
+		2 passing
+		0 failing
+		0 skipped
+
+		Test execution time : <DURATION>s
+exitCode: 0
+beforeSuiteCount: 1
+afterSuiteCount: 1
+beforeEachCount: 2
+afterEachCount: 2
+executionOrder: ["testSetup","testMainCase"]
+-- stderr --

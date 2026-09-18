@@ -1,0 +1,13 @@
+-- stdout --
+		[pass] testSquare#one
+
+
+		1 passing
+		0 failing
+		0 skipped
+
+		Test execution time : <DURATION>s
+exitCode: 0
+oneRan: 1
+twoRan: 0
+-- stderr --

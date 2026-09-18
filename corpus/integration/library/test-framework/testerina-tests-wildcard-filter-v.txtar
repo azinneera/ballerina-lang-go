@@ -1,0 +1,15 @@
+-- stdout --
+		[pass] testBar
+		[pass] testFoo
+
+
+		2 passing
+		0 failing
+		0 skipped
+
+		Test execution time : <DURATION>s
+exitCode: 0
+testFooRan: 1
+testBarRan: 1
+otherBazRan: 0
+-- stderr --

@@ -1,0 +1,15 @@
+-- stdout --
+		[pass] testAlpha
+		[pass] testBeta
+
+
+		2 passing
+		0 failing
+		0 skipped
+
+		Test execution time : <DURATION>s
+exitCode: 0
+testAlphaRan: 1
+testBetaRan: 1
+testGammaRan: 0
+-- stderr --

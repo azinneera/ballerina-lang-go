@@ -1,0 +1,4 @@
+-- stdout --
+Cyclic test dependencies detected: testA -> testB -> testA
+cyclic exitCode: 1
+-- stderr --
