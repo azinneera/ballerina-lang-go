@@ -20,6 +20,7 @@ import (
 	"fmt"
 	"os"
 	"path/filepath"
+	"slices"
 	"sort"
 	"strings"
 	"testing"
@@ -1063,10 +1064,17 @@ func TestDependentlyTypedCrossModuleRoundtrip(t *testing.T) {
 
 	freshEnv := context.NewCompilerEnvironment(semtypes.CreateTypeEnv(), false)
 	publicSymbols := make(map[semantics.PackageIdentifier]model.ExportedSymbolSpace)
+	moduleVisibility := make(map[semantics.PackageIdentifier]semantics.ModuleVisibility)
 	deserializedPkgs := make([]*bir.BIRPackage, 0, len(birPkgs))
 	mainPkg := backend.BIR()
 	exportedSymbols := backend.ExportedSymbols()
 	typeEnv := project.Environment().TypeEnv()
+
+	modulesByQualifiedName := make(map[string]*projects.Module)
+	for _, m := range currentPkg.Modules() {
+		modulesByQualifiedName[m.Descriptor().Name().String()] = m
+	}
+	manifest := currentPkg.Manifest()
 
 	for _, pkg := range birPkgs {
 		if pkg == mainPkg {
@@ -1080,6 +1088,19 @@ func TestDependentlyTypedCrossModuleRoundtrip(t *testing.T) {
 		exported, ok := exportedSymbols[pkgIdent]
 		if !ok {
 			t.Fatalf("exported symbols not found for %s/%s", pkgIdent.OrgName, pkgIdent.ModuleName)
+		}
+
+		// Thread the dependency module's real visibility through, mirroring
+		// module_context.go's resolveTypesAndSymbols, so a non-exported
+		// module found in publicSymbols is still rejected below instead of
+		// silently binding.
+		if module, ok := modulesByQualifiedName[pkgIdent.ModuleName]; ok {
+			desc := module.Descriptor()
+			moduleVisibility[pkgIdent] = semantics.ModuleVisibility{
+				PackageOrg:  desc.Org().Value(),
+				PackageName: desc.PackageName().Value(),
+				Exported:    slices.Contains(manifest.ExportedModules(), module.ModuleName().ModuleNamePart()),
+			}
 		}
 
 		symBytes, err := symbolpool.Marshal(exported, project.Environment().CompilerEnvironment())
@@ -1107,7 +1128,9 @@ func TestDependentlyTypedCrossModuleRoundtrip(t *testing.T) {
 		model.Name(org),
 		[]model.Name{model.Name(packageRoot)},
 		publicSymbols,
+		moduleVisibility,
 		org,
+		packageRoot,
 	)
 	deserializedPkgs = append(deserializedPkgs, mainBIR)
 
@@ -1203,8 +1226,16 @@ func TestRecordFieldAnnotationsSymbolPoolRoundtrip(t *testing.T) {
 	exportedSymbols := backend.ExportedSymbols()
 	typeEnv := result.Project().Environment().TypeEnv()
 
+	currentPkg := result.Project().CurrentPackage()
+	modulesByQualifiedName := make(map[string]*projects.Module)
+	for _, m := range currentPkg.Modules() {
+		modulesByQualifiedName[m.Descriptor().Name().String()] = m
+	}
+	manifest := currentPkg.Manifest()
+
 	freshEnv := context.NewCompilerEnvironment(semtypes.CreateTypeEnv(), false)
 	publicSymbols := make(map[semantics.PackageIdentifier]model.ExportedSymbolSpace)
+	moduleVisibility := make(map[semantics.PackageIdentifier]semantics.ModuleVisibility)
 	deserializedPkgs := make([]*bir.BIRPackage, 0, len(birPkgs))
 	for _, pkg := range birPkgs {
 		if pkg == mainPkg {
@@ -1218,6 +1249,20 @@ func TestRecordFieldAnnotationsSymbolPoolRoundtrip(t *testing.T) {
 		if !ok {
 			t.Fatalf("exported symbols not found for %s", pkgIdent.ModuleName)
 		}
+
+		// Thread the dependency module's real visibility through, mirroring
+		// module_context.go's resolveTypesAndSymbols, so a non-exported
+		// module found in publicSymbols is still rejected below instead of
+		// silently binding.
+		if module, ok := modulesByQualifiedName[pkgIdent.ModuleName]; ok {
+			desc := module.Descriptor()
+			moduleVisibility[pkgIdent] = semantics.ModuleVisibility{
+				PackageOrg:  desc.Org().Value(),
+				PackageName: desc.PackageName().Value(),
+				Exported:    slices.Contains(manifest.ExportedModules(), module.ModuleName().ModuleNamePart()),
+			}
+		}
+
 		symBytes, err := symbolpool.Marshal(exported, result.Project().Environment().CompilerEnvironment())
 		if err != nil {
 			t.Fatalf("symbol Marshal for %s: %v", pkgIdent.ModuleName, err)
@@ -1243,7 +1288,9 @@ func TestRecordFieldAnnotationsSymbolPoolRoundtrip(t *testing.T) {
 		model.Name(org),
 		[]model.Name{model.Name(packageRoot)},
 		publicSymbols,
+		moduleVisibility,
 		org,
+		packageRoot,
 	)
 	deserializedPkgs = append(deserializedPkgs, mainBIR)
 
@@ -1330,7 +1377,8 @@ func compileSingleFileModule(
 	orgName model.Name,
 	nameComps []model.Name,
 	publicSymbols map[semantics.PackageIdentifier]model.ExportedSymbolSpace,
-	defaultOrg string,
+	moduleVisibility map[semantics.PackageIdentifier]semantics.ModuleVisibility,
+	defaultOrg, currentPackageName string,
 ) (model.ExportedSymbolSpace, *bir.BIRPackage) {
 	t.Helper()
 	absPath, err := filepath.Abs(balPath)
@@ -1363,7 +1411,9 @@ func compileSingleFileModule(
 		compilationUnits,
 		langlibs.ImplicitImports,
 		langlibs.PublicSymbols,
+		moduleVisibility,
 		defaultOrg,
+		currentPackageName,
 	)
 	assertNoDiagnostics(t, cx, "ResolveSymbols")
 	pkg := nodebuilder.ToPackageFromCompilationUnits(cx, compilationUnits)
