@@ -49,29 +49,48 @@ func (b *benchmark) run() error {
 		return err
 	}
 
+	pruneWorktrees()
+
 	target, err := resolveTarget(b.target)
 	if err != nil {
 		return fmt.Errorf("failed to resolve benchmark target: %w", err)
 	}
 
-	workRoot, err := os.MkdirTemp("", "bal-bench-*")
+	// Declared up front so cleanup tears down whatever exists at the time it
+	// fires, whether that is the deferred path or an interrupt.
+	var workRoot, baseWorktree, headWorktree, exportDir string
+	cleanup := func() {
+		if headWorktree != "" {
+			b.removeWorktree(headWorktree)
+		}
+		if baseWorktree != "" {
+			b.removeWorktree(baseWorktree)
+		}
+		if workRoot != "" {
+			_ = os.RemoveAll(workRoot)
+		}
+		if exportDir != "" {
+			_ = os.RemoveAll(exportDir)
+		}
+	}
+	defer cleanup()
+	defer onInterrupt(cleanup)()
+
+	workRoot, err = os.MkdirTemp("", "bal-bench-*")
 	if err != nil {
 		return fmt.Errorf("failed to create temporary directory: %w", err)
 	}
-	defer func() { _ = os.RemoveAll(workRoot) }()
 	b.workRoot = workRoot
 
-	baseWorktree, err := b.checkoutWorktree(b.baseRef)
+	baseWorktree, err = b.checkoutWorktree(b.baseRef)
 	if err != nil {
 		return err
 	}
-	defer b.removeWorktree(baseWorktree)
 
-	headWorktree, err := b.checkoutWorktree(b.headRef)
+	headWorktree, err = b.checkoutWorktree(b.headRef)
 	if err != nil {
 		return err
 	}
-	defer b.removeWorktree(headWorktree)
 
 	interpreterBin := builtInterpreterBinaryName()
 	fmt.Printf("Building interpreter for %s...\n", b.baseRef)
@@ -83,11 +102,10 @@ func (b *benchmark) run() error {
 		return err
 	}
 
-	exportDir, err := os.MkdirTemp("", "bal-bench-exports-*")
+	exportDir, err = os.MkdirTemp("", "bal-bench-exports-*")
 	if err != nil {
 		return fmt.Errorf("failed to create temporary directory for exports: %w", err)
 	}
-	defer func() { _ = os.RemoveAll(exportDir) }()
 
 	results, err := b.runBenchmarks(baseWorktree, headWorktree, target, interpreterBin, exportDir)
 	if err != nil {
@@ -143,12 +161,24 @@ func (b *benchmark) checkoutWorktree(ref string) (string, error) {
 	return path, nil
 }
 
+// removeWorktree unregisters the worktree at path. --force is passed twice:
+// git writes a "locked" marker for the duration of `worktree add`, and an
+// interrupted add leaves one behind that a single --force refuses to remove.
 func (b *benchmark) removeWorktree(path string) {
-	_ = runCmdSilent(".", "git", "worktree", "remove", "--force", path)
+	_ = runCmdSilent(".", "git", "worktree", "remove", "--force", "--force", path)
+}
+
+// pruneWorktrees drops registrations whose directories were removed behind
+// git's back, e.g. by the OS reaping the temporary directory.
+func pruneWorktrees() {
+	_ = runCmdSilent(".", "git", "worktree", "prune")
 }
 
 func (b *benchmark) buildInterpreter(worktreePath, ref, output string) error {
-	if err := runCmd(worktreePath, "go", "build", "-o", output, "./cli/cmd"); err != nil {
+	// -trimpath keeps the build cache shareable across checkouts: without it the
+	// compiler keys every package by its absolute source path, so each temporary
+	// worktree seeds its own unshareable slice of GOCACHE.
+	if err := runCmd(worktreePath, "go", "build", "-trimpath", "-o", output, "./cli/cmd"); err != nil {
 		return fmt.Errorf("failed to build interpreter for ref %q: %w", ref, err)
 	}
 	return nil

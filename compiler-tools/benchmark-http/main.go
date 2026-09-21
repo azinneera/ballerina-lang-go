@@ -90,32 +90,50 @@ func parseConfig(args []string) (config, error) {
 }
 
 func run(cfg config) error {
+	pruneWorktrees()
+
+	// Declared up front so cleanup tears down whatever exists at the time it
+	// fires, whether that is the deferred path or an interrupt.
+	var workRoot, helloDir, baseWT, headWT string
+	cleanup := func() {
+		if headWT != "" {
+			removeWorktree(headWT)
+		}
+		if baseWT != "" {
+			removeWorktree(baseWT)
+		}
+		if workRoot != "" {
+			_ = os.RemoveAll(workRoot)
+		}
+		if helloDir != "" {
+			_ = os.RemoveAll(helloDir)
+		}
+	}
+	defer cleanup()
+	defer onInterrupt(cleanup)()
+
 	workRoot, err := os.MkdirTemp("", "httpbench-work-*")
 	if err != nil {
 		return err
 	}
-	defer func() { _ = os.RemoveAll(workRoot) }()
 
-	helloDir, err := os.MkdirTemp("", "httpbench-hello-*")
+	helloDir, err = os.MkdirTemp("", "httpbench-hello-*")
 	if err != nil {
 		return err
 	}
-	defer func() { _ = os.RemoveAll(helloDir) }()
 	helloFile := filepath.Join(helloDir, "hello.bal")
 	if err := os.WriteFile(helloFile, helloSource, 0o644); err != nil {
 		return err
 	}
 
-	baseWT, err := checkoutWorktree(workRoot, "base", cfg.baseRef)
+	baseWT, err = checkoutWorktree(workRoot, "base", cfg.baseRef)
 	if err != nil {
 		return err
 	}
-	defer removeWorktree(baseWT)
-	headWT, err := checkoutWorktree(workRoot, "head", cfg.headRef)
+	headWT, err = checkoutWorktree(workRoot, "head", cfg.headRef)
 	if err != nil {
 		return err
 	}
-	defer removeWorktree(headWT)
 
 	fmt.Fprintf(os.Stderr, "Building bal for %s...\n", cfg.baseRef)
 	baseBal, err := buildInterpreter(baseWT)
