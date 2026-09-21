@@ -89,9 +89,6 @@ func writeTypeName(b *strings.Builder, typeName string) {
 }
 
 func writeDetail(b *strings.Builder, detail *Map, visited map[uintptr]bool, format func(BalValue, map[uintptr]bool) string) {
-	if detail == nil {
-		return
-	}
 	for entry := detail.head; entry != nil; entry = entry.next {
 		b.WriteByte(',')
 		b.WriteString(balDetailKey(entry.key))

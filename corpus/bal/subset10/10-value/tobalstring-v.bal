@@ -21,6 +21,18 @@ type Address record {|
     string country;
 |};
 
+class Counter {
+    int n = 0;
+    public isolated function next() returns record {|int value;|}|error? {
+        int current = self.n;
+        if current >= 3 {
+            return ();
+        }
+        self.n = current + 1;
+        return {value: current};
+    }
+}
+
 public function main() {
     int i = 12;
     io:println(i.toBalString()); // @output 12
@@ -101,6 +113,12 @@ public function main() {
     (any|error)[] keyWrapper = [e3];
     io:println(keyWrapper.toBalString()); // @output [error("boom",'a\\\-b=5)]
 
+    // a quoted identifier key that starts with a digit fails on the first
+    // rune, a distinct case from 'a\-b above (which fails past the first).
+    error e4 = error("boom", '1abc = 5);
+    (any|error)[] digitKeyWrapper = [e4];
+    io:println(digitKeyWrapper.toBalString()); // @output [error("boom",'1abc=5)]
+
     // cloneWithType failures carry a distinct error type name, which renders
     // as "error TypeName (...)" rather than the bare "error(...)".
     anydata badVal = "abc";
@@ -128,4 +146,38 @@ public function main() {
     map<anydata> selfMap = {};
     selfMap["self"] = selfMap;
     io:println(selfMap.toBalString()); // @output {"self":{...}}
+
+    // function/object/stream/typedesc/xml have no expression-style form of
+    // their own, so they fall back to the informal renderer.
+    function (int) returns int fn = x => x + 1;
+    any fnVal = fn;
+    io:println(fnVal.toBalString()); // @output function $anon/tobalstring-v:$anonFunc$_0
+
+    Counter counter = new Counter();
+    any objVal = counter;
+    io:println(objVal.toBalString()); // @output object
+
+    var strm = new stream<int, error?>(new Counter());
+    any streamVal = strm;
+    io:println(streamVal.toBalString()); // @output stream
+
+    typedesc<anydata> td = int;
+    any typedescVal = td;
+    io:println(typedescVal.toBalString()); // @output typedesc
+
+    xml xmlVal = xml `<a>hi</a>`;
+    any xmlAny = xmlVal;
+    io:println(xmlAny.toBalString()); // @output <a>hi</a>
+
+    // future has no case at all (unlike the fallbacks above), so it reaches
+    // BalString's default arm.
+    future<int> fut = start compute();
+    any futVal = fut;
+    io:println(futVal.toBalString()); // @output <unsupported>
+    int|error result = wait fut;
+    io:println(result is int); // @output true
+}
+
+function compute() returns int {
+    return 42;
 }

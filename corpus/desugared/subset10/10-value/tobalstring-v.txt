@@ -8,6 +8,51 @@
         (value-type string))
       (field country
         (value-type string))))
+  (class-definition Counter
+    (variable n (type
+      (value-type int)))
+    (function init () ()
+      (block-function-body
+        (assignment
+          (index-based-access
+            (simple-var-ref self)
+            (literal n))
+          (literal 0))))
+    (function next () (
+      (union-type
+        (record-type
+          (field value
+            (value-type int)))
+        (union-type
+          (error-type)
+          (value-type null))))
+      (block-function-body
+        (var-def
+          (variable current (type
+            (value-type int)) (expr
+            (index-based-access
+              (simple-var-ref self)
+              (literal n)))))
+        (if
+          (binary-expr >=
+            (simple-var-ref current)
+            (literal 3))
+          (block-stmt
+            (return
+              (literal <nil>))) ())
+        (block-stmt
+          (assignment
+            (index-based-access
+              (simple-var-ref self)
+              (literal n))
+            (binary-expr +
+              (simple-var-ref current)
+              (literal 1)))
+          (return
+            (mapping-constructor-expr
+              (key-value
+                (literal value)
+                (simple-var-ref current))))))))
   (function main () (
     (value-type null))
     (block-function-body
@@ -279,6 +324,25 @@ cd))))
           (invocation lang.value toBalString (
             (simple-var-ref keyWrapper))))))
       (var-def
+        (variable e4 (type
+          (error-type)) (expr
+          (error-constructor-expr (
+            (literal boom)) (
+            (named-arg 1abc
+              (literal 5)))))))
+      (var-def
+        (variable digitKeyWrapper (type
+          (array-type
+            (union-type
+              (value-type any)
+              (error-type)) dimensions: 1 ([]))) (expr
+          (list-constructor-expr
+            (simple-var-ref e4)))))
+      (expression-stmt
+        (invocation io println (
+          (invocation lang.value toBalString (
+            (simple-var-ref digitKeyWrapper))))))
+      (var-def
         (variable badVal (type
           (value-type anydata)) (expr
           (literal abc))))
@@ -393,4 +457,115 @@ cd))))
       (expression-stmt
         (invocation io println (
           (invocation lang.value toBalString (
-            (simple-var-ref selfMap)))))))))
+            (simple-var-ref selfMap))))))
+      (var-def
+        (variable fn (type
+          (function-type (
+            (value-type int)) (
+            (value-type int)))) (expr
+          (lambda
+            (function $anonFunc$_0 (
+              (variable x)) ()
+              (expr-function-body
+                (binary-expr +
+                  (simple-var-ref x)
+                  (literal 1))))))))
+      (var-def
+        (variable fnVal (type
+          (value-type any)) (expr
+          (simple-var-ref fn))))
+      (expression-stmt
+        (invocation io println (
+          (invocation lang.value toBalString (
+            (simple-var-ref fnVal))))))
+      (var-def
+        (variable counter (type
+          (user-defined-type Counter)) (expr
+          (new
+            (user-defined-type Counter) ()))))
+      (var-def
+        (variable objVal (type
+          (value-type any)) (expr
+          (simple-var-ref counter))))
+      (expression-stmt
+        (invocation io println (
+          (invocation lang.value toBalString (
+            (simple-var-ref objVal))))))
+      (var-def
+        (variable strm (expr
+          (new
+            (stream-type
+              (value-type int)
+              (union-type
+                (error-type)
+                (value-type null))) (
+            (new
+              (user-defined-type Counter) ()))))))
+      (var-def
+        (variable streamVal (type
+          (value-type any)) (expr
+          (simple-var-ref strm))))
+      (expression-stmt
+        (invocation io println (
+          (invocation lang.value toBalString (
+            (simple-var-ref streamVal))))))
+      (var-def
+        (variable td (type
+          (constrained-type
+            (value-type typedesc)
+            (value-type anydata))) (expr
+          (typedesc-expr
+            (value-type int)))))
+      (var-def
+        (variable typedescVal (type
+          (value-type any)) (expr
+          (simple-var-ref td))))
+      (expression-stmt
+        (invocation io println (
+          (invocation lang.value toBalString (
+            (simple-var-ref typedescVal))))))
+      (var-def
+        (variable xmlVal (type
+          (value-type xml)) (expr
+          (xml-element-literal a
+            (xml-text-literal hi)))))
+      (var-def
+        (variable xmlAny (type
+          (value-type any)) (expr
+          (simple-var-ref xmlVal))))
+      (expression-stmt
+        (invocation io println (
+          (invocation lang.value toBalString (
+            (simple-var-ref xmlAny))))))
+      (var-def
+        (variable fut (type
+          (constrained-type
+            (builtin-ref-type future)
+            (value-type int))) (expr
+          (start-action
+            (invocation compute ())))))
+      (var-def
+        (variable futVal (type
+          (value-type any)) (expr
+          (simple-var-ref fut))))
+      (expression-stmt
+        (invocation io println (
+          (invocation lang.value toBalString (
+            (simple-var-ref futVal))))))
+      (var-def
+        (variable result (type
+          (union-type
+            (value-type int)
+            (error-type))) (expr
+          (single-wait-action
+            (simple-var-ref fut)))))
+      (expression-stmt
+        (invocation io println (
+          (type-test-expr is
+            (simple-var-ref result)
+            (value-type int)))))))
+  (function compute () (
+    (value-type int))
+    (block-function-body
+      (return
+        (literal 42)))))
