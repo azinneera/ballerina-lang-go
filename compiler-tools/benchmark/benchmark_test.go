@@ -646,6 +646,9 @@ func newBareWorktree(t *testing.T, name string) string {
 	return path
 }
 
+// TestRemoveWorktreeRemovesLockedWorktree covers the interrupted-`worktree
+// add` case: git leaves a "locked" marker behind, which a single --force
+// refuses to remove and `git worktree prune` skips entirely.
 func TestRemoveWorktreeRemovesLockedWorktree(t *testing.T) {
 	var b benchmark
 	wt := newBareWorktree(t, "locked")

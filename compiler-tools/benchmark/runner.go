@@ -56,41 +56,30 @@ func (b *benchmark) run() error {
 		return fmt.Errorf("failed to resolve benchmark target: %w", err)
 	}
 
-	// Declared up front so cleanup tears down whatever exists at the time it
-	// fires, whether that is the deferred path or an interrupt.
-	var workRoot, baseWorktree, headWorktree, exportDir string
-	cleanup := func() {
-		if headWorktree != "" {
-			b.removeWorktree(headWorktree)
-		}
-		if baseWorktree != "" {
-			b.removeWorktree(baseWorktree)
-		}
-		if workRoot != "" {
-			_ = os.RemoveAll(workRoot)
-		}
-		if exportDir != "" {
-			_ = os.RemoveAll(exportDir)
-		}
-	}
-	defer cleanup()
-	defer onInterrupt(cleanup)()
+	// Each resource registers its teardown as it is created, so an interrupt
+	// tears down exactly what exists at that moment.
+	var c cleanups
+	defer c.run()
+	defer onInterrupt(c.run)()
 
-	workRoot, err = os.MkdirTemp("", "bal-bench-*")
+	workRoot, err := os.MkdirTemp("", "bal-bench-*")
 	if err != nil {
 		return fmt.Errorf("failed to create temporary directory: %w", err)
 	}
+	c.add(func() { _ = os.RemoveAll(workRoot) })
 	b.workRoot = workRoot
 
-	baseWorktree, err = b.checkoutWorktree(b.baseRef)
+	baseWorktree, err := b.checkoutWorktree(b.baseRef)
 	if err != nil {
 		return err
 	}
+	c.add(func() { b.removeWorktree(baseWorktree) })
 
-	headWorktree, err = b.checkoutWorktree(b.headRef)
+	headWorktree, err := b.checkoutWorktree(b.headRef)
 	if err != nil {
 		return err
 	}
+	c.add(func() { b.removeWorktree(headWorktree) })
 
 	interpreterBin := builtInterpreterBinaryName()
 	fmt.Printf("Building interpreter for %s...\n", b.baseRef)
@@ -102,10 +91,11 @@ func (b *benchmark) run() error {
 		return err
 	}
 
-	exportDir, err = os.MkdirTemp("", "bal-bench-exports-*")
+	exportDir, err := os.MkdirTemp("", "bal-bench-exports-*")
 	if err != nil {
 		return fmt.Errorf("failed to create temporary directory for exports: %w", err)
 	}
+	c.add(func() { _ = os.RemoveAll(exportDir) })
 
 	results, err := b.runBenchmarks(baseWorktree, headWorktree, target, interpreterBin, exportDir)
 	if err != nil {

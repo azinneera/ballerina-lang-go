@@ -196,10 +196,6 @@ func TestCheckoutAndRemoveWorktree(t *testing.T) {
 	}
 }
 
-// TestRemoveWorktreeRemovesLockedWorktree covers the interrupted-`worktree
-// add` case: git leaves a "locked" marker behind, which a single --force
-// refuses to remove and `git worktree prune` skips entirely. Not parallel —
-// see TestCheckoutAndRemoveWorktree.
 // newBareWorktree registers a worktree without materializing the checkout.
 // The removal and prune paths act on the registration, not the files, so the
 // tests that exercise them do not need a 17k-file copy of the repo.
@@ -213,6 +209,10 @@ func newBareWorktree(t *testing.T, name string) string {
 	return path
 }
 
+// TestRemoveWorktreeRemovesLockedWorktree covers the interrupted-`worktree
+// add` case: git leaves a "locked" marker behind, which a single --force
+// refuses to remove and `git worktree prune` skips entirely. Not parallel —
+// see TestCheckoutAndRemoveWorktree.
 func TestRemoveWorktreeRemovesLockedWorktree(t *testing.T) {
 	wt := newBareWorktree(t, "locked")
 	// Torn down with raw git so a regression in removeWorktree fails the test
@@ -458,7 +458,7 @@ func TestMeasureOnceFailsFastWhenPortBusy(t *testing.T) {
 	}
 	defer func() { _ = ln.Close() }()
 
-	_, err = measureOnce("irrelevant-binary", "irrelevant.bal", config{warmup: "1s", duration: "1s", conns: 1})
+	_, err = measureOnce("irrelevant-binary", "irrelevant.bal", config{warmup: "1s", duration: "1s", conns: 1}, &cleanups{})
 	if err == nil {
 		t.Fatal("expected an error when the service port is already in use")
 	}
@@ -477,7 +477,7 @@ func TestMeasureOnceProducesSample(t *testing.T) {
 	}
 
 	cfg := config{warmup: "1s", duration: "1s", conns: 4}
-	s, err := measureOnce(bal, helloFile, cfg)
+	s, err := measureOnce(bal, helloFile, cfg, &cleanups{})
 	if err != nil {
 		t.Fatalf("measureOnce: %v", err)
 	}
