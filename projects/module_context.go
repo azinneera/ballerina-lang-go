@@ -481,18 +481,27 @@ func buildCompilationUnits(cx *context.CompilerContext, syntaxTrees []*st.Syntax
 		}
 	}
 
-	compilationUnits := make([]*ast.BLangCompilationUnit, 0, len(syntaxTrees))
-	for _, st := range syntaxTrees {
-		var cu *ast.BLangCompilationUnit
-		if dumpRecoveredAST {
-			cu = nodebuilder.GetRecoveredCompilationUnit(cx, st)
-		} else {
-			cu = nodebuilder.GetCompilationUnit(cx, st)
-		}
-		if dumpAST {
+	// Each goroutine writes only to its own slice slot, so no lock is needed
+	// here; order is preserved by index rather than append order.
+	compilationUnits := make([]*ast.BLangCompilationUnit, len(syntaxTrees))
+	var wg sync.WaitGroup
+	for i, tree := range syntaxTrees {
+		wg.Add(1)
+		go func(i int, tree *st.SyntaxTree) {
+			defer wg.Done()
+			if dumpRecoveredAST {
+				compilationUnits[i] = nodebuilder.GetRecoveredCompilationUnit(cx, tree)
+			} else {
+				compilationUnits[i] = nodebuilder.GetCompilationUnit(cx, tree)
+			}
+		}(i, tree)
+	}
+	wg.Wait()
+
+	if dumpAST {
+		for _, cu := range compilationUnits {
 			fmt.Fprintln(os.Stderr, prettyPrinter.Print(cu))
 		}
-		compilationUnits = append(compilationUnits, cu)
 	}
 	return compilationUnits
 }
