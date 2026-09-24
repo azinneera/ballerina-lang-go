@@ -25,8 +25,7 @@ import (
 // semantic analysis (in particular lock validation and isolated-field
 // checks) needs when walking method bodies. Classes carry a className
 // derived from the user-supplied name; services have no name and instead
-// carry their source position, a deterministic per-service disambiguator
-// for field lock keys.
+// carry their source position as a deterministic disambiguator for field lock keys.
 type enclosingClassBody struct {
 	// name is the user-supplied class name for class bodies, empty for
 	// service bodies (services have no name).
