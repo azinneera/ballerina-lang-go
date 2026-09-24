@@ -97,10 +97,9 @@ func (cfg *PackageCFG) allFunctionCfgs(yield func(model.SymbolRef, *functionCFG)
 	}
 }
 
-// cfgTask is one function/method whose CFG can be built independently of all
-// others. classRef is the zero SymbolRef for top-level functions and service
-// methods (which land in cfg.funcCfgs), or the owning class's symbol for
-// class methods (which land in cfg.methodCfgs[classRef]).
+// cfgTask is one function/method whose CFG builds independently of all others.
+// classRef is the zero SymbolRef for functions/service methods (cfg.funcCfgs),
+// or the owning class's symbol for class methods (cfg.methodCfgs[classRef]).
 type cfgTask struct {
 	ref      model.SymbolRef
 	body     ast.FunctionBodyNode

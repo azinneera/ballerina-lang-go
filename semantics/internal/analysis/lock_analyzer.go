@@ -133,9 +133,7 @@ func classFieldLockKey(pkg model.PackageIdentifier, className, fieldName string)
 }
 
 // classBodyFieldLockKey returns a per-field lock key for either a class or a
-// service. For classes it uses the class's module-level name; for services
-// (which have no name) it uses the service's source position — deterministic
-// across runs, since this key is embedded verbatim in generated BIR.
+// service. Services have no name, so it falls back to the source position.
 func classBodyFieldLockKey(pkg model.PackageIdentifier, cls *enclosingClassBody, fieldName string) string {
 	if cls.name != "" {
 		return classFieldLockKey(pkg, cls.name, fieldName)
@@ -169,23 +167,8 @@ func resolveRestricted(a analyzer, lock *ast.BLangLock) bool {
 		return true
 	}
 	key, sym, ok := findRestrictedVariable(a, &lock.Body)
-	if ok && key == "" {
-		// No restricted variable referenced — e.g. a lock guarding only calls to
-		// isolated functions. BIR-gen still needs a non-empty key to bracket the
-		// lock, and different such locks must not collide on the same key (or
-		// they'd serialize against each other for no reason). The lock's own
-		// source position is deterministic across runs (this key is embedded
-		// verbatim in generated BIR) and unique per lock statement.
-		key = lockOnlyKey(lock)
-	}
 	lock.LockKey, lock.RestrictedSymbol = key, sym
 	return ok
-}
-
-// lockOnlyKey returns a unique key for a lock statement that guards no
-// restricted variable.
-func lockOnlyKey(lock *ast.BLangLock) string {
-	return "$lock." + lock.GetPosition().String()
 }
 
 // validateLockInvocations enforces all invocations within lock statement must be to isolated functions.
