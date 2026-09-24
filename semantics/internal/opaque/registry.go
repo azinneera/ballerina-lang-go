@@ -96,6 +96,10 @@ func buildFunctionDefinitions() map[packageKey][]*FunctionDefinition {
 						semanticError("expect first argument to be a subtype of (any|error)[]", pos)
 						return model.SymbolRef{}, false
 					}
+					if atomic := semtypes.ToListAtomicType(ctx.typeEnv(), containerTy); atomic != nil && semtypes.IsNever(atomic.Rest()) {
+						semanticError("cannot push to a fixed-length list", pos)
+						return model.SymbolRef{}, false
+					}
 					ref, ok := materialize(model.TypedFunctionSignature{
 						ParamTypes:    []semtypes.SemType{containerTy},
 						RestParamType: semtypes.ListProj(cx, containerTy, semtypes.Int),
