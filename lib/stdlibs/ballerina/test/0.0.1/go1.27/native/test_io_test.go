@@ -41,6 +41,9 @@ func TestMatchWildcard(t *testing.T) {
 		{"testFooBar", "test*Bar", true},
 		{"testFoo", "other*", false},
 		{"testFoo(int)", "testFoo*", true}, // regex metachars in the name must not be interpreted
+		{"testXFoo", "test.Foo", false},    // "." in the pattern is literal, not "any character"
+		{"test.Foo", "test.Foo", true},     // literal "." in the pattern still matches itself
+		{"testFoo", `test\`, false},        // a trailing "\" in the pattern must not break compilation
 	}
 	for _, c := range cases {
 		got, err := matchWildcard(nil, []values.BalValue{c.name, c.pattern})

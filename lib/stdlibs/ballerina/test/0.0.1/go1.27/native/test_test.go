@@ -17,7 +17,11 @@
 package native
 
 import (
+	"fmt"
+	"strings"
 	"testing"
+	"time"
+	"unicode/utf8"
 
 	"github.com/ballerina-nutcracker/ballerina/values"
 )
@@ -113,6 +117,94 @@ func TestKeysNotIn(t *testing.T) {
 				}
 			}
 		})
+	}
+}
+
+// TestChunkByLength guards against byte-based (rather than rune-based)
+// chunking splitting a multi-byte character in half. Every character in the
+// fixture is 3 bytes, so a byte-offset chunk boundary at length 80 is
+// guaranteed to land mid-character; a rune-based boundary never does.
+func TestChunkByLength(t *testing.T) {
+	s := strings.Repeat("あ", 90)
+	chunks := chunkByLength(s, 80)
+	if len(chunks) != 2 {
+		t.Fatalf("chunkByLength returned %d chunks, want 2: %v", len(chunks), chunks)
+	}
+	for i, c := range chunks {
+		if !utf8.ValidString(c) {
+			t.Errorf("chunk %d is not valid UTF-8: %q", i, c)
+		}
+	}
+	if got := strings.Join(chunks, ""); got != s {
+		t.Errorf("chunks don't reconstruct the original string: got len %d, want len %d", len(got), len(s))
+	}
+	if got := utf8.RuneCountInString(chunks[0]); got != 80 {
+		t.Errorf("first chunk has %d runes, want 80", got)
+	}
+}
+
+// TestDiffLines checks ordinary diffs still get a proper LCS-based edit
+// script (not just linear removals/additions) once prefix/suffix stripping
+// is in play.
+func TestDiffLines(t *testing.T) {
+	a := []string{"same1", "removed", "same2"}
+	b := []string{"same1", "added", "same2"}
+	got := diffLines(a, b)
+	want := []diffOp{
+		{' ', "same1"},
+		{'-', "removed"},
+		{'+', "added"},
+		{' ', "same2"},
+	}
+	if len(got) != len(want) {
+		t.Fatalf("diffLines(%v, %v) = %v, want %v", a, b, got, want)
+	}
+	for i := range want {
+		if got[i] != want[i] {
+			t.Errorf("op %d: got %+v, want %+v", i, got[i], want[i])
+		}
+	}
+}
+
+// TestDiffLinesLargeInputFallsBackToLinear guards against the O(n*m)
+// dynamic-programming table diffLines builds: for two large inputs, that
+// table alone can reach the gigabyte range. Past maxDiffCells, diffLines
+// must skip the table entirely rather than just take longer to fill it — so
+// this plants one genuinely shared line in the middle of otherwise-disjoint
+// input (large enough to exceed maxDiffCells) and asserts it does NOT show
+// up as a context match. A real LCS pass (the unbounded old behavior) would
+// find it; only skipping the table entirely loses it. A pure timing-based
+// check can't tell these apart — fully disjoint content produces the exact
+// same output shape either way, since there's no shared line to miss.
+func TestDiffLinesLargeInputFallsBackToLinear(t *testing.T) {
+	const n = 2001 // n*n > maxDiffCells (4,000,000)
+	mid := n / 2
+	a := make([]string, n)
+	b := make([]string, n)
+	for i := range a {
+		if i == mid {
+			a[i], b[i] = "SHARED", "SHARED"
+			continue
+		}
+		a[i] = fmt.Sprintf("a-line-%d", i)
+		b[i] = fmt.Sprintf("b-line-%d", i)
+	}
+
+	done := make(chan []diffOp, 1)
+	go func() { done <- diffLines(a, b) }()
+	select {
+	case got := <-done:
+		if len(got) != 2*n {
+			t.Fatalf("diffLines returned %d ops, want %d (linear fallback: every line removed+added)", len(got), 2*n)
+		}
+		for _, op := range got {
+			if op.kind == ' ' {
+				t.Fatalf("found a context match (%+v) in a large-input diff — the O(n*m) LCS table"+
+					" should have been skipped entirely, not just computed slowly", op)
+			}
+		}
+	case <-time.After(10 * time.Second):
+		t.Fatal("diffLines did not return within 10s — likely still building the full O(n*m) table")
 	}
 }
 

@@ -31,9 +31,6 @@ import (
 	"github.com/ballerina-nutcracker/ballerina/values"
 )
 
-// regexSpecialChars mirrors jballerina's StringUtils#REGEX_SPECIAL_CHARACTERS.
-var regexSpecialChars = []string{"{", "}", "[", "]", "(", ")", "+", "^", "|"}
-
 // bracketChars/specialChars mirror StringUtils#BRACKET_CHARACTERS/SPECIAL_CHARACTERS.
 var bracketChars = []string{"{", "}", "[", "]", "(", ")"}
 var specialChars = []string{",", `\n`, `\r`, `\t`, "\n", "\r", "\t", `"`, `\`, "!", "`"}
@@ -117,15 +114,18 @@ func matchWildcard(_ *extern.Context, args []values.BalValue) (values.BalValue, 
 // --tests wildcard matching, computed in Go ahead of registration, instead
 // of duplicating it.
 func MatchWildcard(name, pattern string) (bool, error) {
-	encodedName := encodeChars(name, regexSpecialChars)
-	encodedPattern := encodeChars(pattern, regexSpecialChars)
-	goPattern := strings.ReplaceAll(encodedPattern, "*", ".*")
+	segments := strings.Split(pattern, "*")
+	quoted := make([]string, len(segments))
+	for i, seg := range segments {
+		quoted[i] = regexp.QuoteMeta(seg)
+	}
+	goPattern := strings.Join(quoted, ".*")
 
 	re, err := regexp.Compile("^(?:" + goPattern + ")$")
 	if err != nil {
 		return false, err
 	}
-	return re.MatchString(encodedName), nil
+	return re.MatchString(name), nil
 }
 
 // isSystemConsole approximates jballerina's System.console() != null check via a TTY test.

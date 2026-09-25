@@ -301,13 +301,13 @@ isolated function getFormattedString(string str) returns string {
         // If the calculated substring index is less than string length
         if (i + 1) * maxArgLength < str.length() {
             // Formulate the substring
-            string subString = byteSubstring(str, (i * maxArgLength), ((i + 1) * maxArgLength));
+            string subString = str.substring(i * maxArgLength, (i + 1) * maxArgLength);
             // Append substring with newline
             formattedString += subString + "\n";
         } else {
             // If the calculated substring is equal to or greater than the string length
             // Modify the substring to include only the string length
-            string subString = byteSubstring(str, (i * maxArgLength), str.length());
+            string subString = str.substring(i * maxArgLength, str.length());
             formattedString += subString;
         }
     }

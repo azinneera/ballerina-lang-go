@@ -130,19 +130,45 @@ func chunkLines(s string) []string {
 }
 
 func chunkByLength(s string, n int) []string {
-	if len(s) <= n {
+	runes := []rune(s)
+	if len(runes) <= n {
 		return []string{s}
 	}
-	out := make([]string, 0, len(s)/n+1)
-	for i := 0; i < len(s); i += n {
-		end := min(i+n, len(s))
-		out = append(out, s[i:end])
+	out := make([]string, 0, len(runes)/n+1)
+	for i := 0; i < len(runes); i += n {
+		end := min(i+n, len(runes))
+		out = append(out, string(runes[i:end]))
 	}
 	return out
 }
 
-// diffLines computes a line-level diff via LCS dynamic programming.
+// diffLines computes a line-level diff via LCS dynamic programming. Matching
+// prefix/suffix lines are stripped first, and the remaining inputs fall back
+// to a linear listing (no dynamic-programming table at all) once their
+// product exceeds maxDiffCells — a large failed string assertion (mostly
+// different content) can otherwise drive the O(n*m) table itself into the
+// gigabyte range and exhaust the process.
+const maxDiffCells = 4_000_000
+
 func diffLines(a, b []string) []diffOp {
+	var prefix []diffOp
+	for len(a) > 0 && len(b) > 0 && a[0] == b[0] {
+		prefix = append(prefix, diffOp{' ', a[0]})
+		a, b = a[1:], b[1:]
+	}
+	var suffix []diffOp
+	for len(a) > 0 && len(b) > 0 && a[len(a)-1] == b[len(b)-1] {
+		suffix = append(suffix, diffOp{' ', a[len(a)-1]})
+		a, b = a[:len(a)-1], b[:len(b)-1]
+	}
+	for i, j := 0, len(suffix)-1; i < j; i, j = i+1, j-1 {
+		suffix[i], suffix[j] = suffix[j], suffix[i]
+	}
+
+	if len(a) > 0 && len(b) > maxDiffCells/len(a) {
+		return append(append(prefix, linearDiff(a, b)...), suffix...)
+	}
+
 	n, m := len(a), len(b)
 	dp := make([][]int, n+1)
 	for i := range dp {
@@ -182,6 +208,20 @@ func diffLines(a, b []string) []diffOp {
 	}
 	for ; j < m; j++ {
 		ops = append(ops, diffOp{'+', b[j]})
+	}
+	return append(append(prefix, ops...), suffix...)
+}
+
+// linearDiff renders every line of a as removed and every line of b as added,
+// with no attempt at finding a shorter edit script — used only once the
+// inputs are too large for diffLines' O(n*m) table to be safe.
+func linearDiff(a, b []string) []diffOp {
+	ops := make([]diffOp, 0, len(a)+len(b))
+	for _, line := range a {
+		ops = append(ops, diffOp{'-', line})
+	}
+	for _, line := range b {
+		ops = append(ops, diffOp{'+', line})
 	}
 	return ops
 }

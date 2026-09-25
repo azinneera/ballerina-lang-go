@@ -41,15 +41,19 @@ function hasTest(string name) returns boolean {
         return true;
     }
     int? testIndex = testOptions.getFilterTestIndex(name);
-    if testIndex == () {
-        foreach string filter in testOptions.getFilterTests() {
-            if includesStr(filter, WILDCARD) {
-                return matchWildcard(name, filter) == true && matchModuleName(filter);
-            }
-        }
-        return false;
+    if testIndex != () && matchModuleName(name) {
+        return true;
     }
-    return matchModuleName(name);
+    // An exact filter entry that names a *different* module must not shadow
+    // a wildcard filter that would otherwise match this module — e.g.
+    // --tests pkg.sub:foo,pkg:* running module pkg should still select foo
+    // via the wildcard, even though the exact entry for foo targets pkg.sub.
+    foreach string filter in testOptions.getFilterTests() {
+        if includesStr(filter, WILDCARD) && matchWildcard(name, filter) == true && matchModuleName(filter) {
+            return true;
+        }
+    }
+    return false;
 }
 
 function matchModuleName(string testName) returns boolean {
@@ -109,7 +113,7 @@ function filterKeyBasedTests(string packageName, string moduleName, string[] tes
             int separatorIndex = <int>indexOfStr(updatedName, DATA_KEY_SEPARATOR);
             string suffix = byteSubstring(updatedName, separatorIndex + 1, updatedName.toBytes().length());
             string testPart = byteSubstring(updatedName, 0, separatorIndex);
-            if testOptions.isFilterSubTestsContains(updatedName) {
+            if testOptions.isFilterSubTestsContains(testPart) {
                 string[] subTestList = testOptions.getFilterSubTest(testPart);
                 subTestList.push(suffix);
                 testOptions.addFilterSubTest(testPart, subTestList);
