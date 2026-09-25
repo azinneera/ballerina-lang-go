@@ -205,12 +205,13 @@ func (rt *Runtime) Listen() {
 // of blocking on <-rt.ExitStatus.
 func (rt *Runtime) RequestGracefulStop() {
 	rt.mu.Lock()
-	listening := rt.state == StateListening
-	rt.mu.Unlock()
-	if !listening {
+	if rt.state != StateListening {
+		rt.mu.Unlock()
 		return
 	}
-	rt.transition(StateGracefulStopping)
+	rt.state = StateGracefulStopping
+	rt.mu.Unlock()
+	gracefulStopAction(rt)
 }
 
 // RegisterModuleInitializer registers a module initializer that will be invoked

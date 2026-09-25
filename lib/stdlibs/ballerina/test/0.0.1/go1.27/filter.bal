@@ -43,8 +43,8 @@ function hasTest(string name) returns boolean {
     int? testIndex = testOptions.getFilterTestIndex(name);
     if testIndex == () {
         foreach string filter in testOptions.getFilterTests() {
-            if includesStr(filter, WILDCARD) {
-                return matchWildcard(name, filter) == true && matchModuleName(filter);
+            if includesStr(filter, WILDCARD) && matchWildcard(name, filter) == true && matchModuleName(filter) {
+                return true;
             }
         }
         return false;
@@ -109,7 +109,7 @@ function filterKeyBasedTests(string packageName, string moduleName, string[] tes
             int separatorIndex = <int>indexOfStr(updatedName, DATA_KEY_SEPARATOR);
             string suffix = byteSubstring(updatedName, separatorIndex + 1, updatedName.toBytes().length());
             string testPart = byteSubstring(updatedName, 0, separatorIndex);
-            if testOptions.isFilterSubTestsContains(updatedName) {
+            if testOptions.isFilterSubTestsContains(testPart) {
                 string[] subTestList = testOptions.getFilterSubTest(testPart);
                 subTestList.push(suffix);
                 testOptions.addFilterSubTest(testPart, subTestList);

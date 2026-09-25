@@ -130,13 +130,14 @@ func chunkLines(s string) []string {
 }
 
 func chunkByLength(s string, n int) []string {
-	if len(s) <= n {
+	runes := []rune(s)
+	if len(runes) <= n {
 		return []string{s}
 	}
-	out := make([]string, 0, len(s)/n+1)
-	for i := 0; i < len(s); i += n {
-		end := min(i+n, len(s))
-		out = append(out, s[i:end])
+	out := make([]string, 0, len(runes)/n+1)
+	for i := 0; i < len(runes); i += n {
+		end := min(i+n, len(runes))
+		out = append(out, string(runes[i:end]))
 	}
 	return out
 }

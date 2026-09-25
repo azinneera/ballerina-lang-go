@@ -17,7 +17,9 @@
 package native
 
 import (
+	"strings"
 	"testing"
+	"unicode/utf8"
 
 	"github.com/ballerina-nutcracker/ballerina/values"
 )
@@ -113,6 +115,29 @@ func TestKeysNotIn(t *testing.T) {
 				}
 			}
 		})
+	}
+}
+
+// TestChunkByLength guards against byte-based (rather than rune-based)
+// chunking splitting a multi-byte character in half. Every character in the
+// fixture is 3 bytes, so a byte-offset chunk boundary at length 80 is
+// guaranteed to land mid-character; a rune-based boundary never does.
+func TestChunkByLength(t *testing.T) {
+	s := strings.Repeat("あ", 90)
+	chunks := chunkByLength(s, 80)
+	if len(chunks) != 2 {
+		t.Fatalf("chunkByLength returned %d chunks, want 2: %v", len(chunks), chunks)
+	}
+	for i, c := range chunks {
+		if !utf8.ValidString(c) {
+			t.Errorf("chunk %d is not valid UTF-8: %q", i, c)
+		}
+	}
+	if got := strings.Join(chunks, ""); got != s {
+		t.Errorf("chunks don't reconstruct the original string: got len %d, want len %d", len(got), len(s))
+	}
+	if got := utf8.RuneCountInString(chunks[0]); got != 80 {
+		t.Errorf("first chunk has %d runes, want 80", got)
 	}
 }
 
