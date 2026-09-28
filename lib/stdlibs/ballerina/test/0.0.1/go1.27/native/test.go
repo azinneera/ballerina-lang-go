@@ -142,12 +142,8 @@ func chunkByLength(s string, n int) []string {
 	return out
 }
 
-// diffLines computes a line-level diff via LCS dynamic programming. Matching
-// prefix/suffix lines are stripped first, and the remaining inputs fall back
-// to a linear listing (no dynamic-programming table at all) once their
-// product exceeds maxDiffCells — a large failed string assertion (mostly
-// different content) can otherwise drive the O(n*m) table itself into the
-// gigabyte range and exhaust the process.
+// diffLines computes a line-level diff via LCS, falling back to a linear
+// listing past maxDiffCells to bound memory on large inputs.
 const maxDiffCells = 4_000_000
 
 func diffLines(a, b []string) []diffOp {
@@ -212,9 +208,7 @@ func diffLines(a, b []string) []diffOp {
 	return append(append(prefix, ops...), suffix...)
 }
 
-// linearDiff renders every line of a as removed and every line of b as added,
-// with no attempt at finding a shorter edit script — used only once the
-// inputs are too large for diffLines' O(n*m) table to be safe.
+// linearDiff lists every line of a as removed and b as added, with no attempt at a shorter edit script.
 func linearDiff(a, b []string) []diffOp {
 	ops := make([]diffOp, 0, len(a)+len(b))
 	for _, line := range a {

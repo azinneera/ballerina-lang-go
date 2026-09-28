@@ -18,10 +18,7 @@ function unrelatedQux() {
 }
 
 public function main() {
-    // --tests "testFoo*,otherBaz*" has two wildcard patterns matching two
-    // disjoint sets of functions. filter.bal#hasTest must check every
-    // wildcard filter, not stop after the first one — otherwise
-    // otherBazBeta would never get a chance to match.
+    // hasTest must check every wildcard filter, not stop after the first one.
     test:setTestOptions("target", "multiwildcardfiltermod", "multiwildcardfiltermod", "false", "false", "", "",
             "testFoo*,otherBaz*", "false", "false");
     test:registerTestConfig("testFooAlpha", testFooAlpha, true, [], [], (), (), false, ());

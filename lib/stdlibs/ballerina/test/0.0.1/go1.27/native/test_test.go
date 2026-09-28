@@ -120,10 +120,7 @@ func TestKeysNotIn(t *testing.T) {
 	}
 }
 
-// TestChunkByLength guards against byte-based (rather than rune-based)
-// chunking splitting a multi-byte character in half. Every character in the
-// fixture is 3 bytes, so a byte-offset chunk boundary at length 80 is
-// guaranteed to land mid-character; a rune-based boundary never does.
+// TestChunkByLength guards against byte-based chunking splitting a multi-byte character in half.
 func TestChunkByLength(t *testing.T) {
 	s := strings.Repeat("あ", 90)
 	chunks := chunkByLength(s, 80)
@@ -143,9 +140,7 @@ func TestChunkByLength(t *testing.T) {
 	}
 }
 
-// TestDiffLines checks ordinary diffs still get a proper LCS-based edit
-// script (not just linear removals/additions) once prefix/suffix stripping
-// is in play.
+// TestDiffLines checks ordinary diffs still get a proper LCS edit script, not just linear removals/additions.
 func TestDiffLines(t *testing.T) {
 	a := []string{"same1", "removed", "same2"}
 	b := []string{"same1", "added", "same2"}
@@ -166,16 +161,8 @@ func TestDiffLines(t *testing.T) {
 	}
 }
 
-// TestDiffLinesLargeInputFallsBackToLinear guards against the O(n*m)
-// dynamic-programming table diffLines builds: for two large inputs, that
-// table alone can reach the gigabyte range. Past maxDiffCells, diffLines
-// must skip the table entirely rather than just take longer to fill it — so
-// this plants one genuinely shared line in the middle of otherwise-disjoint
-// input (large enough to exceed maxDiffCells) and asserts it does NOT show
-// up as a context match. A real LCS pass (the unbounded old behavior) would
-// find it; only skipping the table entirely loses it. A pure timing-based
-// check can't tell these apart — fully disjoint content produces the exact
-// same output shape either way, since there's no shared line to miss.
+// TestDiffLinesLargeInputFallsBackToLinear plants one shared line in large, otherwise-disjoint
+// input: only a real LCS pass would find it, so its absence proves the table was skipped entirely.
 func TestDiffLinesLargeInputFallsBackToLinear(t *testing.T) {
 	const n = 2001 // n*n > maxDiffCells (4,000,000)
 	mid := n / 2

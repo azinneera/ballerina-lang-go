@@ -148,12 +148,8 @@ func moduleBalFiles(entry stdlibEntry) ([]string, error) {
 	return files, nil
 }
 
-// compileStdlibEntry compiles one embedded standard-library module into a
-// fresh CompilerContext sharing env (and thus the same type-env and symbol
-// table), resolving its imports against implicitImports/publicSymbols.
-// Returns ok=false (with no error) if the module fails to compile for any
-// reason — callers silently skip it, matching this driver's tolerance for
-// modules not needed by the corpus fixtures it feeds.
+// compileStdlibEntry compiles one stdlib module against implicitImports/publicSymbols;
+// ok=false means it failed to compile for any reason.
 func compileStdlibEntry(env *context.CompilerEnvironment, entry stdlibEntry,
 	implicitImports map[string]model.ExportedSymbolSpace, publicSymbols map[semantics.PackageIdentifier]model.ExportedSymbolSpace,
 ) (semantics.PackageIdentifier, model.ExportedSymbolSpace, bool) {
@@ -227,16 +223,8 @@ func compileStdlibEntry(env *context.CompilerEnvironment, entry stdlibEntry,
 	return semantics.PackageIdentifier{OrgName: entry.org, ModuleName: entry.module}, exported, true
 }
 
-// loadBuiltinPublicSymbols compiles builtinStdlibs in order, each against the
-// symbols accumulated so far, so a module that imports an earlier one (e.g.
-// os→io, crypto→time) resolves correctly. The returned map can be merged
-// directly into the publicSymbols passed to semantics.ResolveImports.
-//
-// None of these entries may use a langlib function (e.g. string:fromBytes) —
-// this runs before LoadLanglibs builds the langlib symbol table, so
-// implicitImports/publicSymbols here carry no langlib entries yet. A module
-// that needs one silently fails compileStdlibEntry and is dropped; see
-// LoadLanglibs' separate langlib-aware pass for modules that do need this.
+// loadBuiltinPublicSymbols compiles builtinStdlibs in order, each against symbols accumulated so far.
+// Runs before langlib symbols exist, so entries here can't use langlib functions — see langlibAwareStdlibs.
 func loadBuiltinPublicSymbols(env *context.CompilerEnvironment) map[semantics.PackageIdentifier]model.ExportedSymbolSpace {
 	result := make(map[semantics.PackageIdentifier]model.ExportedSymbolSpace)
 	for _, entry := range builtinStdlibs {
@@ -249,13 +237,8 @@ func loadBuiltinPublicSymbols(env *context.CompilerEnvironment) map[semantics.Pa
 	return result
 }
 
-// langlibAwareStdlibs lists builtin modules that need langlib functions to
-// compile (e.g. ballerina/test's string:fromBytes) — compiled in a second
-// pass, after LoadLanglibs has built the langlib symbol table, and kept
-// entirely separate from loadBuiltinPublicSymbols/builtinStdlibs so adding an
-// entry here never shifts the symbol-space allocation counter those other
-// modules were compiled under (several corpus goldens embed that counter's
-// value directly, e.g. generated lock-region names for isolated/lock fields).
+// langlibAwareStdlibs lists modules needing langlib functions (e.g. string:fromBytes), compiled
+// in a second pass so adding one never shifts the counter builtinStdlibs was compiled under.
 var langlibAwareStdlibs = []stdlibEntry{
 	flatEntry("test", "0.0.1", "go1.27"),
 }

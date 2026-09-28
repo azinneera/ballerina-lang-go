@@ -44,10 +44,7 @@ function hasTest(string name) returns boolean {
     if testIndex != () && matchModuleName(name) {
         return true;
     }
-    // An exact filter entry that names a *different* module must not shadow
-    // a wildcard filter that would otherwise match this module — e.g.
-    // --tests pkg.sub:foo,pkg:* running module pkg should still select foo
-    // via the wildcard, even though the exact entry for foo targets pkg.sub.
+    // An exact filter for another module must not shadow a wildcard that matches this one.
     foreach string filter in testOptions.getFilterTests() {
         if includesStr(filter, WILDCARD) && matchWildcard(name, filter) == true && matchModuleName(filter) {
             return true;

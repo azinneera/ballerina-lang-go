@@ -108,11 +108,8 @@ func matchWildcard(_ *extern.Context, args []values.BalValue) (values.BalValue, 
 	return matched, nil
 }
 
-// MatchWildcard mirrors jballerina's StringUtils#matchWildcard: name matches
-// pattern where '*' matches any run of characters, everything else literal.
-// Exported so cli/internal/testfilter can reuse the exact same algorithm for
-// --tests wildcard matching, computed in Go ahead of registration, instead
-// of duplicating it.
+// MatchWildcard mirrors jballerina's StringUtils#matchWildcard ('*' matches any run of
+// characters, everything else literal); exported so cli/internal/testfilter can reuse it.
 func MatchWildcard(name, pattern string) (bool, error) {
 	segments := strings.Split(pattern, "*")
 	quoted := make([]string, len(segments))

@@ -130,13 +130,8 @@ func TestLifecycleImmediateStopSignal(t *testing.T) {
 	}
 }
 
-// TestRequestGracefulStopConcurrentCallsDoNotEscalate guards against a
-// check-then-transition race in RequestGracefulStop: if the StateListening
-// check and the transition to StateGracefulStopping aren't atomic, two
-// concurrent callers can both observe StateListening, and the second one's
-// transition then lands on the StateGracefulStopping->StateGracefulStopping
-// self-loop, which the lifecycle table maps to immediateStopAction — silently
-// escalating a graceful stop into an immediate one instead of no-op'ing.
+// TestRequestGracefulStopConcurrentCallsDoNotEscalate guards against a check-then-transition race
+// that could let a second concurrent caller escalate a graceful stop into an immediate one.
 func TestRequestGracefulStopConcurrentCallsDoNotEscalate(t *testing.T) {
 	pal := newLifecycleTestPal(t)
 	rt := newLifecycleTestRuntime(t, lifecycleTestSource, pal)

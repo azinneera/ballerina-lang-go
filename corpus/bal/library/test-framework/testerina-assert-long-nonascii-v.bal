@@ -13,12 +13,7 @@ function callAssertLongNonAscii() returns error? {
 public function main() {
     error? failure = trap callAssertLongNonAscii();
     if failure is error {
-        // Printing the raw message isn't reliable here (multi-line,
-        // whitespace-padded diff-style content — see testerina-assert-v.bal's
-        // own comment on why it avoids this). A byte-based chunk boundary
-        // instead of a rune-based one at this exact character layout doesn't
-        // corrupt visibly, but does change the message's rune count by 2 (a
-        // subtle but deterministic, exact-length regression signal).
+        // Message length changes by 2 runes if chunking falls back to byte-based boundaries.
         io:println("messageLength: ", failure.message().length());
     }
     // @output messageLength: 149

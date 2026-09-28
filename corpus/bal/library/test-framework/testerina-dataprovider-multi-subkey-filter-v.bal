@@ -21,13 +21,7 @@ function testSquare(int input, int expected) {
 }
 
 public function main() {
-    // --tests testSquare#one,testSquare#three selects two sub-keys of the
-    // same data-driven test. filterKeyBasedTests must accumulate both
-    // suffixes under the one "testSquare" entry, not have the second
-    // overwrite the first (which would silently drop "one" and leave "two"
-    // unfiltered-out instead of "three" included) — see filter.bal's
-    // isFilterSubTestsContains, which must be keyed consistently with
-    // getFilterSubTest/addFilterSubTest.
+    // filterKeyBasedTests must accumulate both data-provider sub-keys, not overwrite the first.
     test:setTestOptions("target", "ddmultisubkeymod", "ddmultisubkeymod", "false", "false", "", "",
             "testSquare#one,testSquare#three", "false", "false");
     test:registerTestConfig("testSquare", testSquare, true, [], [], (), (), false, squareDataSet);

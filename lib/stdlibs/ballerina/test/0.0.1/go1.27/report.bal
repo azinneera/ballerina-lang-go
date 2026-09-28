@@ -233,12 +233,8 @@ function escapeSpecialCharactersJson(string name) returns string {
     return name;
 }
 
-// Byte-level rewrite of jballerina's `foreach string chr in originalString` —
-// strings aren't Iterable in this interpreter yet (see TODO.md). Escaping
-// itself stays byte-level (the quote character is single-byte ASCII either
-// way), but the bytes are accumulated whole and decoded once at the end,
-// since decoding one byte at a time breaks on any multi-byte UTF-8 character
-// — a lone byte from the middle of one isn't valid UTF-8 by itself.
+// Byte-level rewrite of jballerina's foreach-over-string (not Iterable here yet, see TODO.md);
+// bytes are accumulated whole and decoded once, since decoding one byte at a time breaks on multi-byte UTF-8.
 function replaceDoubleQuotes(string originalString) returns string {
     byte[] bytes = originalString.toBytes();
     byte[] updatedBytes = [];

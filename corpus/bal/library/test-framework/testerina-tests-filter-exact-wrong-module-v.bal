@@ -13,14 +13,8 @@ function barTest() {
 }
 
 public function main() {
-    // "combinedqualmod.sub:fooTest" is an exact filter entry naming this
-    // module's fooTest, but qualified to a *different* module within the
-    // same package — it must not shadow "combinedqualmod:foo*", a wildcard
-    // entry that also matches fooTest and does target the running module.
-    // filter.bal#hasTest must fall through to checking the wildcard filters
-    // even when an exact entry exists for the same name but the wrong
-    // module — otherwise fooTest is wrongly excluded entirely, never
-    // reaching the wildcard that would select it.
+    // An exact entry for a different module ("combinedqualmod.sub") must not shadow the
+    // wildcard "combinedqualmod:foo*" that matches fooTest in the running module.
     test:setTestOptions("target", "combinedqualmod", "combinedqualmod", "false", "false", "", "",
             "combinedqualmod.sub:fooTest,combinedqualmod:foo*", "false", "false");
     test:registerTestConfig("fooTest", fooTest, true, [], [], (), (), false, ());
