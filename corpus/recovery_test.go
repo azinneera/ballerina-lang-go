@@ -238,7 +238,7 @@ func runRecoveryAST(cx *context.CompilerContext, inputPath, content string) (*te
 	if err != nil {
 		return nil, err
 	}
-	unit := nodebuilder.GetRecoveredCompilationUnit(cx, tree)
+	unit := nodebuilder.GetRecoveredCompilationUnit(cx, cx.GetDefaultPackage(), tree)
 	if unit == nil {
 		return nil, fmt.Errorf("recovered compilation unit is nil")
 	}
@@ -273,7 +273,7 @@ func runRecoveryPipeline(env *context.CompilerEnvironment, cx *context.CompilerC
 		return nil, fmt.Errorf("parsing recovery source: %w", err)
 	}
 	if err := phases.run(testphases.PhaseAST, func() error {
-		result.CompilationUnit = nodebuilder.GetRecoveredCompilationUnit(cx, syntaxTree)
+		result.CompilationUnit = nodebuilder.GetRecoveredCompilationUnit(cx, cx.GetDefaultPackage(), syntaxTree)
 		if result.CompilationUnit == nil {
 			return fmt.Errorf("recovered compilation unit is nil")
 		}
