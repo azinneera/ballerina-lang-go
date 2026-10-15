@@ -296,10 +296,10 @@ type (
 		Version      string
 	}
 
-	// Zero value (Space == nil) means "empty".
+	// Zero value means "empty".
 	SymbolRef struct {
-		Index int
-		Space *SymbolSpace
+		Index      int
+		SpaceIndex int
 	}
 
 	// FunctionSignatureRef identifies an untyped function signature in the compiler environment. Zero is unset.
@@ -340,8 +340,13 @@ type (
 	}
 
 	SymbolSpace struct {
-		mu          sync.RWMutex
-		Pkg         PackageIdentifier
+		mu  sync.RWMutex
+		Pkg PackageIdentifier
+		// SpaceIndex is this space's stable index in the environment's
+		// symbol-space registry, assigned once at registration time. Set by whoever
+		// creates the space (see context.CompilerEnvironment.NewSymbolSpace);
+		// zero until then.
+		SpaceIndex  int
 		lookupTable map[string]int
 		symbols     []Symbol
 	}
@@ -804,7 +809,7 @@ func (space *SymbolSpace) GetSymbol(name string) (SymbolRef, bool) {
 	if !ok {
 		return SymbolRef{}, false
 	}
-	return SymbolRef{Index: index, Space: space}, true
+	return space.RefAt(index), true
 }
 
 // AppendSymbol appends a symbol to the space and returns its index. Thread-safe.
@@ -819,7 +824,7 @@ func (space *SymbolSpace) AppendSymbol(symbol Symbol) int {
 
 // RefAt returns a SymbolRef for the symbol at the given index.
 func (space *SymbolSpace) RefAt(index int) SymbolRef {
-	return SymbolRef{Index: index, Space: space}
+	return SymbolRef{Index: index, SpaceIndex: space.SpaceIndex}
 }
 
 func (space *SymbolSpace) SymbolAt(index int) Symbol {

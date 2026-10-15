@@ -470,10 +470,7 @@ func (sr *symbolReader) readSymbolRef(space *model.SymbolSpace) model.SymbolRef 
 	case symbolRefTagLocal:
 		var index int32
 		read(sr.r, &index)
-		return model.SymbolRef{
-			Index: int(index),
-			Space: space,
-		}
+		return space.RefAt(int(index))
 	case symbolRefTagExternal:
 		var index int32
 		read(sr.r, &index)
