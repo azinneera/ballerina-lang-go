@@ -174,7 +174,6 @@ func (sr *symbolReader) readSymbolSpace() *model.SymbolSpace {
 
 	pkgID := sr.readPackageIdentifier()
 	space := sr.env.NewSymbolSpace(*pkgID)
-	sr.env.RegisterPackageSpace(space)
 	sr.readFunctionSignatureTable(space)
 	opaque := model.OpaqueSymbols(space.Pkg)
 	for i := int64(0); i < count; i++ {
@@ -470,7 +469,10 @@ func (sr *symbolReader) readSymbolRef(space *model.SymbolSpace) model.SymbolRef 
 	case symbolRefTagLocal:
 		var index int32
 		read(sr.r, &index)
-		return space.RefAt(int(index))
+		return model.SymbolRef{
+			Index:      int(index),
+			SpaceIndex: space.SpaceIndex(),
+		}
 	case symbolRefTagExternal:
 		var index int32
 		read(sr.r, &index)

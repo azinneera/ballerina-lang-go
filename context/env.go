@@ -22,7 +22,6 @@ import (
 
 	"github.com/ballerina-nutcracker/ballerina/context/internal/capturegroups"
 	"github.com/ballerina-nutcracker/ballerina/context/internal/functionsignatures"
-	"github.com/ballerina-nutcracker/ballerina/context/internal/symbolspaces"
 	"github.com/ballerina-nutcracker/ballerina/model"
 	"github.com/ballerina-nutcracker/ballerina/semtypes"
 	"github.com/ballerina-nutcracker/ballerina/tools/diagnostics"
@@ -101,7 +100,8 @@ type CompilerEnvironment struct {
 	anonTypeCount              map[*model.PackageID]int
 	anonFuncCount              map[*model.PackageID]int
 	packageInterner            *model.PackageIDInterner
-	symbolSpaces               symbolspaces.Store
+	symbolSpaces               []*model.SymbolSpace
+	symbolSpacesMu             sync.RWMutex // we need this because desugaring add new init functions concurrently we shouldn't need this if the spaces are scoped to the module, may be we should do that?
 	typeEnv                    semtypes.Env
 	underlyingSymbol           sync.Map
 	functionSignatures         functionsignatures.Store
@@ -221,30 +221,22 @@ func (c *CompilerEnvironment) DiagnosticEnv() *diagnostics.DiagnosticEnv {
 	return c.diagnosticContext
 }
 
-// NewSymbolSpace registers the new space and assigns it a stable SpaceIndex so
-// SymbolRefs into it can be resolved later via GetSymbol.
 func (c *CompilerEnvironment) NewSymbolSpace(packageID model.PackageID) *model.SymbolSpace {
-	space := model.NewSymbolSpaceInner(packageID)
-	space.SpaceIndex = c.symbolSpaces.Register(space)
+	c.symbolSpacesMu.Lock()
+	space := model.NewSymbolSpaceInner(packageID, len(c.symbolSpaces))
+	c.symbolSpaces = append(c.symbolSpaces, space)
+	c.symbolSpacesMu.Unlock()
 	return space
-}
-
-func (c *CompilerEnvironment) RegisterPackageSpace(space *model.SymbolSpace) {
-	c.symbolSpaces.RegisterPackageSpace(space)
 }
 
 func (c *CompilerEnvironment) NewModuleScope(pkg model.PackageID, prefixes map[string]model.ExportedSymbolSpace) *model.ModuleScope {
 	if prefixes == nil {
 		prefixes = make(map[string]model.ExportedSymbolSpace)
 	}
-	main := c.NewSymbolSpace(pkg)
-	annotation := c.NewSymbolSpace(pkg)
-	c.RegisterPackageSpace(main)
-	c.RegisterPackageSpace(annotation)
 	return &model.ModuleScope{
-		Main:       main,
+		Main:       c.NewSymbolSpace(pkg),
 		Prefix:     prefixes,
-		Annotation: annotation,
+		Annotation: c.NewSymbolSpace(pkg),
 	}
 }
 
@@ -267,25 +259,42 @@ func (c *CompilerEnvironment) NewBlockScope(parent model.Scope, pkg model.Packag
 }
 
 func (c *CompilerEnvironment) GetSymbol(symbol model.SymbolRef) model.Symbol {
-	space := c.symbolSpaces.SpaceAt(symbol.SpaceIndex)
-	return space.SymbolAt(symbol.Index)
+	return c.symbolSpace(symbol.SpaceIndex).SymbolAt(symbol.Index)
+}
+
+func (c *CompilerEnvironment) symbolSpace(index int) *model.SymbolSpace {
+	c.symbolSpacesMu.RLock()
+	defer c.symbolSpacesMu.RUnlock()
+	// We treat 0,0 as empty space
+	return c.symbolSpaces[index-1]
 }
 
 func (c *CompilerEnvironment) SymbolPackage(symbol model.SymbolRef) model.PackageIdentifier {
 	if symbol.IsEmpty() {
 		panic("cannot get package for empty symbol ref")
 	}
-	return c.symbolSpaces.SpaceAt(symbol.SpaceIndex).Pkg
+	return c.symbolSpace(symbol.SpaceIndex).Pkg
 }
 
-// FindSymbol resolves external symbol-pool references during deserialization.
-// This lookup is potentially very slow; use a SymbolRef in the AST wherever possible.
+// FindSymbol is used for symbol serialization, and is not meant to be used by other parts. This lookup is
+// potentially very slow and you should have a symbolRef in the AST for anywhere that you may need a symbol
 func (c *CompilerEnvironment) FindSymbol(pkg model.PackageIdentifier, name string) (model.SymbolRef, bool) {
-	return c.symbolSpaces.Find(pkg, name)
+	c.symbolSpacesMu.RLock()
+	spaces := append([]*model.SymbolSpace(nil), c.symbolSpaces...)
+	c.symbolSpacesMu.RUnlock()
+	for _, space := range spaces {
+		if space.Pkg != pkg {
+			continue
+		}
+		if ref, ok := space.GetSymbol(name); ok {
+			return ref, true
+		}
+	}
+	return model.SymbolRef{}, false
 }
 
 func (c *CompilerEnvironment) AddSymbolToSameSpace(ref model.SymbolRef, name string, symbol model.Symbol) model.SymbolRef {
-	space := c.symbolSpaces.SpaceAt(ref.SpaceIndex)
+	space := c.symbolSpace(ref.SpaceIndex)
 	space.AddSymbol(name, symbol)
 	newRef, _ := space.GetSymbol(name)
 	return newRef
@@ -294,10 +303,13 @@ func (c *CompilerEnvironment) AddSymbolToSameSpace(ref model.SymbolRef, name str
 // CreateNarrowedSymbol create a narrowed symbol for the given baseRef symbol. IMPORTANT: baseRef must be the actual symbol
 // not a narrowed symbol.
 func (c *CompilerEnvironment) CreateNarrowedSymbol(baseRef model.SymbolRef) model.SymbolRef {
-	symbolSpace := c.symbolSpaces.SpaceAt(baseRef.SpaceIndex)
+	symbolSpace := c.symbolSpace(baseRef.SpaceIndex)
 	underlyingSymbolCopy := c.GetSymbol(baseRef).Copy()
 	symbolIndex := symbolSpace.AppendSymbol(underlyingSymbolCopy)
-	narrowedSymbol := symbolSpace.RefAt(symbolIndex)
+	narrowedSymbol := model.SymbolRef{
+		SpaceIndex: baseRef.SpaceIndex,
+		Index:      symbolIndex,
+	}
 	c.underlyingSymbol.Store(narrowedSymbol, baseRef)
 	return narrowedSymbol
 }
@@ -483,7 +495,6 @@ func NewCompilerEnvironment(typeEnv semtypes.Env, statsEnabled bool) *CompilerEn
 		anonTypeCount:              make(map[*model.PackageID]int),
 		anonFuncCount:              make(map[*model.PackageID]int),
 		packageInterner:            model.DefaultPackageIDInterner,
-		symbolSpaces:               symbolspaces.NewStore(),
 		functionSignatures:         functionsignatures.NewStore(),
 		captureGroups:              capturegroups.NewStore(),
 		distinctTypes:              newDistinctTypeTracker(),

@@ -296,7 +296,7 @@ type (
 		Version      string
 	}
 
-	// Zero value means "empty".
+	// We are using indeces here with the same rational as RefAtoms, instead of pointers
 	SymbolRef struct {
 		Index      int
 		SpaceIndex int
@@ -340,15 +340,11 @@ type (
 	}
 
 	SymbolSpace struct {
-		mu  sync.RWMutex
-		Pkg PackageIdentifier
-		// SpaceIndex is this space's stable index in the environment's
-		// symbol-space registry, assigned once at registration time. Set by whoever
-		// creates the space (see context.CompilerEnvironment.NewSymbolSpace);
-		// zero until then.
-		SpaceIndex  int
+		mu          sync.RWMutex
+		Pkg         PackageIdentifier
 		lookupTable map[string]int
 		symbols     []Symbol
+		index       int
 	}
 
 	symbolBase struct {
@@ -809,7 +805,7 @@ func (space *SymbolSpace) GetSymbol(name string) (SymbolRef, bool) {
 	if !ok {
 		return SymbolRef{}, false
 	}
-	return space.RefAt(index), true
+	return SymbolRef{Index: index, SpaceIndex: space.SpaceIndex()}, true
 }
 
 // AppendSymbol appends a symbol to the space and returns its index. Thread-safe.
@@ -824,7 +820,12 @@ func (space *SymbolSpace) AppendSymbol(symbol Symbol) int {
 
 // RefAt returns a SymbolRef for the symbol at the given index.
 func (space *SymbolSpace) RefAt(index int) SymbolRef {
-	return SymbolRef{Index: index, SpaceIndex: space.SpaceIndex}
+	return SymbolRef{Index: index, SpaceIndex: space.SpaceIndex()}
+}
+
+// SpaceIndex returns the non-zero symbol-space index used in SymbolRef.
+func (space *SymbolSpace) SpaceIndex() int {
+	return space.index + 1
 }
 
 func (space *SymbolSpace) SymbolAt(index int) Symbol {
@@ -857,8 +858,8 @@ func (space *SymbolSpace) Symbols() iter.Seq[SymbolRef] {
 	}
 }
 
-func NewSymbolSpaceInner(packageID PackageID) *SymbolSpace {
-	return &SymbolSpace{Pkg: PackageIdentifierFromID(&packageID), lookupTable: make(map[string]int), symbols: make([]Symbol, 0)}
+func NewSymbolSpaceInner(packageID PackageID, index int) *SymbolSpace {
+	return &SymbolSpace{index: index, Pkg: PackageIdentifierFromID(&packageID), lookupTable: make(map[string]int), symbols: make([]Symbol, 0)}
 }
 
 func PackageIdentifierFromID(id *PackageID) PackageIdentifier {
