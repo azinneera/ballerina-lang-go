@@ -13,6 +13,7 @@ require (
 	github.com/ballerina-nutcracker/ballerina/platform v0.7.0
 	github.com/ballerina-nutcracker/ballerina/runtime v0.7.0
 	github.com/ballerina-nutcracker/ballerina/semtypes v0.7.0
+	github.com/ballerina-nutcracker/ballerina/testplan v0.7.0
 	github.com/ballerina-nutcracker/ballerina/tools v0.7.0
 	github.com/ballerina-nutcracker/ballerina/values v0.7.0
 	golang.org/x/crypto v0.52.0
