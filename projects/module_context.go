@@ -247,6 +247,14 @@ func resolveTypesAndSymbols(moduleCtx *moduleContext) {
 	// `bal build`/`bal run` leave it at its default (true) and never compile
 	// test sources.
 	includeTestTrees := !moduleCtx.project.BuildOptions().SkipTests()
+	// A single-file project (`bal test somefile.bal`) has no tests/
+	// directory at all — the one file plays both roles, so its functions
+	// must be discoverable as tests too, unlike a real project's main.bal
+	// (see discover.go's model.FlagTestable check, and the regression this
+	// guards: a @test:Config function outside tests/ must stay silently
+	// ignored for a real project, but single-file mode has no "outside" to
+	// speak of).
+	treatSourceAsTestable := includeTestTrees && moduleCtx.project.Kind() == ProjectKindSingleFile
 	syntaxTrees := parseDocumentsParallel(
 		compilerCtx,
 		moduleCtx.srcDocIDs,
@@ -254,6 +262,7 @@ func resolveTypesAndSymbols(moduleCtx *moduleContext) {
 		moduleCtx.testSrcDocIDs,
 		moduleCtx.testDocContextMap,
 		includeTestTrees,
+		treatSourceAsTestable,
 	)
 
 	if compilerCtx.HasDiagnostics() || len(syntaxTrees) == 0 {
@@ -448,6 +457,7 @@ func parseDocumentsParallel(
 	testDocIDs []DocumentID,
 	testDocContextMap map[DocumentID]*documentContext,
 	includeTestTrees bool,
+	treatSourceAsTestable bool,
 ) []*st.SyntaxTree {
 	var (
 		mu          sync.Mutex
@@ -467,6 +477,7 @@ func parseDocumentsParallel(
 			defer wg.Done()
 			st := dc.parseWithStats(compilerCtx)
 			if st != nil {
+				st.IsTest = treatSourceAsTestable
 				mu.Lock()
 				syntaxTrees = append(syntaxTrees, st)
 				mu.Unlock()
@@ -486,6 +497,7 @@ func parseDocumentsParallel(
 			defer wg.Done()
 			st := dc.parseWithStats(compilerCtx)
 			if includeTestTrees && st != nil {
+				st.IsTest = true
 				mu.Lock()
 				syntaxTrees = append(syntaxTrees, st)
 				mu.Unlock()
@@ -516,6 +528,7 @@ func buildCompilationUnits(cx *context.CompilerContext, syntaxTrees []*st.Syntax
 		} else {
 			cu = nodebuilder.GetCompilationUnit(cx, st)
 		}
+		cu.IsTest = st.IsTest
 		if dumpAST {
 			fmt.Fprintln(os.Stderr, prettyPrinter.Print(cu))
 		}
