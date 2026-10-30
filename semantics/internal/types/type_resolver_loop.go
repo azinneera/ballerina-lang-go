@@ -73,10 +73,6 @@ func (l *loopTypeResolver) unimplemented(msg string, loc diagnostics.Location) {
 	l.parentResolver.unimplemented(msg, loc)
 }
 
-func (l *loopTypeResolver) syntaxError(msg string, loc diagnostics.Location) {
-	l.parentResolver.syntaxError(msg, loc)
-}
-
 func (l *loopTypeResolver) symbolType(ref model.SymbolRef) semtypes.SemType {
 	return l.parentResolver.symbolType(ref)
 }
@@ -147,18 +143,6 @@ func (l *loopTypeResolver) addImplicitImport(name string, imp ast.BLangImportPac
 
 func (l *loopTypeResolver) hasImplicitImport(name string) bool {
 	return l.parentResolver.hasImplicitImport(name)
-}
-
-func (l *loopTypeResolver) trackCapturedVar(ref model.SymbolRef) {
-	l.parentResolver.trackCapturedVar(ref)
-}
-
-func (l *loopTypeResolver) getCapturedVars() map[model.SymbolRef]bool {
-	return l.parentResolver.getCapturedVars()
-}
-
-func (l *loopTypeResolver) setCapturedVars(vars map[model.SymbolRef]bool) {
-	l.parentResolver.setCapturedVars(vars)
 }
 
 func (l *loopTypeResolver) ensureResolved(ref model.SymbolRef, depth int) bool {

@@ -27,17 +27,54 @@ import (
 	"github.com/ballerina-nutcracker/ballerina/semtypes"
 )
 
+// ClassFieldDescriptor returns the descriptor of a field declared in a class
+// or service body, whose type is ty.
+func ClassFieldDescriptor(field *ast.BLangVariable, ty semtypes.SemType) model.FieldDescriptor {
+	var flags model.FieldDescriptorFlag
+	if field.IsFinal() {
+		flags |= model.FieldDescriptorFinal
+	}
+	if field.Expr != nil {
+		flags |= model.FieldDescriptorHasDefault
+	}
+	fd := model.NewFieldDescriptor(field.Name.GetValue(), flags, field.IsPublic())
+	fd.SetMemberType(ty)
+	return fd
+}
+
 func IsSelfFieldAccess(n *ast.BLangFieldBaseAccess) bool {
 	varRef, ok := n.Expr.(*ast.BLangVarRef)
 	return ok && varRef.VariableName.GetValue() == "self"
 }
 
-func IterableType(ctx *context.CompilerContext, symbolType func(model.SymbolRef) semtypes.SemType) (semtypes.SemType, bool) {
+// AssignmentTargetError returns the reason a symbol of the given kind cannot be assigned to, if any.
+func AssignmentTargetError(kind model.SymbolKind) (string, bool) {
+	switch kind {
+	case model.SymbolKindConstant:
+		return "cannot assign to constant", true
+	case model.SymbolKindParemeter:
+		return "cannot assign to parameter", true
+	case model.SymbolKindFunction:
+		return "cannot assign to function", true
+	case model.SymbolKindType:
+		return "cannot assign to type", true
+	default:
+		return "", false
+	}
+}
+
+func IterableType(ctx *context.CompilerContext) (semtypes.SemType, bool) {
 	ref, ok := ctx.LangLibDistinctTypeSymbol("lang.object", "Iterable")
 	if !ok {
 		return semtypes.SemType{}, false
 	}
-	return symbolType(ref), true
+	return ctx.SymbolType(ref), true
+}
+
+// DeclaredNodes returns the nodes that declare a symbol. A declaration with a bad name declares none, so it has
+// no type.
+func DeclaredNodes[N ast.NodeWithSymbol](nodes []N) []N {
+	return slices.DeleteFunc(slices.Clone(nodes), func(node N) bool { return !ast.SymbolIsSet(node) })
 }
 
 type NamedClassMethod struct {
@@ -112,7 +149,13 @@ func mapQuerySelectExpectedTypeWithValue(env semtypes.Env, valueTy semtypes.SemT
 	return ld.Define(env, []semtypes.SemType{semtypes.String, valueTy})
 }
 
+// MappingKeyName returns the field name of a literal or identifier key. A
+// computed key has no static name; its value is only known at runtime.
 func MappingKeyName(ctx *context.CompilerContext, key *ast.BLangMappingKey) (string, bool) {
+	if key.Kind == ast.MappingKeyComputed {
+		ctx.InternalError("computed mapping key has no static name", key.GetPosition())
+		return "", false
+	}
 	switch expr := key.Expr.(type) {
 	case *ast.BLangLiteral:
 		return expr.Value.(string), true

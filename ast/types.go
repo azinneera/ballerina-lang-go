@@ -44,6 +44,7 @@ const (
 type BType interface {
 	BLangNode
 	TypeDescriptor
+	NodeWithType
 	SetTypeData(ty TypeData)
 	GetTypeData() TypeData
 	bTypeGetName() model.Name
@@ -100,6 +101,7 @@ type (
 	BField struct {
 		// TODO: think how to align this with BLangMemberTypeDesc. Ideally this should be an inclusion on that
 		bLangNodeBase
+		captureOwnerBase
 		bFieldAnnotationBase
 		Name    model.Name
 		Type    BType
@@ -142,6 +144,7 @@ type (
 		Inclusions         []model.SymbolRef      // This needs to be symbol because it could be a class definition as well
 		InclusionPositions []diagnostics.Location // Positions of each inclusion, parallel to Inclusions
 		members            map[string]ObjectMember
+		BadMembers         []*BLangBadTopLevelNode
 		Definition         semtypes.Definition
 		Isolated           bool
 		NetworkQuals       ObjectNetworkQuals
@@ -171,7 +174,7 @@ type (
 
 	BLangConstrainedType struct {
 		bLangTypeBase
-		Type       TypeData
+		BaseType   TypeData
 		Constraint TypeData
 		Definition semtypes.Definition
 	}
@@ -221,6 +224,7 @@ type (
 
 	BLangFunctionTypeParam struct {
 		bLangNodeBase
+		captureOwnerBase
 		Name                IdentifierNode
 		TypeDesc            BType
 		InitExpr            BLangExpression
@@ -416,6 +420,10 @@ func (b *bLangTypeBase) GetTypeData() TypeData {
 	return b.ty
 }
 
+func (b *bLangTypeBase) Type() semtypes.SemType {
+	return b.ty.Type
+}
+
 func (b *bLangTypeBase) SetTypeData(ty TypeData) {
 	b.ty = ty
 }
@@ -558,7 +566,7 @@ func (b *BLangFunctionType) IsTransactional() bool {
 }
 
 func (b *BLangConstrainedType) GetType() TypeData {
-	return b.Type
+	return b.BaseType
 }
 
 func (b *BLangConstrainedType) GetConstraint() TypeData {
@@ -569,13 +577,13 @@ func (b *BLangConstrainedType) GetConstraint() TypeData {
 // before the type parameter), e.g. TypeKindMap for `map<T>` or
 // TypeKindTypeDesc for `typedesc<T>`.
 func (b *BLangConstrainedType) ConstraintKind() TypeKind {
-	switch t := b.Type.TypeDescriptor.(type) {
+	switch t := b.BaseType.TypeDescriptor.(type) {
 	case *BLangBuiltInRefTypeNode:
 		return t.TypeKind
 	case *BLangValueType:
 		return t.TypeKind
 	}
-	panic("BLangConstrainedType.Type has unexpected type descriptor")
+	panic("BLangConstrainedType.BaseType has unexpected type descriptor")
 }
 
 func NewBLangStreamType(valueType, completionType TypeData) *BLangStreamType {

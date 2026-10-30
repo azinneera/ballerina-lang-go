@@ -18,6 +18,7 @@
 package context
 
 import (
+	"slices"
 	"sync"
 	"time"
 
@@ -182,12 +183,34 @@ func (c *CompilerContext) SymbolIsPublic(symbol model.SymbolRef) bool {
 	return c.env.SymbolIsPublic(symbol)
 }
 
+// SymbolMembers returns the members of a record, object type or class
+// symbol, including those added by type inclusion.
+func (c *CompilerContext) SymbolMembers(symbol model.SymbolRef) []model.InclusionMember {
+	carrier, ok := c.env.GetSymbol(symbol).(model.MemberCarrier)
+	if !ok {
+		return nil
+	}
+	return carrier.Members()
+}
+
 func (c *CompilerContext) SymbolIsClass(symbol model.SymbolRef) bool {
 	return c.env.SymbolIsClass(symbol)
 }
 
 func (c *CompilerContext) ValueSymbolMetadata(symbol model.SymbolRef) (ValueSymbolMetadata, bool) {
 	return c.env.ValueSymbolMetadata(symbol)
+}
+
+func (c *CompilerContext) NewCaptureGroup() model.CaptureGroupRef {
+	return c.env.newCaptureGroup()
+}
+
+func (c *CompilerContext) AddToCaptureGroup(group model.CaptureGroupRef, ref model.SymbolRef) {
+	c.env.addToCaptureGroup(group, ref)
+}
+
+func (c *CompilerContext) CaptureGroupContains(group model.CaptureGroupRef, ref model.SymbolRef) bool {
+	return c.env.captureGroupContains(group, ref)
 }
 
 func (c *CompilerContext) SetSymbolType(symbol model.SymbolRef, ty semtypes.SemType) {
@@ -283,10 +306,14 @@ func (c *CompilerContext) addDiagnostic(code string, severity diagnostics.Diagno
 }
 
 func (c *CompilerContext) HasDiagnostics() bool {
+	c.mu.Lock()
+	defer c.mu.Unlock()
 	return len(c.diagnostics) > 0
 }
 
 func (c *CompilerContext) HasErrors() bool {
+	c.mu.Lock()
+	defer c.mu.Unlock()
 	for _, diag := range c.diagnostics {
 		switch diag.DiagnosticInfo().Severity() {
 		case diagnostics.Error, diagnostics.Fatal:
@@ -297,7 +324,9 @@ func (c *CompilerContext) HasErrors() bool {
 }
 
 func (c *CompilerContext) Diagnostics() []diagnostics.Diagnostic {
-	return c.diagnostics
+	c.mu.Lock()
+	defer c.mu.Unlock()
+	return slices.Clone(c.diagnostics)
 }
 
 func NewCompilerContext(env *CompilerEnvironment) *CompilerContext {

@@ -40,6 +40,8 @@ type basicBlock struct {
 	children []int
 	// Nodes inside this block.
 	nodes []ast.Node
+	// true if this block ends by panicking (panic statement or a checkpanic that always panics)
+	panics bool
 }
 
 type bbRef int
@@ -343,6 +345,7 @@ func (analyzer *functionControlFlowAnalyzer) analyzeStatement(curBB bbRef, stmt 
 	case *ast.BLangExpressionStmt:
 		analyzer.addNode(curBB, stmt)
 		if expr, ok := s.Expr.(ast.BLangExpression); ok && alwaysTerminatesViaCheck(analyzer.tyCtx, expr) {
+			analyzer.bbs[curBB].panics = isCheckPanic(expr)
 			return terminatedEffect()
 		}
 		return continueEffect(curBB)
@@ -388,12 +391,21 @@ func (analyzer *functionControlFlowAnalyzer) analyzeStatement(curBB bbRef, stmt 
 
 func (analyzer *functionControlFlowAnalyzer) analyzeReturn(curBB bbRef, stmt *ast.BLangReturn) stmtEffect {
 	analyzer.addNode(curBB, stmt)
+	if expr, ok := stmt.Expr.(ast.BLangExpression); ok && isCheckPanic(expr) {
+		analyzer.bbs[curBB].panics = alwaysTerminatesViaCheck(analyzer.tyCtx, expr)
+	}
 	// Return terminates execution - current block has no children
 	return terminatedEffect()
 }
 
+func isCheckPanic(expr ast.BLangExpression) bool {
+	_, ok := expr.(*ast.BLangCheckPanickedExpr)
+	return ok
+}
+
 func (analyzer *functionControlFlowAnalyzer) analyzePanic(curBB bbRef, stmt *ast.BLangPanic) stmtEffect {
 	analyzer.addNode(curBB, stmt)
+	analyzer.bbs[curBB].panics = true
 	return terminatedEffect()
 }
 
@@ -416,7 +428,7 @@ func alwaysTerminatesViaCheck(tyCtx semtypes.Context, expr ast.BLangExpression) 
 	if inner == nil {
 		return false
 	}
-	return semtypes.IsSubtype(tyCtx, inner.GetDeterminedType(), semtypes.Error)
+	return semtypes.IsSubtype(tyCtx, inner.Type(), semtypes.Error)
 }
 
 // Branching statement handlers
@@ -459,11 +471,11 @@ func (analyzer *functionControlFlowAnalyzer) analyzeIf(curBB bbRef, stmt *ast.BL
 }
 
 func (analyzer *functionControlFlowAnalyzer) isFalse(node ast.BLangExpression) bool {
-	return semtypes.IsSameType(analyzer.tyCtx, node.GetDeterminedType(), falseTy)
+	return semtypes.IsSameType(analyzer.tyCtx, node.Type(), falseTy)
 }
 
 func (analyzer *functionControlFlowAnalyzer) isTrue(node ast.BLangExpression) bool {
-	return semtypes.IsSameType(analyzer.tyCtx, node.GetDeterminedType(), trueTy)
+	return semtypes.IsSameType(analyzer.tyCtx, node.Type(), trueTy)
 }
 
 func (analyzer *functionControlFlowAnalyzer) analyzeWhile(curBB bbRef, stmt *ast.BLangWhile) stmtEffect {

@@ -4,19 +4,25 @@ linters:
   default: standard
   enable:
     - depguard
+    - usetesting
     - dupl
     - exhaustive
+    - gochecksumtype
     - iface
     - iotamixing
     - reassign
     - unparam
     - wastedassign
   settings:
+    usetesting:
+      os-temp-dir: true
     reassign:
       patterns:
         - ".*"
     exhaustive:
       default-signifies-exhaustive: true
+    gochecksumtype:
+      default-signifies-exhaustive: false
     depguard:
       rules:
         no-test-util-in-production:

@@ -26,6 +26,7 @@ package pal
 import (
 	"context"
 	"io"
+	"net"
 	"net/http"
 	"time"
 )
@@ -54,6 +55,7 @@ type (
 		OS      OS
 		Time    Time
 		HTTP    HTTP
+		Net     Net
 		Signals SignalSource
 	}
 	IO struct {
@@ -69,6 +71,24 @@ type (
 		// OpenWritable opens path for streaming writes, truncating unless appendMode
 		// is set. Close flushes and releases the handle.
 		OpenWritable func(path string, appendMode bool) (io.WriteCloser, error)
+		Getwd        func() (string, error)
+		// Abs does not clean "." or ".." segments, matching Java's Path.toAbsolutePath.
+		Abs       func(path string) (string, error)
+		Mkdir     func(path string) error
+		MkdirAll  func(path string) error
+		Remove    func(path string) error
+		RemoveAll func(path string) error
+		// Rename fails with fs.ErrExist if newPath already exists.
+		Rename        func(oldPath, newPath string) error
+		CreateFile    func(path string) error
+		Stat          func(path string) (*FileInfo, error)
+		Lstat         func(path string) (*FileInfo, error)
+		ReadDir       func(path string) ([]FileInfo, error)
+		Copy          func(src, dst string, opts CopyOptions) error
+		CreateTemp    func(prefix, suffix, dir string) (string, error)
+		CreateTempDir func(prefix, suffix, dir string) (string, error)
+		Readlink      func(path string) (string, error)
+		Watch         func(path string, recursive bool, handler WatchHandler) (WatchHandle, error)
 	}
 	OS struct {
 		GetEnv      func(name string) string
@@ -82,10 +102,39 @@ type (
 	Time struct {
 		Now          func() time.Time
 		MonotonicNow func() time.Duration
+		// AfterFunc calls f on its own goroutine once d has elapsed.
+		AfterFunc func(d time.Duration, f func()) Timer
+	}
+	// Net abstracts raw TCP(+TLS) and UDP socket dialing and listening for
+	// non-HTTP wire protocols (e.g. ldap, tcp, udp). HTTP-based stdlibs must
+	// keep using pal.HTTP instead.
+	Net struct {
+		// Dial opens a TCP connection to address, optionally binding to
+		// localAddr first (empty = OS-chosen) and optionally upgrading to
+		// TLS (tlsCfg != nil) before returning. Reuses TLSConfig from HTTP.
+		Dial func(ctx context.Context, network, address, localAddr string, tlsCfg *TLSConfig) (net.Conn, error)
+		// Listen binds a TCP listener on address, optionally wrapping it in
+		// TLS (tlsCfg != nil). Reuses ServerTLSConfig from HTTP. The caller
+		// owns the accept loop and per-connection dispatch.
+		Listen func(network, address string, tlsCfg *ServerTLSConfig) (net.Listener, error)
+		// DialPacket opens a connected datagram socket (e.g. UDP) to address,
+		// optionally binding to localAddr first (empty = OS-chosen). The
+		// returned net.Conn's Read/Write only exchange data with address.
+		DialPacket func(ctx context.Context, network, address, localAddr string) (net.Conn, error)
+		// ListenPacket binds an unconnected datagram socket (e.g. UDP) on
+		// address. The returned net.PacketConn's ReadFrom/WriteTo carry an
+		// explicit per-datagram peer address, unlike DialPacket's net.Conn.
+		ListenPacket func(network, address string) (net.PacketConn, error)
+		// ResolvePacketAddr resolves a "host:port" address (performing a name
+		// lookup if needed) into a peer address usable with PacketConn.WriteTo.
+		ResolvePacketAddr func(network, address string) (net.Addr, error)
 	}
 	HTTP struct {
 		// NewClient builds an outbound HTTP client (native: net/http; WASM: fetch).
-		NewClient func(cfg ClientConfig) HTTPClient
+		// Returns an error when cfg.TLS carries malformed CA/client certificate
+		// material rather than silently degrading (e.g. falling back to the
+		// system trust store).
+		NewClient func(cfg ClientConfig) (HTTPClient, error)
 		// Listen starts serving inbound requests to handler. On native it binds a
 		// TCP socket and runs http.Server.Serve; a WASM/web platform registers the
 		// handler with its JS host instead (no socket). Returns a handle whose
@@ -93,6 +142,11 @@ type (
 		Listen func(cfg ServerConfig, handler http.Handler) (ServerHandle, error)
 	}
 )
+
+// Timer is a pending AfterFunc call. Stop reports whether it prevented the call.
+type Timer interface {
+	Stop() bool
+}
 
 // ProcessHandle is an opaque handle to a running subprocess.
 type ProcessHandle interface {
@@ -106,16 +160,17 @@ type ProcessHandle interface {
 type (
 	// TLSConfig carries TLS settings derived from Ballerina's secureSocket config.
 	TLSConfig struct {
-		InsecureSkipVerify    bool          // secureSocket.enable=false OR verifyHostName=false
-		CACertPEM             []byte        // secureSocket.cert (string PEM file path) → file contents
-		ClientCertPEM         []byte        // secureSocket.key.certFile → file contents
-		ClientKeyPEM          []byte        // secureSocket.key.keyFile  → file contents
-		ServerName            string        // secureSocket.serverName → tls.Config.ServerName (SNI)
-		CipherSuiteNames      []string      // secureSocket.ciphers → IANA names; platform resolves IDs
-		MinVersion            uint16        // secureSocket.protocol.versions min → tls.Config.MinVersion
-		MaxVersion            uint16        // secureSocket.protocol.versions max → tls.Config.MaxVersion
-		HandshakeTimeout      time.Duration // secureSocket.handshakeTimeout → transport.TLSHandshakeTimeout
-		DisableSessionTickets bool          // secureSocket.shareSession=false → tls.Config.SessionTicketsDisabled
+		InsecureSkipVerify       bool          // secureSocket.enable=false OR verifyHostName=false
+		SkipHostnameVerification bool          // skip only the hostname check; the certificate chain is still verified
+		CACertPEM                []byte        // secureSocket.cert (string PEM file path) → file contents
+		ClientCertPEM            []byte        // secureSocket.key.certFile → file contents
+		ClientKeyPEM             []byte        // secureSocket.key.keyFile  → file contents
+		ServerName               string        // secureSocket.serverName → tls.Config.ServerName (SNI)
+		CipherSuiteNames         []string      // secureSocket.ciphers → IANA names; platform resolves IDs
+		MinVersion               uint16        // secureSocket.protocol.versions min → tls.Config.MinVersion
+		MaxVersion               uint16        // secureSocket.protocol.versions max → tls.Config.MaxVersion
+		HandshakeTimeout         time.Duration // secureSocket.handshakeTimeout → transport.TLSHandshakeTimeout
+		DisableSessionTickets    bool          // secureSocket.shareSession=false → tls.Config.SessionTicketsDisabled
 	}
 	// FollowRedirects controls HTTP redirect behaviour, matching Ballerina's http:FollowRedirects.
 	FollowRedirects struct {
@@ -216,3 +271,50 @@ type (
 		Close() error                       // immediate: close all connections now
 	}
 )
+
+// FileInfo carries metadata for a single filesystem entry.
+type FileInfo struct {
+	AbsPath    string
+	Size       int64
+	ModifiedAt time.Time
+	IsDir      bool
+	IsSymlink  bool
+	IsReadable bool
+	IsWritable bool
+}
+
+// CopyOptions controls the behavior of FS.Copy.
+type CopyOptions struct {
+	ReplaceExisting bool
+	CopyAttributes  bool
+	NoFollowLinks   bool
+}
+
+// WatchOp identifies the kind of filesystem change reported by FS.Watch.
+type WatchOp uint8
+
+const (
+	WatchCreate WatchOp = iota
+	WatchModify
+	WatchDelete
+)
+
+// WatchEvent carries a single filesystem change notification from FS.Watch.
+// When Err is set the event reports a watch failure instead, such as dropped
+// events after a queue overflow, and Path and Op are unset.
+type WatchEvent struct {
+	Path string
+	Op   WatchOp
+	Err  error
+}
+
+// WatchHandler receives filesystem change notifications from FS.Watch. It is
+// invoked on a platform-owned goroutine, independent of the strand that
+// called FS.Watch.
+type WatchHandler func(WatchEvent)
+
+// WatchHandle is an opaque handle to an active filesystem watch, returned by
+// FS.Watch. Close stops watching and releases OS resources.
+type WatchHandle interface {
+	Close() error
+}

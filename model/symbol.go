@@ -77,6 +77,7 @@ type ValueSymbol interface {
 	IsIsolated() bool
 	IsFinal() bool
 	IsConfigurable() bool
+	IsTopLevel() bool
 }
 
 // symbolTypeSetter is a private interface for updating symbol types during type resolution.
@@ -101,7 +102,11 @@ const (
 	valueSymbolFlagFinal
 	valueSymbolFlagConfigurable
 	valueSymbolFlagListener
+	valueSymbolFlagTopLevel
 )
+
+// CaptureGroupRef identifies a capture group in the compiler environment. Zero means no group.
+type CaptureGroupRef int
 
 type FunctionSymbol interface {
 	Symbol
@@ -671,6 +676,7 @@ const (
 	FieldDescriptorReadonly FieldDescriptorFlag = 1 << iota
 	FieldDescriptorOptional
 	FieldDescriptorHasDefault
+	FieldDescriptorFinal
 )
 
 type FieldDescriptor struct {
@@ -695,6 +701,18 @@ func (f *FieldDescriptor) IsReadonly() bool                  { return f.flags&Fi
 func (f *FieldDescriptor) IsOptional() bool { return f.flags&FieldDescriptorOptional != 0 }
 
 func (f *FieldDescriptor) HasDefault() bool { return f.flags&FieldDescriptorHasDefault != 0 }
+
+func (f *FieldDescriptor) IsFinal() bool { return f.flags&FieldDescriptorFinal != 0 }
+
+// WithoutDefault returns a copy of f that has no default value. Type inclusion copies a field's
+// declaration but not its initializer, so a class including f's type must initialize the field
+// itself. The copy leaves the included type's own descriptor unchanged.
+func (f *FieldDescriptor) WithoutDefault() *FieldDescriptor {
+	fd := *f
+	fd.flags &^= FieldDescriptorHasDefault
+	fd.DefaultFnRef = SymbolRef{}
+	return &fd
+}
 
 type MethodDescriptor struct {
 	name      string
@@ -872,6 +890,8 @@ func mapToLangPrefixIfNeeded(prefix string) string {
 		return "lang.boolean"
 	case "decimal":
 		return "lang.decimal"
+	case "error":
+		return "lang.error"
 	case "float":
 		return "lang.float"
 	case "array":
@@ -1314,6 +1334,10 @@ func (vs *VariableSymbol) SetConfigurable() { vs.setFlag(valueSymbolFlagConfigur
 func (vs *VariableSymbol) IsListener() bool { return vs.hasFlag(valueSymbolFlagListener) }
 
 func (vs *VariableSymbol) SetListener() { vs.setFlag(valueSymbolFlagListener) }
+
+func (vs *VariableSymbol) IsTopLevel() bool { return vs.hasFlag(valueSymbolFlagTopLevel) }
+
+func (vs *VariableSymbol) SetTopLevel() { vs.setFlag(valueSymbolFlagTopLevel) }
 
 func (vs *VariableSymbol) hasFlag(flag valueSymbolFlags) bool { return vs.flags&flag != 0 }
 

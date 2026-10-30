@@ -123,11 +123,17 @@ func (sr *symbolReader) readDependentlyTypedResourceMethodSymbol(space *model.Sy
 	}
 }
 
+// addDeserializedSymbol adds sym to space and returns its ref. A non-public
+// symbol whose name is already taken is appended without replacing the
+// registered name. A public value symbol whose name is already taken panics with
+// "duplicate public symbol: <name>"; deserialize recovers it into an error.
 func addDeserializedSymbol(space *model.SymbolSpace, name string, sym model.Symbol) model.SymbolRef {
-	if !sym.IsPublic() {
-		if _, exists := space.GetSymbol(name); exists {
-			return space.RefAt(space.AppendSymbol(sym))
-		}
+	_, exists := space.GetSymbol(name)
+	if exists && !sym.IsPublic() {
+		return space.RefAt(space.AppendSymbol(sym))
+	}
+	if _, isValue := sym.(model.ValueSymbol); exists && isValue {
+		panic(fmt.Sprintf("duplicate public symbol: %s", name))
 	}
 	space.AddSymbol(name, sym)
 	ref, _ := space.GetSymbol(name)
@@ -432,6 +438,9 @@ func (sr *symbolReader) readInclusionMembers(space *model.SymbolSpace) []model.I
 			if flags&4 != 0 {
 				fdFlags |= model.FieldDescriptorHasDefault
 			}
+			if flags&8 != 0 {
+				fdFlags |= model.FieldDescriptorFinal
+			}
 			fd := model.NewFieldDescriptor(name, fdFlags, isPublic)
 			fd.SetMemberType(ty)
 			fd.DefaultFnRef = sr.readSymbolRef(space)
@@ -536,6 +545,7 @@ type valueSymbolFields struct {
 	isFinal        bool
 	isConfigurable bool
 	isIsolated     bool
+	isTopLevel     bool
 	sigHandle      int64
 }
 
@@ -547,6 +557,7 @@ func (sr *symbolReader) readValueSymbolFields() valueSymbolFields {
 	read(sr.r, &f.isFinal)
 	read(sr.r, &f.isConfigurable)
 	read(sr.r, &f.isIsolated)
+	read(sr.r, &f.isTopLevel)
 	read(sr.r, &f.sigHandle)
 	return f
 }
@@ -561,6 +572,9 @@ func applyValueSymbolFields(sym *model.VariableSymbol, f valueSymbolFields) {
 	}
 	if f.isIsolated {
 		sym.SetIsolated()
+	}
+	if f.isTopLevel {
+		sym.SetTopLevel()
 	}
 }
 

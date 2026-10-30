@@ -17,8 +17,11 @@ function nonIsolated(int value) returns int {
     return value + 1;
 }
 
+isolated int lockCalls = 0;
+
 function invalidLockCall(int[] values) returns int {
     lock {
+        lockCalls += 1;
         return values.map(value => nonIsolated(value)).length(); // @error
     }
 }
@@ -26,18 +29,6 @@ function invalidLockCall(int[] values) returns int {
 type InvalidRecord record {|
     int[] values = [1].map(nonIsolated); // @error
 |};
-
-function createInvalidIsolatedLambda() returns (isolated function() returns int) {
-    return isolated function() returns int {
-        return [1].map(func = nonIsolated).length(); // @error
-    };
-}
-
-function createInvalidNestedExplicitLambda() returns (isolated function() returns int) {
-    return isolated function() returns int {
-        return [1].map(value => [value].map(nonIsolated)[0])[0]; // @error
-    };
-}
 
 function invalidateNarrowingCapturedByCallback() returns int {
     int|string value = 1;

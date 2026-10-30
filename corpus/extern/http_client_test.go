@@ -79,12 +79,12 @@ func (c *rewritingHTTPClient) Execute(ctx context.Context, method, url string, b
 
 // rewriteClient returns a NewClient factory that forwards every request to
 // serverURL via rewritingHTTPClient.
-func rewriteClient(serverURL string) func(pal.ClientConfig) pal.HTTPClient {
-	return func(cfg pal.ClientConfig) pal.HTTPClient {
+func rewriteClient(serverURL string) func(pal.ClientConfig) (pal.HTTPClient, error) {
+	return func(cfg pal.ClientConfig) (pal.HTTPClient, error) {
 		return &rewritingHTTPClient{
 			serverURL: serverURL,
 			client:    &http.Client{Timeout: cfg.Timeout},
-		}
+		}, nil
 	}
 }
 
@@ -224,11 +224,11 @@ func TestHttpClientCompressionLocal(t *testing.T) {
 	}))
 	defer server.Close()
 
-	noAutoDecompress := func(cfg pal.ClientConfig) pal.HTTPClient {
+	noAutoDecompress := func(cfg pal.ClientConfig) (pal.HTTPClient, error) {
 		return &rewritingHTTPClient{
 			serverURL: server.URL,
 			client:    &http.Client{Timeout: cfg.Timeout, Transport: &http.Transport{DisableCompression: true}},
-		}
+		}, nil
 	}
 	runExtern(t, fileCase("http-client-compression-local-v"), newHTTPPal(noAutoDecompress), nil)
 }
@@ -264,7 +264,7 @@ func TestHttpClientTLSInsecure(t *testing.T) {
 	}))
 	defer server.Close()
 
-	clientFactory := func(cfg pal.ClientConfig) pal.HTTPClient {
+	clientFactory := func(cfg pal.ClientConfig) (pal.HTTPClient, error) {
 		serverTLSConfig := server.Client().Transport.(*http.Transport).TLSClientConfig.Clone()
 		if cfg.TLS.InsecureSkipVerify {
 			serverTLSConfig.InsecureSkipVerify = true //nolint:gosec
@@ -273,7 +273,7 @@ func TestHttpClientTLSInsecure(t *testing.T) {
 		return &rewritingHTTPClient{
 			serverURL: server.URL,
 			client:    &http.Client{Timeout: cfg.Timeout, Transport: &http.Transport{TLSClientConfig: serverTLSConfig}},
-		}
+		}, nil
 	}
 	runExtern(t, fileCase("http-client-tls-v"), newHTTPPal(clientFactory), nil)
 }
@@ -389,6 +389,14 @@ public function main() returns error? {
 		ExpectedPath: filepath.Join(expectedDir, "http-client-mtls-v.txtar"),
 	}
 	runExtern(t, tc, newHTTPPal(palnative.NewHTTPClient).withRealFS(), nil)
+}
+
+// TestHttpClientMalformedTLS verifies that malformed CA or client key PEM
+// material fails Client.init. The check lives in the native TLS config builder,
+// which the stub HTTP client used by the lib corpus never reaches.
+func TestHttpClientMalformedTLS(t *testing.T) {
+	t.Parallel()
+	runExtern(t, fileCase("http-client-malformed-tls-v"), newHTTPPal(palnative.NewHTTPClient).withRealFS(), nil)
 }
 
 func TestHttpClientForward(t *testing.T) {

@@ -77,20 +77,30 @@ type typeResolutionValidator struct {
 	t     *testing.T
 	ctx   *context.CompilerContext
 	tyCtx semtypes.Context
+	// dependentReturnType is the return type descriptor of the dependently typed function being walked.
+	// Its type descriptor only gets a type per call site, after monomorphization, so only its annotations
+	// are validated.
+	dependentReturnType *ast.BLangReturnTypeDescriptor
 }
 
 func (v *typeResolutionValidator) Visit(node ast.BLangNode) ast.Visitor {
 	if node == nil {
 		return nil
 	}
+	if rt, ok := node.(*ast.BLangReturnTypeDescriptor); ok && rt == v.dependentReturnType {
+		attachments := rt.GetAnnotationAttachments()
+		for i := range attachments {
+			ast.Walk(v, &attachments[i])
+		}
+		return nil
+	}
 
-	// Validate that all BLangExpression nodes have their determined type set.
 	// NEVER is a legitimate type for guaranteed-divergent expressions (e.g.
 	// `check newError()` or `checkpanic newError()` whose inner type is
 	// exactly `error`, so the non-error remainder is empty).
-	if expr, ok := node.(ast.BLangExpression); ok {
-		if semtypes.IsZero(expr.GetDeterminedType()) {
-			v.t.Errorf("expression %T at %v does not have determined type set", expr, expr.GetPosition())
+	if typed, ok := node.(ast.NodeWithType); ok {
+		if semtypes.IsZero(typed.Type()) {
+			v.t.Errorf("%T at %v does not have type set", typed, typed.GetPosition())
 		}
 	}
 
@@ -101,6 +111,15 @@ func (v *typeResolutionValidator) Visit(node ast.BLangNode) ast.Visitor {
 		symbol := nodeWithSymbol.Symbol()
 		// Skip constant symbols (kind: 1) since they're resolved during semantic analysis
 		if v.ctx.SymbolKind(symbol) == model.SymbolKindConstant {
+			return v
+		}
+		if paramTypes, _, dependent := v.ctx.DependentlyTypedFunctionType(symbol); dependent {
+			for i, ty := range paramTypes {
+				if semtypes.IsZero(ty) {
+					v.t.Errorf("parameter %d of dependently typed function at %v does not have type set", i, node.GetPosition())
+				}
+			}
+			v.dependentReturnType = node.(ast.InvokableNode).GetReturnTypeDescriptor()
 			return v
 		}
 		if semtypes.IsZero(v.ctx.SymbolType(symbol)) {

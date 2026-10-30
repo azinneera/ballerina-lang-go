@@ -68,7 +68,6 @@ func testSemanticAnalysis(t *testing.T, testCase test_util.TestCase) {
 		t.Fatalf("compiler context has errors for %s: %v", testCase.InputPath, cx.Diagnostics())
 	}
 
-	// Validate that all expressions have determinedTypes set
 	validator := &semanticAnalysisValidator{t: t, ctx: cx}
 	ast.Walk(validator, result.Package)
 
@@ -79,21 +78,30 @@ func testSemanticAnalysis(t *testing.T, testCase test_util.TestCase) {
 type semanticAnalysisValidator struct {
 	t   *testing.T
 	ctx *context.CompilerContext
+	// dependentReturnType is the return type descriptor of the dependently typed function being walked.
+	// Its type descriptor only gets a type per call site, after monomorphization, so only its annotations
+	// are validated.
+	dependentReturnType *ast.BLangReturnTypeDescriptor
 }
 
 func (v *semanticAnalysisValidator) Visit(node ast.BLangNode) ast.Visitor {
 	if node == nil {
 		return nil
 	}
+	if rt, ok := node.(*ast.BLangReturnTypeDescriptor); ok && rt == v.dependentReturnType {
+		attachments := rt.GetAnnotationAttachments()
+		for i := range attachments {
+			ast.Walk(v, &attachments[i])
+		}
+		return nil
+	}
 
-	// Validate determinedType is set on every expression node. NEVER is a
-	// legitimate type for guaranteed-divergent expressions (e.g.
+	// NEVER is a legitimate type for guaranteed-divergent expressions (e.g.
 	// `check newError()` whose inner type is exactly `error`), so we only
 	// flag the unset case.
-	if _, ok := node.(ast.BLangExpression); ok {
-		if semtypes.IsZero(node.GetDeterminedType()) {
-			v.t.Errorf("determinedType not set for expression %T at %v",
-				node, node.GetPosition())
+	if typed, ok := node.(ast.NodeWithType); ok {
+		if semtypes.IsZero(typed.Type()) {
+			v.t.Errorf("type not set for %T at %v", typed, typed.GetPosition())
 		}
 	}
 
@@ -103,6 +111,15 @@ func (v *semanticAnalysisValidator) Visit(node ast.BLangNode) ast.Visitor {
 	// Check if node has a symbol that should have type set
 	if nodeWithSymbol, ok := node.(ast.BNodeWithSymbol); ok {
 		symbol := nodeWithSymbol.Symbol()
+		if paramTypes, _, dependent := v.ctx.DependentlyTypedFunctionType(symbol); dependent {
+			for i, ty := range paramTypes {
+				if semtypes.IsZero(ty) {
+					v.t.Errorf("parameter %d of dependently typed function at %v does not have type set", i, node.GetPosition())
+				}
+			}
+			v.dependentReturnType = node.(ast.InvokableNode).GetReturnTypeDescriptor()
+			return v
+		}
 		if semtypes.IsZero(v.ctx.SymbolType(symbol)) {
 			v.t.Errorf("symbol %s (kind: %v) does not have type set for node %T at %v",
 				v.ctx.SymbolName(symbol), v.ctx.SymbolKind(symbol), node, node.GetPosition())

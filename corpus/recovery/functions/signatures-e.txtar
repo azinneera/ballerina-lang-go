@@ -1,0 +1,187 @@
+-- signatures-e.bal --
+// Copyright (c) 2026, WSO2 LLC. (http://www.wso2.com).
+//
+// WSO2 LLC. licenses this file to you under the Apache License,
+// Version 2.0 (the "License"); you may not use this file except
+// in compliance with the License.
+// You may obtain a copy of the License at
+//
+// http://www.apache.org/licenses/LICENSE-2.0
+//
+// Unless required by applicable law or agreed to in writing,
+// software distributed under the License is distributed on an
+// "AS IS" BASIS, WITHOUT WARRANTIES OR CONDITIONS OF ANY
+// KIND, either express or implied.  See the License for the
+// specific language governing permissions and limitations
+// under the License.
+
+function _() {} // @error
+function (int x) {} // @error
+function ordinary(int _) {} // @error
+function missing(int ) {} // @error
+function rest(int... _) {} // @error
+function defaults(int x = ) {} // @error
+function returnsBad() returns mod:_ {} // @error
+@mod:_ function annotated() {} // @error
+public public function qualifiers() {} // @error
+function valid() returns int => 1;
+function discardedReferences() returns int {
+    int ordinaryResult = ordinary(1); // @error discarded declaration reference
+    int defaultResult = defaults(); // @error discarded declaration reference
+    int later = valid();
+    return later;
+}
+-- ast --
+(package
+  (function (bad-identifier) () (
+    (value-type null))
+    (block-function-body))
+  (function (bad-identifier) (
+    (variable x (type
+      (value-type int)))) (
+    (value-type null))
+    (block-function-body))
+  (function ordinary (
+    (variable (bad-identifier) (type
+      (value-type int)))) (
+    (value-type null))
+    (block-function-body))
+  (function missing (
+    (variable (bad-identifier) (type
+      (value-type int)))) (
+    (value-type null))
+    (block-function-body))
+  (function rest () (
+    (value-type null))
+    (block-function-body))
+  (function defaults (
+    (variable x (type
+      (value-type int)) (expr
+      (simple-var-ref (bad-identifier))))) (
+    (value-type null))
+    (block-function-body))
+  (function returnsBad () (
+    (bad-type qualified-reference (tokens (":" 23:34 23:35))))
+    (block-function-body))
+  (function annotated () (
+    (value-type null))
+    (block-function-body)
+    (annotation-attachment mod (bad-identifier)
+      (literal true)))
+  (function valid () (
+    (value-type int))
+    (expr-function-body
+      (literal 1)))
+  (function discardedReferences () (
+    (value-type int))
+    (block-function-body
+      (var-def
+        (variable ordinaryResult (type
+          (value-type int)) (expr
+          (invocation ordinary (
+            (literal 1))))))
+      (var-def
+        (variable defaultResult (type
+          (value-type int)) (expr
+          (invocation defaults ()))))
+      (var-def
+        (variable later (type
+          (value-type int)) (expr
+          (invocation valid ()))))
+      (return
+        (simple-var-ref later))))
+  (bad-top-level function (tokens ("public" 25:1 25:7) ("function" 25:15 25:23) ("(" 25:34 25:35) (")" 25:35 25:36) ("{" 25:37 25:38) ("}" 25:38 25:39))))
+-- stderr --
+error[SEMANTIC_ERROR]: Unknown annotation: _
+  --> signatures-e.bal:24:1
+   |
+24 | @mod:_ function annotated() {} // @error
+   | ^^^^^^^
+
+error[SEMANTIC_ERROR]: Unknown symbol: 
+  --> signatures-e.bal:22:27
+   |
+22 | function defaults(int x = ) {} // @error
+   |
+
+error[SEMANTIC_ERROR]: unused variable 'defaultResult'
+  --> signatures-e.bal:29:1
+   |
+29 |     int defaultResult = defaults(); // @error discarded declaration reference
+   |     ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+30 |     int later = valid();
+   |
+
+error[SEMANTIC_ERROR]: unused variable 'ordinaryResult'
+  --> signatures-e.bal:28:1
+   |
+28 |     int ordinaryResult = ordinary(1); // @error discarded declaration reference
+   |     ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+29 |     int defaultResult = defaults(); // @error discarded declaration reference
+   |
+
+error[SEMANTIC_ERROR]: unused variable 'x'
+  --> signatures-e.bal:18:11
+   |
+18 | function (int x) {} // @error
+   |           ^^^^^
+
+error[SEMANTIC_ERROR]: unused variable 'x'
+  --> signatures-e.bal:22:19
+   |
+22 | function defaults(int x = ) {} // @error
+   |                   ^^^^^^^^
+
+error[SYNTAX_ERROR]: '_' is a keyword, and may not be used as an identifier
+  --> signatures-e.bal:17:10
+   |
+17 | function _() {} // @error
+   |          ^
+
+error[SYNTAX_ERROR]: '_' is a keyword, and may not be used as an identifier
+  --> signatures-e.bal:19:23
+   |
+19 | function ordinary(int _) {} // @error
+   |                       ^
+
+error[SYNTAX_ERROR]: '_' is a keyword, and may not be used as an identifier
+  --> signatures-e.bal:21:22
+   |
+21 | function rest(int... _) {} // @error
+   |                      ^
+
+error[SYNTAX_ERROR]: '_' is a keyword, and may not be used as an identifier
+  --> signatures-e.bal:23:35
+   |
+23 | function returnsBad() returns mod:_ {} // @error
+   |                                   ^^
+
+error[SYNTAX_ERROR]: '_' is a keyword, and may not be used as an identifier
+  --> signatures-e.bal:24:6
+   |
+24 | @mod:_ function annotated() {} // @error
+   |      ^^
+
+error[SYNTAX_ERROR]: invalid token
+  --> signatures-e.bal:25:8
+   |
+25 | public public function qualifiers() {} // @error
+   |        ^^^^^^^^^^^^^^^^
+
+error[SYNTAX_ERROR]: missing function name
+  --> signatures-e.bal:18:10
+   |
+18 | function (int x) {} // @error
+   |
+
+error[SYNTAX_ERROR]: missing identifier
+  --> signatures-e.bal:20:22
+   |
+20 | function missing(int ) {} // @error
+   |
+
+error[SYNTAX_ERROR]: missing identifier
+  --> signatures-e.bal:22:27
+   |
+22 | function defaults(int x = ) {} // @error
+   |

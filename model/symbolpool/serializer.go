@@ -546,6 +546,9 @@ func (sw *symbolWriter) writeInclusionMembers(buf *bytes.Buffer, members []model
 			if member.HasDefault() {
 				flags |= 4
 			}
+			if member.IsFinal() {
+				flags |= 8
+			}
 			if err := write(buf, flags); err != nil {
 				return err
 			}
@@ -692,6 +695,9 @@ func (sw *symbolWriter) writeValueSymbolBody(buf *bytes.Buffer, ref model.Symbol
 		return err
 	}
 	if err := write(buf, sym.IsIsolated()); err != nil {
+		return err
+	}
+	if err := write(buf, sym.IsTopLevel()); err != nil {
 		return err
 	}
 	return sw.writeFunctionSignatureIndex(buf, ref)

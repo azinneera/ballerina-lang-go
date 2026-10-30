@@ -48,14 +48,16 @@ type Location = diagnostics.Location
 
 type BLangNode interface {
 	Node
-	SetDeterminedType(ty semtypes.SemType)
 	SetPosition(pos diagnostics.Location)
 }
 
 type (
 	bLangNodeBase struct {
-		DeterminedType semtypes.SemType
-		pos            diagnostics.Location
+		pos diagnostics.Location
+	}
+
+	nodeWithTypeBase struct {
+		Ty semtypes.SemType
 	}
 
 	BLangAnnotation struct {
@@ -82,6 +84,42 @@ type (
 	bLangFunctionBodyBase struct {
 		bLangNodeBase
 	}
+
+	captureOwnerBase struct {
+		captureGroup model.CaptureGroupRef
+	}
+)
+
+// CaptureGroupOwner is a node whose evaluation makes a capture group effective.
+type CaptureGroupOwner interface {
+	BLangNode
+	CaptureGroup() model.CaptureGroupRef
+	SetCaptureGroup(group model.CaptureGroupRef)
+}
+
+func (b *captureOwnerBase) CaptureGroup() model.CaptureGroupRef {
+	return b.captureGroup
+}
+
+func (b *captureOwnerBase) SetCaptureGroup(group model.CaptureGroupRef) {
+	if b.captureGroup != 0 {
+		panic("capture group is already set")
+	}
+	b.captureGroup = group
+}
+
+var (
+	_ CaptureGroupOwner = &BLangFunction{}
+	_ CaptureGroupOwner = &BLangResourceMethod{}
+	// A defaulted parameter owns the group of its default expression, which is
+	// evaluated like a closure over the preceding parameters. BLangFunctionTypeParam
+	// and BField own their default expressions the same way.
+	_ CaptureGroupOwner = &BLangVariable{}
+	_ CaptureGroupOwner = &BLangWhile{}
+	_ CaptureGroupOwner = &BLangForeach{}
+	_ CaptureGroupOwner = &BLangQueryExpr{}
+	_ CaptureGroupOwner = &BLangFunctionTypeParam{}
+	_ CaptureGroupOwner = &BField{}
 )
 
 func (*bLangFunctionBodyBase) isFunctionBody() {}
@@ -131,6 +169,7 @@ type (
 		Methods                         map[string]*BLangFunction
 		ResourceMethods                 []*BLangResourceMethod
 		Fields                          []*BLangVariable
+		BadTopLevelNodes                []*BLangBadTopLevelNode
 		Inclusions                      []model.SymbolRef      // This needs to be symbol because it could be a class definition as well
 		InclusionPositions              []diagnostics.Location // Positions of each inclusion, parallel to Inclusions
 		flags                           model.Flag
@@ -182,6 +221,7 @@ type (
 		Annotations      []*BLangAnnotation
 		InitFunction     *BLangFunction
 		ClassDefinitions []*BLangClassDefinition
+		BadTopLevelNodes []*BLangBadTopLevelNode
 		PackageID        *model.PackageID
 		Scope            model.Scope
 	}
@@ -225,6 +265,7 @@ type (
 
 	BLangVariable struct {
 		bLangVariableBase
+		captureOwnerBase
 		Name IdentifierNode
 	}
 
@@ -234,6 +275,7 @@ type (
 
 	bLangInvokableNodeBase struct {
 		bLangNodeBase
+		captureOwnerBase
 		Name                            IdentifierNode
 		symbol                          model.SymbolRef
 		AnnAttachments                  []BLangAnnotationAttachment
@@ -293,7 +335,14 @@ func (b *bLangInvokableNodeBase) SetTestable()      { b.flags |= model.FlagTesta
 func (b *bLangInvokableNodeBase) Flags() model.Flag { return b.flags }
 
 func (b *bLangInvokableNodeBase) FuncSymbolFlags() model.FuncSymbolFlags {
-	return model.FuncSymbolFlags(b.flags)
+	var flags model.FuncSymbolFlags
+	if b.IsIsolated() {
+		flags |= model.FuncSymbolFlagIsolated
+	}
+	if b.IsTransactional() {
+		flags |= model.FuncSymbolFlagTransactional
+	}
+	return flags
 }
 
 func (b *bLangInvokableNodeBase) Parameters() []Param {
@@ -359,12 +408,8 @@ func (b *BLangAnnotation) IsConst() bool         { return b.flags.Has(model.Flag
 func (b *BLangService) IsPublic() bool        { return false }
 func (b *BLangMemberTypeDesc) IsPublic() bool { return false }
 
-func (b *bLangNodeBase) SetDeterminedType(ty semtypes.SemType) {
-	b.DeterminedType = ty
-}
-
-func (b *bLangNodeBase) GetDeterminedType() semtypes.SemType {
-	return b.DeterminedType
+func (b *nodeWithTypeBase) Type() semtypes.SemType {
+	return b.Ty
 }
 
 func (b *bLangNodeBase) GetPosition() diagnostics.Location {
@@ -771,7 +816,7 @@ func (b *BLangVariable) GetMarkdownDocumentationAttachment() *BLangMarkdownDocum
 
 func (b *BLangVariable) GetAssociatedType() semtypes.SemType {
 	if b.TypeNode() != nil {
-		return b.TypeNode().GetTypeData().Type
+		return b.TypeNode().Type()
 	}
 	return semtypes.SemType{}
 }
@@ -982,6 +1027,8 @@ func (r *BLangReturnTypeDescriptor) IsGrouped() bool { return r.innerType().IsGr
 func (r *BLangReturnTypeDescriptor) SetTypeData(ty TypeData) { r.innerType().SetTypeData(ty) }
 
 func (r *BLangReturnTypeDescriptor) GetTypeData() TypeData { return r.innerType().GetTypeData() }
+
+func (r *BLangReturnTypeDescriptor) Type() semtypes.SemType { return r.innerType().Type() }
 
 func (r *BLangReturnTypeDescriptor) bTypeGetName() model.Name { return r.innerType().bTypeGetName() }
 

@@ -20,13 +20,13 @@ WORKSPACE_ROOT := $(subst \,/,$(CURDIR))
 WORKSPACE_MODULE_DIRS := $(subst \,/,$(shell $(LIST_WORKSPACE_MODULES)))
 WORKSPACE_MODULES := . $(patsubst $(WORKSPACE_ROOT)/%,%,$(filter-out $(WORKSPACE_ROOT),$(WORKSPACE_MODULE_DIRS)))
 BUILD_MODULES := $(filter-out compiler-tools/%,$(WORKSPACE_MODULES))
-LINT_MODULES := $(filter-out compiler-tools/%,$(WORKSPACE_MODULES))
+LINT_MODULES := $(WORKSPACE_MODULES)
 BUILD_MODULE_TARGETS := $(addprefix build-module/,$(BUILD_MODULES))
 VET_MODULE_TARGETS := $(addprefix vet-module/,$(WORKSPACE_MODULES))
 LINT_MODULE_TARGETS := $(addprefix lint-module/,$(LINT_MODULES))
 TEST_RUNNER = .github/scripts/run_native_tests.py
 
-.PHONY: build vet lint force test test-coverage test-race check update-testdata release install-hooks \
+.PHONY: build vet lint lint-walks force test test-coverage test-race check update-testdata release install-hooks \
 	test-wasm test-wasm-corpus-light test-wasm-corpus-integration benchmark-corpus
 
 force:
@@ -59,7 +59,11 @@ vet-module/%: force
 	@echo "Vetting $*"
 	@(cd "$*" && go vet ./...)
 
-lint: $(LINT_MODULE_TARGETS)
+lint: $(LINT_MODULE_TARGETS) lint-walks
+
+lint-walks:
+	@echo "Checking AST walk purity"
+	@go run ./compiler-tools/walkpurity/cmd/walkpurity -test=false ./semantics/internal/types
 
 lint-module/%: force
 	@config="$(CURDIR)/.golangci.yml"; \

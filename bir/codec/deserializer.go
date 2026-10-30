@@ -666,9 +666,15 @@ func (br *birReader) readInstruction(varMap map[int32]*bir.BIRLocalVariableDcl) 
 			if !isKeyValuePair {
 				panic("spread entries in mapping constructors are not supported")
 			}
+			var isComputed bool
+			br.read(&isComputed)
 			keyOp := br.readOperand(varMap)
 			valueOp := br.readOperand(varMap)
-			values[k] = bir.NewMappingConstructorKeyValueEntry(keyOp, valueOp)
+			if isComputed {
+				values[k] = bir.NewComputedMappingConstructorKeyValueEntry(keyOp, valueOp)
+			} else {
+				values[k] = bir.NewMappingConstructorKeyValueEntry(keyOp, valueOp)
+			}
 		}
 		defaultsCount := br.readLength()
 		defaults := make([]bir.MappingConstructorDefaultEntry, defaultsCount)
@@ -1190,7 +1196,7 @@ func (br *birReader) readConstValueByTag(tag typeTag) any {
 			field := string(br.readStringCPEntry())
 			fieldAnnotations[field] = br.readAnnotationValues()
 		}
-		return values.NewTypeDescWithFieldAnnotations(ty, annotations, fieldAnnotations)
+		return values.NewTypeDescWithFieldAnnotations(br.ctx.GetTypeEnv(), ty, annotations, fieldAnnotations)
 	case typeTagRuntimeRef:
 		return &values.RuntimeAnnotationValueRef{
 			Organization: string(br.readStringCPEntry()),

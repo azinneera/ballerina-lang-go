@@ -25,17 +25,17 @@ import (
 	"github.com/ballerina-nutcracker/ballerina/tools/diagnostics"
 )
 
+// GetCompilationUnit builds the AST of a syntax tree, reporting its syntax errors and substituting bad nodes for
+// the constructs that contain them.
 func GetCompilationUnit(cx *context.CompilerContext, syntaxTree *st.SyntaxTree) *ast.BLangCompilationUnit {
-	builder := newNodeBuilder(cx)
-	compilationUnit := builder.transformModulePart(syntaxTree.RootNode.(*st.ModulePart))
-	return compilationUnit.(*ast.BLangCompilationUnit)
+	builder := newNodeBuilder(cx, st.Node.TextRange)
+	return builder.transformModulePart(syntaxTree.RootNode.(*st.ModulePart))
 }
 
-// GetRecoveredCompilationUnit builds an AST while preserving malformed syntax as bad nodes.
+// GetRecoveredCompilationUnit is GetCompilationUnit with node positions that include surrounding minutiae.
 func GetRecoveredCompilationUnit(cx *context.CompilerContext, syntaxTree *st.SyntaxTree) *ast.BLangCompilationUnit {
-	builder := newRecoveringNodeBuilder(cx)
-	compilationUnit := builder.transformModulePart(syntaxTree.RootNode.(*st.ModulePart))
-	return compilationUnit.(*ast.BLangCompilationUnit)
+	builder := newNodeBuilder(cx, st.Node.TextRangeWithMinutiae)
+	return builder.transformModulePart(syntaxTree.RootNode.(*st.ModulePart))
 }
 
 func ToPackageFromCompilationUnits(cx *context.CompilerContext, compilationUnits []*ast.BLangCompilationUnit) *ast.BLangPackage {
@@ -56,6 +56,8 @@ func ToPackageFromCompilationUnits(cx *context.CompilerContext, compilationUnits
 func addCompilationUnitNodesToPackage(cx *context.CompilerContext, pkg *ast.BLangPackage, compilationUnit *ast.BLangCompilationUnit) {
 	for _, node := range compilationUnit.GetTopLevelNodes() {
 		switch node := node.(type) {
+		case *ast.BLangBadTopLevelNode:
+			pkg.BadTopLevelNodes = append(pkg.BadTopLevelNodes, node)
 		case *ast.BLangImportPackage:
 			pkg.Imports = append(pkg.Imports, node)
 		case *ast.BLangVariable:

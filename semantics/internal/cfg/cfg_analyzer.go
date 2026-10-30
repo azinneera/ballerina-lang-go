@@ -32,7 +32,7 @@ import (
 // - Unitialized variable analysis: validate all variables are initialized before use in all code paths
 // - Unitialized field analysis: validate object fields are initialized in all code paths in init method (if they don't have inline initializers)
 // - Unitialized global var analysis: validate all module global variables are initialized in module init funciton (if they don't have inline initializers)
-// - Final reassignment analysis: validate final variables without inline initializers are not assigned when possibly assigned already
+// - Final reassignment analysis: validate final variables and class/service fields without inline initializers are not assigned when possibly assigned already
 func Analyze(ctx *context.CompilerContext, pkg *ast.BLangPackage, cfg *PackageCFG) {
 	var wg sync.WaitGroup
 	wg.Go(func() { analyzeReachability(ctx, cfg) })
@@ -145,7 +145,7 @@ func analyzeFunctionNeverReturn(ctx *context.CompilerContext, fn invokableNode, 
 		if !bb.isTerminal() || !bb.isReachable() {
 			continue
 		}
-		if terminalBlockHasPanic(bb) {
+		if bb.panics {
 			continue
 		}
 		ctx.SemanticError("expected panic", positionForMissingReturn(bb, fn))
@@ -169,14 +169,6 @@ func terminalBlockHasReturnOrPanic(bb basicBlock) bool {
 	default:
 		return false
 	}
-}
-
-func terminalBlockHasPanic(bb basicBlock) bool {
-	if len(bb.nodes) == 0 {
-		return false
-	}
-	_, ok := bb.nodes[len(bb.nodes)-1].(*ast.BLangPanic)
-	return ok
 }
 
 func positionForMissingReturn(bb basicBlock, fn ast.BLangNode) diagnostics.Location {

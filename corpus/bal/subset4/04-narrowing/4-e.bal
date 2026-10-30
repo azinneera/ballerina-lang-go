@@ -18,7 +18,7 @@ import ballerina/io;
 public function main() {
     int|string foo = 2;
     while foo == 2 {
-        foo += 5;
+        foo = foo + 5;
         int _ = foo; // @error
     }
     io:println(foo);

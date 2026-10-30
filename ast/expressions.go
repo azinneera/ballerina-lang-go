@@ -18,6 +18,7 @@ package ast
 
 import (
 	"fmt"
+	"slices"
 	"strconv"
 	"strings"
 
@@ -57,8 +58,10 @@ const (
 	XMLStepStartKindElementDescendants
 )
 
+//sumtype:decl
 type BLangActionOrExpression interface {
 	BLangNode
+	NodeWithType
 	actionOrExpression()
 }
 
@@ -91,34 +94,36 @@ func WorkerPairId(sender, receiver string) string {
 
 type (
 	BLangMarkdownDocumentationLine struct {
-		bLangExpressionBase
+		bLangNodeBase
 		Text string
 	}
 	BLangMarkdownParameterDocumentation struct {
-		bLangExpressionBase
+		bLangNodeBase
 		ParameterName               *BLangIdentifier
 		ParameterDocumentationLines []string
 	}
 	BLangMarkdownReturnParameterDocumentation struct {
-		bLangExpressionBase
+		bLangNodeBase
 		ReturnParameterDocumentationLines []string
 		ReturnType                        *BLangValueType
 	}
 	BLangMarkDownDeprecationDocumentation struct {
-		bLangExpressionBase
+		bLangNodeBase
 		DeprecationDocumentationLines []string
 		DeprecationLines              []string
 		IsCorrectDeprecationLine      bool
 	}
 	BLangMarkDownDeprecatedParametersDocumentation struct {
-		bLangExpressionBase
+		bLangNodeBase
 		Parameters []BLangMarkdownParameterDocumentation
 	}
 	bLangExpressionBase struct {
 		bLangNodeBase
+		nodeWithTypeBase
 	}
 	bLangActionBase struct {
 		bLangNodeBase
+		nodeWithTypeBase
 	}
 )
 
@@ -327,6 +332,7 @@ type (
 
 	BLangQueryExpr struct {
 		bLangExpressionBase
+		captureOwnerBase
 		QueryClauseList    []BLangNode
 		QueryConstructType TypeKind
 	}
@@ -425,6 +431,7 @@ type (
 
 	BLangRemoteMethodCallAction struct {
 		bLangNodeBase
+		nodeWithTypeBase
 		bLangInvocationBase
 	}
 
@@ -437,6 +444,7 @@ type (
 
 	BLangClientResourceAccessAction struct {
 		bLangNodeBase
+		nodeWithTypeBase
 		bLangInvocationBase
 		Path       []BLangResourceAccessSegment
 		MethodName string
@@ -519,7 +527,7 @@ type (
 	BLangTypeTestExpr struct {
 		bLangExpressionBase
 		Expr       BLangExpression
-		Type       TypeData
+		TestedType TypeData
 		isNegation bool
 	}
 
@@ -537,9 +545,10 @@ type (
 
 	BLangMappingConstructorExpr struct {
 		bLangExpressionBase
-		Fields        []MappingField
-		AtomicType    semtypes.MappingAtomicType
-		FieldDefaults []model.FieldDefault
+		Fields             []MappingField
+		ReadonlyFields     []string
+		SelectedAtomicType semtypes.MappingAtomicType
+		FieldDefaults      []model.FieldDefault
 	}
 
 	BLangNamedArgsExpression struct {
@@ -593,7 +602,7 @@ type (
 	}
 
 	BLangXMLAttribute struct {
-		bLangExpressionBase
+		bLangNodeBase
 		Name            string
 		NamespaceSymbol model.SymbolRef
 		Value           BLangExpression
@@ -638,7 +647,8 @@ type (
 		// resolved against the result type of the preceding extension. Desugaring is
 		// too late to type-check and monomorphize those generated calls. Since type
 		// resolution cannot replace this node in its parent, desugaring uses this
-		// fully typed lowering.
+		// fully typed lowering. The first type resolution to reach the step sets it,
+		// including a candidate trial, and later resolutions reuse it.
 		LoweredExpression BLangExpression
 	}
 
@@ -1191,7 +1201,7 @@ func NewBLangTypeTestExpr(pos Location, expr BLangExpression, ty TypeData, isNeg
 	return &BLangTypeTestExpr{
 		bLangExpressionBase: bLangExpressionBase{bLangNodeBase: bLangNodeBase{pos: pos}},
 		Expr:                expr,
-		Type:                ty,
+		TestedType:          ty,
 		isNegation:          isNegation,
 	}
 }
@@ -1221,7 +1231,7 @@ func (b *BLangTypeTestExpr) GetExpression() BLangExpression {
 }
 
 func (b *BLangTypeTestExpr) GetType() TypeData {
-	return b.Type
+	return b.TestedType
 }
 
 func (b *BLangMappingKeyValueField) GetKey() BLangExpression {
@@ -1237,6 +1247,11 @@ func (b *BLangMappingKeyValueField) GetValue() BLangExpression {
 
 func (b *BLangMappingKeyValueField) IsKeyValueField() bool {
 	return true
+}
+
+// IsReadonly reports whether the named field carried an explicit readonly prefix.
+func (b *BLangMappingConstructorExpr) IsReadonly(name string) bool {
+	return slices.Contains(b.ReadonlyFields, name)
 }
 
 func (b *BLangMappingConstructorExpr) GetFields() []MappingField {
@@ -1258,12 +1273,12 @@ func (b *BLangTrapExpr) GetExpression() BLangActionOrExpression {
 // IsStreamOperation use to distinguish stream operations from method calls.
 func IsStreamOperation(inv interface{ Receiver() BLangExpression }) bool {
 	recv := inv.Receiver()
-	return recv != nil && semtypes.IsSubtypeSimple(recv.GetDeterminedType(), semtypes.Stream)
+	return recv != nil && semtypes.IsSubtypeSimple(recv.Type(), semtypes.Stream)
 }
 
 // IsStreamNewExpression returns true when the new expression constructs a stream value.
 func IsStreamNewExpression(expr *BLangNewExpression) bool {
-	return semtypes.IsSubtypeSimple(expr.GetDeterminedType(), semtypes.Stream)
+	return semtypes.IsSubtypeSimple(expr.Type(), semtypes.Stream)
 }
 
 func NewBLangUnaryExpr(location diagnostics.Location, operator model.OperatorKind, expr BLangExpression) *BLangUnaryExpr {
@@ -1279,7 +1294,6 @@ var (
 	_ BLangExpression = &BLangTemplateExpr{}
 	_ BLangExpression = &BLangXMLTemplateExpr{}
 	_ BLangExpression = &BLangXMLElementLiteral{}
-	_ BLangExpression = &BLangXMLAttribute{}
 	_ BLangExpression = &BLangXMLPILiteral{}
 	_ BLangExpression = &BLangXMLCommentLiteral{}
 	_ BLangExpression = &BLangXMLTextLiteral{}

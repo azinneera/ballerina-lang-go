@@ -322,6 +322,7 @@ func (bw *birWriter) writeInstruction(buf *bytes.Buffer, instr bir.BIRInstructio
 			write(buf, entry.IsKeyValuePair())
 			if entry.IsKeyValuePair() {
 				kvEntry := entry.(*bir.MappingConstructorKeyValueEntry)
+				write(buf, kvEntry.IsComputed())
 				bw.writeOperand(buf, kvEntry.KeyOp())
 				bw.writeOperand(buf, kvEntry.ValueOp())
 			}
@@ -685,7 +686,7 @@ func (bw *birWriter) writeConstValueByTag(buf *bytes.Buffer, tag typeTag, value 
 		if !ok {
 			panic(fmt.Sprintf("expected typedesc for tag %v, got %T", tag, value))
 		}
-		bw.writeType(buf, td.Type)
+		bw.writeType(buf, td.Constraint())
 		bw.writeAnnotationValues(buf, td.Annotations)
 		fields := make([]string, 0, len(td.FieldAnnotations))
 		for field := range td.FieldAnnotations {
