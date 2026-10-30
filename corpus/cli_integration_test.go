@@ -272,7 +272,8 @@ func TestBalRunCompilerPluginManifestCorpus(t *testing.T) {
 	if runtime.GOOS == "js" || runtime.GOARCH == "wasm" {
 		t.Skip("skipping CLI integration test on WASM (js/wasm)")
 	}
-	balBin, repoRoot, coverDir := integrationTestBalCLI(t, false)
+	cli := newBalCLI(t)
+	balBin, repoRoot, coverDir := cli.relBin, cli.repoRoot, cli.coverDir
 	testDataRoot := filepath.Join(repoRoot, "corpus", "cli", "testdata", "run")
 	outputsRoot := filepath.Join(repoRoot, "corpus", "cli", "output", "run", "compiler-plugin-manifests")
 	workspace := filepath.Join(testDataRoot, "workspaces", "compiler-plugin")
