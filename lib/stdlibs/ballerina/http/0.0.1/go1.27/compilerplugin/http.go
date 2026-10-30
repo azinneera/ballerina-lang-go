@@ -62,7 +62,7 @@ func exportedType(compilerCtx *context.CompilerContext, exported model.ExportedS
 
 func isHTTPService(typeCtx semtypes.Context, listenerType semtypes.SemType, service *ast.BLangService) bool {
 	for _, attached := range service.AttachedExprs {
-		attachedType := semtypes.Diff(attached.GetDeterminedType(), semtypes.Error)
+		attachedType := semtypes.Diff(attached.Type(), semtypes.Error)
 		if semtypes.IsNever(attachedType) {
 			continue
 		}

@@ -272,7 +272,8 @@ func TestBalRunCompilerPluginManifestCorpus(t *testing.T) {
 	if runtime.GOOS == "js" || runtime.GOARCH == "wasm" {
 		t.Skip("skipping CLI integration test on WASM (js/wasm)")
 	}
-	balBin, repoRoot, coverDir := integrationTestBalCLI(t, false)
+	cli := newBalCLI(t)
+	balBin, repoRoot, coverDir := cli.relBin, cli.repoRoot, cli.coverDir
 	testDataRoot := filepath.Join(repoRoot, "corpus", "cli", "testdata", "run")
 	outputsRoot := filepath.Join(repoRoot, "corpus", "cli", "output", "run", "compiler-plugin-manifests")
 	workspace := filepath.Join(testDataRoot, "workspaces", "compiler-plugin")
@@ -310,7 +311,7 @@ func TestBalRunCompilerPluginManifestCorpus(t *testing.T) {
 // ballerina/io don't count (isEmbeddedPackage) — so no fixture here
 // exercises that path; this only proves the flag threads through and the
 // program still runs correctly.
-func TestBalRunTargetDir(t *testing.T, cli *balCLI) {
+func testBalRunTargetDir(t *testing.T, cli *balCLI) {
 	balBin, repoRoot, coverDir := cli.relBin, cli.repoRoot, cli.coverDir
 	balFile := filepath.Join("corpus", "cli", "testdata", "run", "single-bal-files", "run-and-print.bal")
 	dir := t.TempDir()
